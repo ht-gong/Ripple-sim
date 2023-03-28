@@ -1,0 +1,9 @@
+Sirius changes:
+
+-New max packer size (1100?)
+
+-At most 1 data packet sent per slice
+-> Routing should not enqueue more than 1125 bytes per slice (new max queue size?)
+-> How do we treat queueing now? Should we use CALENDARCLEAR? (now when slice changes link is gone)
+
+-Slice is 100ns but has 90ns availability + 10ns reconfig (need to change routing/queues to account for reconfig?)
