@@ -252,10 +252,13 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     case NDP:
     {
         NdpPacket *p = (NdpPacket*)&pkt;
+        p->inc_queueing(_queuesize_low);
+        /*
         if (p->get_src() == 403 && p->get_dst() == 19 && (p->seqno() == 1066949 || p->seqno() == 1065513)) {
             cout << "SEQ " << p->seqno() << " INQUEUE " << nodename() << " AT " << 
                 eventlist().now()/1E6 << endl;
         }
+        */
     }
     case NDPACK:
     case NDPNACK:

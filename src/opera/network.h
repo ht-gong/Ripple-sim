@@ -140,6 +140,9 @@ class Packet {
     int get_maxhops() {return _maxhops;}
     void set_crtport(int port) {_crtport = port;}
     int get_crtport() {return _crtport;}
+    void set_queueing(unsigned queueing) {_queueing = queueing;}
+    unsigned get_queueing() {return _queueing;}
+    void inc_queueing(unsigned queueing) {_queueing += queueing;}
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -190,6 +193,7 @@ class Packet {
     bool _been_bounced; // packet has been bounced previously (for debugging only as of 9/4/18)
     uint32_t _flags; // used for ECN & friends
     simtime_picosec _fabricts; //timestamp from nic sentout
+    unsigned _queueing; //amount of queueing packet goes through
 
     ///////// For RLB //////////
 
