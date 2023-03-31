@@ -14,7 +14,7 @@
 
 #ifndef QT
 #define QT
-typedef enum {COMPOSITE} queue_type;
+typedef enum {DEFAULT, COMPOSITE} queue_type;
 #endif
 
 class Queue;

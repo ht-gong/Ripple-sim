@@ -150,7 +150,9 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, in
 
 Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port) {
     if (qt==COMPOSITE)
-      return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+    else if (qt==DEFAULT)
+        return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
     //else if (qt==CTRL_PRIO)
     //  return new CtrlPrioQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
     assert(0);

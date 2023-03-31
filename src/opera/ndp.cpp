@@ -477,7 +477,7 @@ void NdpSrc::pull_packets(NdpPull::seq_t pull_no, NdpPull::seq_t pacer_no) {
     }
 }
 
-Queue* NdpSrc::sendToNIC(NdpPacket* pkt) {
+Queue* NdpSrc::sendToNIC(Packet* pkt) {
     DynExpTopology* top = pkt->get_topology();
     Queue* nic = top->get_queue_serv_tor(pkt->get_src()); // returns pointer to nic queue
     nic->receivePacket(*pkt); // send this packet to the nic queue

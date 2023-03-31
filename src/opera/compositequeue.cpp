@@ -16,7 +16,7 @@
 
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, 
 			       QueueLogger* logger, int tor, int port)
-  : Queue(bitrate, maxsize, eventlist, logger)
+  : Queue(bitrate, maxsize, eventlist, logger, tor, port)
 {
   _tor = tor;
   _port = port;

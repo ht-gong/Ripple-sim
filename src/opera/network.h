@@ -15,9 +15,12 @@ class PacketFlow;
 class PacketSink;
 typedef uint32_t packetid_t;
 //void print_route(const Route& route);
+enum RouteStrategy {NOT_SET, SINGLE_PATH, SCATTER_PERMUTE, SCATTER_RANDOM, PULL_BASED};
 
 class NdpSink;
 class NdpSrc;
+class TcpSink;
+class TcpSrc;
 class RlbSink;
 class RlbSrc;
 
@@ -149,6 +152,8 @@ class Packet {
 
     virtual inline NdpSink* get_ndpsink(){return NULL;}
     virtual inline NdpSrc* get_ndpsrc(){return NULL;}
+    virtual inline TcpSrc* get_tcpsrc(){return NULL;}
+    virtual inline TcpSink* get_tcpsink(){return NULL;}
 
     // stuff used for RLB:
     void set_dst(int dst) {_dst = dst;} // the current sending host
