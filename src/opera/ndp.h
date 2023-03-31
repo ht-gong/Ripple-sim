@@ -92,6 +92,7 @@ class NdpSrc : public PacketSink, public EventSource {
     uint64_t _last_acked;
     uint32_t _flight_size;
     uint32_t _acked_packets;
+    uint32_t _found_reorder = 0;
 
     // the following are used with SCATTER_PERMUTE, SCATTER_RANDOM and PULL_BASED route strategies
 
@@ -231,7 +232,8 @@ class NdpSink : public PacketSink, public DataReceiver, public Logged {
     uint64_t _total_received;
 
     simtime_picosec last_ts = 0;
-    bool found_reorder = false;
+    unsigned last_hops = 0;
+    unsigned last_queueing = 0;
  
     // Mechanism
     void send_ack(simtime_picosec ts, NdpPacket::seq_t ackno, NdpPacket::seq_t pacer_no);

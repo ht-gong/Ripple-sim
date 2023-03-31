@@ -356,14 +356,9 @@ void NdpSrc::processAck(const NdpAck& ack) {
         // FCT output for processing: (src dst bytes fct_ms timestarted_ms)
         
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
-            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed << timeAsMs(get_start_time()) << endl;
+            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << flow_id() << endl;
         //if (get_flow_src() == 403 && get_flow_dst() == 19) exit(0);
-
-        // debug a certain connection:
-        //if ( get_flow_src() == 84 && get_flow_dst() == 0) {
-        //cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
-        //    " " << timeAsMs(eventlist().now() - get_start_time()) << " " << get_id() << endl;
-        //}
     }
 
     update_rtx_time();
@@ -507,10 +502,13 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
         _rtx_queue.pop_front();
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_SEND);
         p->set_ts(eventlist().now()); // set transmission time
+        p->set_queueing(0);
         p->set_pacerno(pacer_no);
+        /*
         if (get_flow_src() == 403 && get_flow_dst() == 19) {
             cout << "RESENDING " << p->seqno() << endl;
         }
+        */
 
         //PacketSink* sink = p->sendOn();
         //PacketSink* sink = p->sendToNIC();
@@ -559,14 +557,17 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
 
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
         p->set_ts(eventlist().now());
+        p->set_queueing(0);
 
         _flight_size += _pkt_size;
         _highest_sent += _pkt_size;  //XX beware wrapping
         _packets_sent++;
         _new_packets_sent++;
+        /*
         if (get_flow_src() == 403 && get_flow_dst() == 19 && p->seqno() > 920000 && p->seqno() < 930000) {
         cout << "SENDING " << p->seqno() << endl;
         }
+        */
 
         //PacketSink* sink = p->sendOn();
         //PacketSink* sink = p->sendToNIC();
@@ -894,23 +895,30 @@ void NdpSink::receivePacket(Packet& pkt) {
         //    cout << " Sending NACK" << endl;
         //}
 
-        cout << "NACK " << _flow_src << " " << _flow_dst << " " << ((NdpPacket*)&pkt)->seqno() << endl;
+        //cout << "NACK " << _flow_src << " " << _flow_dst << " " << ((NdpPacket*)&pkt)->seqno() << endl;
         send_nack(ts,((NdpPacket*)&pkt)->seqno(), pacer_no);	  
         pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
         p->free();
         return;
     }
 
-    if (last_ts > ts && !found_reorder){
-        cout << "REORDER " << flow_id() << " " << _src->get_flowsize() << endl;
-        found_reorder = true;
+    if (last_ts > ts){
+        cout << "REORDER " << flow_id() << " " << _flow_src << " " << _flow_dst << " "
+            << _src->get_flowsize() << " " << 
+            "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
+            "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
+        _src->_found_reorder++;
     }
     last_ts = ts;
+    last_hops = p->get_crthop();
+    last_queueing = p->get_queueing();
 
+/*
     if (_flow_src == 403 && _flow_dst == 19 && !pkt.header_only()) {
         cout << "SEQ " << p->seqno() << " TIME " << p->get_fabricts()/1E6 <<  
             " SLICE " << p->get_slice_sent() << " NHOPS " << p->get_crthop() << endl;
     }
+    */
 
     int size = p->size()-ACKSIZE; // TODO: the following code assumes all packets are the same size
 
@@ -948,7 +956,7 @@ void NdpSink::receivePacket(Packet& pkt) {
             _drops += (size + seqno-_cumulative_ack-1)/size;
         } else if (seqno > _received.back()) { // likely case
             _received.push_back(seqno);
-            cout << "OOO? " << _flow_src << " " << _flow_dst << " " << size << " " << seqno << " " << _received.back() << endl;
+            //cout << "OOO? " << _flow_src << " " << _flow_dst << " " << size << " " << seqno << " " << _received.back() << endl;
         } 
         else { // uncommon case - it fills a hole
             list<uint64_t>::iterator i;
@@ -956,8 +964,8 @@ void NdpSink::receivePacket(Packet& pkt) {
                 if (seqno == *i) break; // it's a bad retransmit
                 if (seqno < (*i)) {
                     _received.insert(i, seqno);
-                    cout << "Filled " << _flow_src << " " << _flow_dst << " " 
-                        << size << " " << seqno << " " << _last_packet_seqno << endl;
+                    //cout << "Filled " << _flow_src << " " << _flow_dst << " " 
+                     //   << size << " " << seqno << " " << _last_packet_seqno << endl;
                     break;
                 }
             }
