@@ -119,14 +119,14 @@ void Pipe::sendFromPipe(Packet *pkt) {
                     break;
                 }
             case TCPACK:
-            case NDPACK:
-            case NDPNACK:
                 {
                     TcpSrc* src = pkt->get_tcpsrc();
                     assert(src);
                     src->receivePacket(*pkt);
                     break;
                 }
+            case NDPACK:
+            case NDPNACK:
             case NDPPULL:
                 {
                     NdpSrc* src = pkt->get_ndpsrc();
