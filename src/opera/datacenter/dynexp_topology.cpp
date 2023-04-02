@@ -10,6 +10,7 @@
 #include "queue.h"
 #include "pipe.h"
 #include "compositequeue.h"
+#include "ecnqueue.h"
 //#include "prioqueue.h"
 
 #include "rlbmodule.h"
@@ -153,6 +154,8 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
     else if (qt==DEFAULT)
         return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+    else if (qt==ECN)
+        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*3, tor, port);
     //else if (qt==CTRL_PRIO)
     //  return new CtrlPrioQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
     assert(0);

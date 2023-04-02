@@ -2,6 +2,7 @@
 #include <sstream>
 #include <math.h>
 #include "queue.h"
+#include "tcppacket.h"
 #include "ndppacket.h"
 #include "rlbpacket.h" // added
 #include "queue_lossless.h"
@@ -9,6 +10,7 @@
 #include "pipe.h"
 
 #include "rlb.h" // needed to make dummy packet
+#include "tcp.h"
 #include "rlbmodule.h"
 
 Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger)
@@ -89,6 +91,10 @@ void Queue::sendFromQueue(Packet* pkt) {
                     case NDPPULL:
                         cout << "!!! NDPPULL";
                         break;
+                    case TCP:
+                        cout << "!!! TCP";
+                        TcpPacket *tcppkt = (TcpPacket*)&pkt;
+                        tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
                 }
                 cout << " packet dropped: port & dst didn't match! (queue.cpp)" << endl;
                 cout << "    ToR = " << pkt->get_crtToR() << ", port = " << pkt->get_crtport() <<
@@ -120,7 +126,11 @@ void Queue::receivePacket(Packet& pkt) {
     */
 	pkt.free();
     //cout << "!!! Packet dropped: queue overflow!" << endl;
-	_num_drops++;
+    if(pkt.type() == TCP){
+        TcpPacket *tcppkt = (TcpPacket*)&pkt;
+        tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
+    }
+    _num_drops++;
 	return;
     }
     //pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_ARRIVE);
@@ -129,7 +139,8 @@ void Queue::receivePacket(Packet& pkt) {
     bool queueWasEmpty = _enqueued.empty();
     _enqueued.push_front(&pkt);
     _queuesize += pkt.size();
-    if (_logger) _logger->logQueue(*this, QueueLogger::PKT_ENQUEUE, pkt);
+    pkt.inc_queueing(_queuesize);
+    //if (_logger) _logger->logQueue(*this, QueueLogger::PKT_ENQUEUE, pkt);
 
     if (queueWasEmpty) {
 	/* schedule the dequeue event */

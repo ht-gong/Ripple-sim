@@ -4,6 +4,7 @@
 #include "datacenter/dynexp_topology.h"
 #include "ecn.h"
 #include <iostream>
+#include <algorithm>
 
 #define KILL_THRESHOLD 5
 ////////////////////////////////////////////////////////////////
@@ -48,13 +49,6 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
     //_mSrc = NULL;
     _drops = 0;
 
-#ifdef PACKET_SCATTER
-    _crt_path = 0;
-    DUPACK_TH = 3;
-    _paths = NULL;
-#endif
-
-
     //_old_route = NULL;
     _last_packet_with_old_route = 0;
 
@@ -63,21 +57,6 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
 
     _nodename = "tcpsrc";
 }
-
-#ifdef PACKET_SCATTER
-void TcpSrc::set_paths(vector<const Route*>* rt) {
-    //this should only be used with route
-    _paths = new vector<const Route*>();
-
-    for (unsigned int i=0;i<rt->size();i++){
-	Route* t = new Route(*(rt->at(i)));
-	t->push_back(_sink);
-	_paths->push_back(t);
-    }
-    DUPACK_TH = 3 + rt->size();
-    cout << "Setting DUPACK TH to " << DUPACK_TH << endl;
-}
-#endif
 
 void TcpSrc::set_app_limit(int pktps) {
     if (_app_limited==0 && pktps){
@@ -98,6 +77,20 @@ TcpSrc::startflow() {
     send_packets();
 }
 
+void TcpSrc::add_to_dropped(uint64_t seqno) {
+    _dropped_at_queue.push_back(seqno);
+}
+
+bool TcpSrc::was_it_dropped(uint64_t seqno) {
+    vector<uint64_t>::iterator it;
+    it = find(_dropped_at_queue.begin(), _dropped_at_queue.end(), seqno);
+    if (it != _dropped_at_queue.end()) {
+        _dropped_at_queue.erase(it);
+        return true;
+    } else {
+        return false;
+    }
+}
 uint32_t TcpSrc::effective_window() {
     return _in_fast_recovery?_ssthresh:_cwnd;
 }
@@ -186,20 +179,12 @@ TcpSrc::receivePacket(Packet& pkt)
 
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
-            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << timeAsMs(get_start_time()) << endl;
+            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << endl;
         _finished = true;
     }
 
     if (seqno > _last_acked) { // a brand new ack
-        /*
-           if (_old_route){
-           if (seqno >= _last_packet_with_old_route) {
-        //delete _old_route;
-        _old_route = NULL;
-        //printf("Deleted old route\n");
-        }
-        }
-        */
         _RFC2988_RTO_timeout = eventlist().now() + _rto;// RFC 2988 5.3
         _last_ping = eventlist().now();
 
@@ -291,14 +276,12 @@ TcpSrc::receivePacket(Packet& pkt)
     // Not yet in fast recovery. What should we do instead?
     _dupacks++;
 
-#ifdef PACKET_SCATTER
-    if (_dupacks!=DUPACK_TH) 
-#else
         if (_dupacks!=3) 
-#endif
         { // not yet serious worry
+            /*
             if (_logger) 
                 _logger->logTcp(*this, TcpLogger::TCP_RCV_DUP);
+            */
             send_packets();
             return;
         }
@@ -306,15 +289,22 @@ TcpSrc::receivePacket(Packet& pkt)
     if (_last_acked < _recoverq) {  
         /* See RFC 3782: if we haven't recovered from timeouts
            etc. don't do fast recovery */
+        /*
         if (_logger) 
             _logger->logTcp(*this, TcpLogger::TCP_RCV_3DUPNOFR);
+        */
         return;
     }
 
     // begin fast recovery
-
+    
     //only count drops in CA state
     _drops++;
+    //print if retransmission is due to reordered packet (was not dropped)
+    if (!was_it_dropped(_last_acked+1)) {
+        cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size << endl;
+        _found_retransmit++;
+    }
 
     deflate_window();
 
@@ -570,6 +560,16 @@ TcpSink::receivePacket(Packet& pkt) {
 
     int size = p->size(); // TODO: the following code assumes all packets are the same size
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
+    if (last_ts > ts){
+        cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
+            << _src->get_flowsize() << " " << 
+            "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
+            "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
+        _src->_found_reorder++;
+    }
+    last_ts = ts;
+    last_hops = p->get_crthop();
+    last_queueing = p->get_queueing();
     p->free();
 
     _packets+= p->size();
@@ -618,17 +618,6 @@ TcpSink::sendToNIC(Packet* pkt) {
 
 void 
 TcpSink::send_ack(simtime_picosec ts,bool marked) {
-#ifdef PACKET_SCATTER
-    if (_paths){
-#ifdef RANDOM_PATH
-	_crt_path = random()%_paths->size();
-#endif
-	
-	rt = _paths->at(_crt_path);
-	_crt_path = (_crt_path+1)%_paths->size();
-    }
-#endif
-    
     //terribly ugly but that's how opera people made it...
     //just use the previous tcpsrc as a source, packet will get routed based
     //on the inverted src/sink ids and then be received by the source at the end
@@ -644,19 +633,6 @@ TcpSink::send_ack(simtime_picosec ts,bool marked) {
 
     sendToNIC(ack);
 }
-
-#ifdef PACKET_SCATTER
-void TcpSink::set_paths(vector<const Route*>* rt) {
-    //this should only be used with route
-    _paths = new vector<const Route*>();
-
-    for (unsigned int i=0;i<rt->size();i++){
-	Route* t = new Route(*(rt->at(i)));
-	t->push_back(_src);
-	_paths->push_back(t);
-    }
-}
-#endif
 
 ////////////////////////////////////////////////////////////////
 //  TCP RETRANSMISSION TIMER

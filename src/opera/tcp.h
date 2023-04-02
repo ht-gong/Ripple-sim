@@ -6,6 +6,7 @@
  * A TCP source and sink
  */
 
+#include <cstdint>
 #include <list>
 #include "config.h"
 #include "datacenter/dynexp_topology.h"
@@ -35,11 +36,6 @@ class TcpSrc : public PacketSink, public EventSource {
     uint32_t get_id(){ return id;}
     virtual void connect(TcpSink& sink, simtime_picosec startTime);
     void startflow();
-    /*
-    inline void joinMultipathConnection(MultipathTcpSrc* multipathSrc) {
-	_mSrc = multipathSrc;
-    };
-    */
 
     void doNextEvent();
     Queue* sendToNIC(Packet* pkt);
@@ -66,6 +62,8 @@ class TcpSrc : public PacketSink, public EventSource {
     inline int get_flow_dst() {return _flow_dst;}
     inline void set_start_time(simtime_picosec startTime) {_start_time = startTime;}
     inline simtime_picosec get_start_time() {return _start_time;};
+    void add_to_dropped(uint64_t seqno);
+    bool was_it_dropped(uint64_t seqno);
 
     // should really be private, but loggers want to see:
     uint64_t _highest_sent;  //seqno is in bytes
@@ -84,6 +82,8 @@ class TcpSrc : public PacketSink, public EventSource {
     int32_t _app_limited;
     DynExpTopology *_top;
     bool _finished = false;
+    uint32_t _found_reorder = 0;
+    uint32_t _found_retransmit = 0;
 
     //round trip time estimate, needed for coupled congestion control
     simtime_picosec _rtt, _rto, _mdev,_base_rtt;
@@ -132,6 +132,7 @@ class TcpSrc : public PacketSink, public EventSource {
  private:
     //const Route* _old_route;
     uint64_t _last_packet_with_old_route;
+    vector<uint64_t> _dropped_at_queue;
 
     // Housekeeping
     TcpLogger* _logger;
@@ -184,6 +185,9 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
  private:
     // Connectivity
     uint16_t _crt_path;
+    simtime_picosec last_ts = 0;
+    unsigned last_hops = 0;
+    unsigned last_queueing = 0;
 
     void connect(TcpSrc& src);
     //const Route* _route;

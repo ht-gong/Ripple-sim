@@ -357,7 +357,7 @@ void NdpSrc::processAck(const NdpAck& ack) {
         
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << flow_id() << endl;
+            << timeAsMs(get_start_time()) << " " << _found_reorder << endl;
         //if (get_flow_src() == 403 && get_flow_dst() == 19) exit(0);
     }
 
@@ -903,7 +903,7 @@ void NdpSink::receivePacket(Packet& pkt) {
     }
 
     if (last_ts > ts){
-        cout << "REORDER " << flow_id() << " " << _flow_src << " " << _flow_dst << " "
+        cout << "REORDER " << " " << _flow_src << " " << _flow_dst << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
             "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
