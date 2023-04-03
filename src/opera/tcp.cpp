@@ -85,6 +85,7 @@ bool TcpSrc::was_it_dropped(uint64_t seqno) {
     vector<uint64_t>::iterator it;
     it = find(_dropped_at_queue.begin(), _dropped_at_queue.end(), seqno);
     if (it != _dropped_at_queue.end()) {
+        cout << "DROPPED\n";
         _dropped_at_queue.erase(it);
         return true;
     } else {
@@ -181,6 +182,15 @@ TcpSrc::receivePacket(Packet& pkt)
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << endl;
+        if (_found_reorder == 0) assert(_found_retransmit == 0);
+        /*
+        if (_found_reorder == 0 && _found_retransmit != 0) {
+            cout << "BAD\n";
+        }
+        if (get_flow_src() == 578 && get_flow_dst() == 163) {
+            exit(1);
+        }
+        */
         _finished = true;
     }
 
@@ -302,7 +312,7 @@ TcpSrc::receivePacket(Packet& pkt)
     _drops++;
     //print if retransmission is due to reordered packet (was not dropped)
     if (!was_it_dropped(_last_acked+1)) {
-        cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size << endl;
+        cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size  << " " << seqno << endl;
         _found_retransmit++;
     }
 
@@ -555,21 +565,27 @@ TcpSink::receivePacket(Packet& pkt) {
     TcpPacket *p = (TcpPacket*)(&pkt);
     TcpPacket::seq_t seqno = p->seqno();
     simtime_picosec ts = p->ts();
+    simtime_picosec fts = p->get_fabricts();
 
     bool marked = p->flags()&ECN_CE;
-
+    
     int size = p->size(); // TODO: the following code assumes all packets are the same size
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
-    if (last_ts > ts){
+    if (last_ts > fts){
         cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
             "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
         _src->_found_reorder++;
     }
-    last_ts = ts;
+    last_ts = fts;
     last_hops = p->get_crthop();
     last_queueing = p->get_queueing();
+    /*
+    if (p->get_src() == 578 && p->get_dst() == 163 && seqno == 2873+1) {
+        cout << "RECVD " << p->ts()/1E6 << endl;
+    }
+    */
     p->free();
 
     _packets+= p->size();
@@ -586,6 +602,11 @@ TcpSink::receivePacket(Packet& pkt) {
 	}
     } else if (seqno < _cumulative_ack+1) {
     } else { // it's not the next expected sequence number
+        /*
+        if(_src->get_flow_src() == 578 && _src->get_flow_dst() == 163 && _cumulative_ack+1 == 2873+1) {
+            cout << "EXPECTING 2874 GOT " << seqno << " " << ts/1E6 << endl;
+        }
+        */
 	if (_received.empty()) {
 	    _received.push_front(seqno);
 	    //it's a drop in this simulator there are no reorderings.

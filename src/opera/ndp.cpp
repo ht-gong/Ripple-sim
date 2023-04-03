@@ -865,6 +865,7 @@ void NdpSink::receivePacket(Packet& pkt) {
     NdpPacket::seq_t seqno = p->seqno();
     NdpPacket::seq_t pacer_no = p->pacerno();
     simtime_picosec ts = p->ts();
+    simtime_picosec fts = p->get_fabricts();
     bool last_packet = ((NdpPacket*)&pkt)->last_packet();
     switch (pkt.type()) {
     case NDP:
@@ -902,14 +903,14 @@ void NdpSink::receivePacket(Packet& pkt) {
         return;
     }
 
-    if (last_ts > ts){
+    if (last_ts > fts){
         cout << "REORDER " << " " << _flow_src << " " << _flow_dst << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
             "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
         _src->_found_reorder++;
     }
-    last_ts = ts;
+    last_ts = fts;
     last_hops = p->get_crthop();
     last_queueing = p->get_queueing();
 
