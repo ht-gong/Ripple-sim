@@ -182,6 +182,7 @@ int main(int argc, char **argv) {
             vector<int64_t> vtemp;
             getline(input, line);
             stringstream stream(line);
+            if(line.length() <= 0) continue;
             while (stream >> temp)
                 vtemp.push_back(temp);
             //cout << "src = " << vtemp[0] << ", dest = " << vtemp[1] << ", bytes =  " << vtemp[2] << ", start_time[us] " << vtemp[3] << endl;
