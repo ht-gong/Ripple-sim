@@ -946,11 +946,14 @@ void NdpSink::receivePacket(Packet& pkt) {
         // are there any additional received packets we can now ack?
         while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
             _received.pop_front();
+            _top->change_host_buffer(_flow_dst, -size);
             _cumulative_ack+= size;
         }
     } else if (seqno < _cumulative_ack+1) {
         //must have been a bad retransmit
     } else { // it's not the next expected sequence number
+        _top->change_host_buffer(_flow_dst, size);
+        
         if (_received.empty()) {
             _received.push_front(seqno);
             //it's a drop in this simulator there are no reorderings.

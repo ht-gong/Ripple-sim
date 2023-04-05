@@ -55,6 +55,8 @@ class DynExpTopology: public Topology{
   bool port_dst_match(int port, int crtToR, int dst);
   int get_no_paths(int srcToR, int dstToR, int slice);
   int get_no_hops(int srcToR, int dstToR, int slice, int path_ind);
+  int64_t get_host_buffer(int host);
+  void change_host_buffer(int host, int64_t mem);
 
 
   Logfile* logfile;
@@ -81,6 +83,8 @@ class DynExpTopology: public Topology{
 
  private:
   map<Queue*,int> _link_usage;
+  map<int, int64_t> _host_buffers;
+  map<int, int64_t> _max_host_buffers;
   void read_params(string topfile);
   void set_params();
   // Tor-to-Tor connections across time
