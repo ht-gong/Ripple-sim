@@ -427,7 +427,7 @@ void NdpSrc::receivePacket(Packet& pkt)
 	    //printf("Receive PULL: %s\n", p->pull_bitmap().to_string().c_str());
 
 	    pull_packets(p->pullno(), p->pacerno());
-
+            pkt.free();
 	    return;
 	}
     case NDPACK:
