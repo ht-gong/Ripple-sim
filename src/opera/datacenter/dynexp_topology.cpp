@@ -293,6 +293,6 @@ void DynExpTopology::change_host_buffer(int host, int64_t mem) {
     _host_buffers[host] += mem;
     if(_host_buffers[host] > _max_host_buffers[host]) {
         _max_host_buffers[host] = _host_buffers[host];
-        cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
+        //cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
     }
 }

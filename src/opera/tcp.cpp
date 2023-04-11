@@ -574,13 +574,14 @@ TcpSink::receivePacket(Packet& pkt) {
     if (last_ts > fts){
         cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
             << _src->get_flowsize() << " " << 
-            "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
-            "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
+            "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " << last_seqno << " " 
+            "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
         _src->_found_reorder++;
     }
     last_ts = fts;
     last_hops = p->get_crthop();
     last_queueing = p->get_queueing();
+    last_seqno = seqno;
     /*
     if (p->get_src() == 578 && p->get_dst() == 163 && seqno == 2873+1) {
         cout << "RECVD " << p->ts()/1E6 << endl;
@@ -596,12 +597,12 @@ TcpSink::receivePacket(Packet& pkt) {
 	_cumulative_ack = seqno + size - 1;
 	//cout << "New cumulative ack is " << _cumulative_ack << endl;
 	// are there any additional received packets we can now ack?
-	while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
-            _src->_top->change_host_buffer(_src->get_flow_dst(), -size);
-            _src->buffer_change -= size;
-	    _received.pop_front();
-	    _cumulative_ack+= size;
-	}
+    while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
+        _src->_top->change_host_buffer(_src->get_flow_dst(), -size);
+        _src->buffer_change -= size;
+        _received.pop_front();
+        _cumulative_ack+= size;
+    }
     } else if (seqno < _cumulative_ack+1) {
     } else { // it's not the next expected sequence number
         /*

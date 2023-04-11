@@ -189,6 +189,7 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
     simtime_picosec last_ts = 0;
     unsigned last_hops = 0;
     unsigned last_queueing = 0;
+    unsigned last_seqno = 0;
 
     void connect(TcpSrc& src);
     //const Route* _route;
