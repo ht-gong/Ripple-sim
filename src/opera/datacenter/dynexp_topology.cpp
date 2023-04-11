@@ -11,6 +11,7 @@
 #include "pipe.h"
 #include "compositequeue.h"
 #include "ecnqueue.h"
+#include "ecn.h"
 //#include "prioqueue.h"
 
 #include "rlbmodule.h"
@@ -156,7 +157,7 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem
     else if (qt==DEFAULT)
         return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
     else if (qt==ECN)
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*3, tor, port);
+        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port);
     //else if (qt==CTRL_PRIO)
     //  return new CtrlPrioQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
     assert(0);
@@ -292,6 +293,6 @@ void DynExpTopology::change_host_buffer(int host, int64_t mem) {
     _host_buffers[host] += mem;
     if(_host_buffers[host] > _max_host_buffers[host]) {
         _max_host_buffers[host] = _host_buffers[host];
-        cout << "MAXBUF " << host << " " << _max_host_buffers[host];
+        cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
     }
 }

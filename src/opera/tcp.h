@@ -84,6 +84,7 @@ class TcpSrc : public PacketSink, public EventSource {
     bool _finished = false;
     uint32_t _found_reorder = 0;
     uint32_t _found_retransmit = 0;
+    int buffer_change = 0;
 
     //round trip time estimate, needed for coupled congestion control
     simtime_picosec _rtt, _rto, _mdev,_base_rtt;

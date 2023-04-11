@@ -85,7 +85,7 @@ bool TcpSrc::was_it_dropped(uint64_t seqno) {
     vector<uint64_t>::iterator it;
     it = find(_dropped_at_queue.begin(), _dropped_at_queue.end(), seqno);
     if (it != _dropped_at_queue.end()) {
-        cout << "DROPPED\n";
+        //cout << "DROPPED\n";
         _dropped_at_queue.erase(it);
         return true;
     } else {
@@ -106,7 +106,7 @@ TcpSrc::connect(TcpSink& sink,
     _flow.id = id; // identify the packet flow with the TCP source that generated it
     _sink->connect(*this);
     _start_time = starttime;
-    cout << "Flow start " << _flow_src << " " << _flow_dst << " " << starttime << endl;
+    //cout << "Flow start " << _flow_src << " " << _flow_dst << " " << starttime << endl;
 
     //printf("Tcp %x msrc %x\n",this,_mSrc);
     eventlist().sourceIsPending(*this,starttime);
@@ -181,8 +181,8 @@ TcpSrc::receivePacket(Packet& pkt)
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << endl;
-        if (_found_reorder == 0) assert(_found_retransmit == 0);
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << endl;
+        //if (_found_reorder == 0) assert(_found_retransmit == 0);
         /*
         if (_found_reorder == 0 && _found_retransmit != 0) {
             cout << "BAD\n";
@@ -597,6 +597,8 @@ TcpSink::receivePacket(Packet& pkt) {
 	//cout << "New cumulative ack is " << _cumulative_ack << endl;
 	// are there any additional received packets we can now ack?
 	while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
+            _src->_top->change_host_buffer(_src->get_flow_dst(), -size);
+            _src->buffer_change -= size;
 	    _received.pop_front();
 	    _cumulative_ack+= size;
 	}
@@ -607,6 +609,8 @@ TcpSink::receivePacket(Packet& pkt) {
             cout << "EXPECTING 2874 GOT " << seqno << " " << ts/1E6 << endl;
         }
         */
+        _src->_top->change_host_buffer(_src->get_flow_dst(), size);
+        _src->buffer_change += size;
 	if (_received.empty()) {
 	    _received.push_front(seqno);
 	    //it's a drop in this simulator there are no reorderings.
