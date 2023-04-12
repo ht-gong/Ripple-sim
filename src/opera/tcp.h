@@ -62,8 +62,8 @@ class TcpSrc : public PacketSink, public EventSource {
     inline int get_flow_dst() {return _flow_dst;}
     inline void set_start_time(simtime_picosec startTime) {_start_time = startTime;}
     inline simtime_picosec get_start_time() {return _start_time;};
-    void add_to_dropped(uint64_t seqno);
-    bool was_it_dropped(uint64_t seqno);
+    void add_to_dropped(uint64_t seqno); //signal dropped seqno
+    bool was_it_dropped(uint64_t seqno, bool clear); //check if seqno was dropped. if clear, remove it from list
 
     // should really be private, but loggers want to see:
     uint64_t _highest_sent;  //seqno is in bytes
@@ -186,10 +186,17 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
  private:
     // Connectivity
     uint16_t _crt_path;
+
+    //FD info tracking
     simtime_picosec last_ts = 0;
     unsigned last_hops = 0;
     unsigned last_queueing = 0;
     unsigned last_seqno = 0;
+
+    bool waiting_for_seq = false;
+    unsigned out_of_seq_n = 0;
+    simtime_picosec out_of_seq_fts = 0;
+    simtime_picosec out_of_seq_rxts = 0;
 
     void connect(TcpSrc& src);
     //const Route* _route;
