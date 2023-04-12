@@ -578,7 +578,7 @@ TcpSink::receivePacket(Packet& pkt) {
         cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " << last_seqno << " " 
-            "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
+            "LATE " << fts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
         _src->_found_reorder++;
     }
     last_ts = fts;
@@ -599,47 +599,54 @@ TcpSink::receivePacket(Packet& pkt) {
     if (seqno == _cumulative_ack+1) { // it's the next expected seq no
 	_cumulative_ack = seqno + size - 1;
     if (waiting_for_seq) {
-        cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
-            << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << endl;
+        if(!(fts > out_of_seq_fts)){ //if retransmitted don't print, false positive
+            cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
+                << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << out_of_seq_n << endl;
+        }
         waiting_for_seq = false;
     }
 	//cout << "New cumulative ack is " << _cumulative_ack << endl;
 	// are there any additional received packets we can now ack?
     while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
-        _src->_top->change_host_buffer(_src->get_flow_dst(), -size);
-        _src->buffer_change -= size;
+        _src->_top->decr_host_buffer(_src->get_flow_dst());
+        _src->buffer_change--;
         _received.pop_front();
         _cumulative_ack+= size;
     }
     } else if (seqno < _cumulative_ack+1) {
     } else { // it's not the next expected sequence number
     //check whether the expected seqno was dropped. if not, it's a reorder
-    if(!_src->was_it_dropped(seqno, false)) {
+    if(!_src->was_it_dropped(_cumulative_ack+1, false)) {
         if(!waiting_for_seq) {
             waiting_for_seq = true;
             out_of_seq_fts = fts;
             out_of_seq_rxts = _src->eventlist().now();
         }
         out_of_seq_n += 1;
+    } else if (waiting_for_seq) {
+        //it could have been dropped while arriving late...
+        waiting_for_seq = false;
     }
         /*
         if(_src->get_flow_src() == 578 && _src->get_flow_dst() == 163 && _cumulative_ack+1 == 2873+1) {
             cout << "EXPECTING 2874 GOT " << seqno << " " << ts/1E6 << endl;
         }
         */
-        _src->_top->change_host_buffer(_src->get_flow_dst(), size);
-        _src->buffer_change += size;
 	if (_received.empty()) {
 	    _received.push_front(seqno);
 	    //it's a drop in this simulator there are no reorderings.
 	    _drops += (1000 + seqno-_cumulative_ack-1)/1000;
 	} else if (seqno > _received.back()) { // likely case
 	    _received.push_back(seqno);
+        _src->_top->inc_host_buffer(_src->get_flow_dst());
+        _src->buffer_change++;
 	} else { // uncommon case - it fills a hole
 	    list<uint64_t>::iterator i;
 	    for (i = _received.begin(); i != _received.end(); i++) {
 		if (seqno == *i) break; // it's a bad retransmit
 		if (seqno < (*i)) {
+            _src->_top->inc_host_buffer(_src->get_flow_dst());
+            _src->buffer_change++;
 		    _received.insert(i, seqno);
 		    break;
 		}
