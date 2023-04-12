@@ -81,12 +81,14 @@ void TcpSrc::add_to_dropped(uint64_t seqno) {
     _dropped_at_queue.push_back(seqno);
 }
 
-bool TcpSrc::was_it_dropped(uint64_t seqno) {
+bool TcpSrc::was_it_dropped(uint64_t seqno, bool clear) {
     vector<uint64_t>::iterator it;
     it = find(_dropped_at_queue.begin(), _dropped_at_queue.end(), seqno);
     if (it != _dropped_at_queue.end()) {
         //cout << "DROPPED\n";
-        _dropped_at_queue.erase(it);
+        if(clear) {
+            _dropped_at_queue.erase(it);
+        }
         return true;
     } else {
         return false;
@@ -311,7 +313,8 @@ TcpSrc::receivePacket(Packet& pkt)
     //only count drops in CA state
     _drops++;
     //print if retransmission is due to reordered packet (was not dropped)
-    if (!was_it_dropped(_last_acked+1)) {
+    //also as we're retransmitting it, clear the seqno from the dropped list
+    if (!was_it_dropped(_last_acked+1, true)) {
         cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size  << " " << seqno << endl;
         _found_retransmit++;
     }
@@ -595,6 +598,11 @@ TcpSink::receivePacket(Packet& pkt) {
 
     if (seqno == _cumulative_ack+1) { // it's the next expected seq no
 	_cumulative_ack = seqno + size - 1;
+    if (waiting_for_seq) {
+        cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
+            << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << endl;
+        waiting_for_seq = false;
+    }
 	//cout << "New cumulative ack is " << _cumulative_ack << endl;
 	// are there any additional received packets we can now ack?
     while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
@@ -605,6 +613,15 @@ TcpSink::receivePacket(Packet& pkt) {
     }
     } else if (seqno < _cumulative_ack+1) {
     } else { // it's not the next expected sequence number
+    //check whether the expected seqno was dropped. if not, it's a reorder
+    if(!_src->was_it_dropped(seqno, false)) {
+        if(!waiting_for_seq) {
+            waiting_for_seq = true;
+            out_of_seq_fts = fts;
+            out_of_seq_rxts = _src->eventlist().now();
+        }
+        out_of_seq_n += 1;
+    }
         /*
         if(_src->get_flow_src() == 578 && _src->get_flow_dst() == 163 && _cumulative_ack+1 == 2873+1) {
             cout << "EXPECTING 2874 GOT " << seqno << " " << ts/1E6 << endl;
