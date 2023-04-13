@@ -638,6 +638,8 @@ TcpSink::receivePacket(Packet& pkt) {
         }
         */
 	if (_received.empty()) {
+            _src->_top->inc_host_buffer(_src->get_flow_dst());
+            _src->buffer_change++;
 	    _received.push_front(seqno);
 	    //it's a drop in this simulator there are no reorderings.
 	    _drops += (1000 + seqno-_cumulative_ack-1)/1000;
