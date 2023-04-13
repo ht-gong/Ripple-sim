@@ -186,10 +186,7 @@ TcpSrc::receivePacket(Packet& pkt)
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << endl;
         //if (_found_reorder == 0) assert(_found_retransmit == 0);
         /*
-        if (_found_reorder == 0 && _found_retransmit != 0) {
-            cout << "BAD\n";
-        }
-        if (get_flow_src() == 578 && get_flow_dst() == 163) {
+        if (get_flow_src() == 355 && get_flow_dst() == 429) {
             exit(1);
         }
         */
@@ -570,6 +567,12 @@ TcpSink::receivePacket(Packet& pkt) {
     simtime_picosec ts = p->ts();
     simtime_picosec fts = p->get_fabricts();
 
+    /*
+    if(_src->get_flow_src() == 355 && _src->get_flow_dst() == 429) {
+    cout << "PKT " << fts << " " << seqno << endl;
+    }
+    */
+
     bool marked = p->flags()&ECN_CE;
     
     int size = p->size(); // TODO: the following code assumes all packets are the same size
@@ -578,7 +581,7 @@ TcpSink::receivePacket(Packet& pkt) {
         cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " << last_seqno << " " 
-            "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
+            "LATE " << fts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
         _src->_found_reorder++;
     }
     last_ts = fts;
@@ -599,9 +602,12 @@ TcpSink::receivePacket(Packet& pkt) {
     if (seqno == _cumulative_ack+1) { // it's the next expected seq no
 	_cumulative_ack = seqno + size - 1;
     if (waiting_for_seq) {
+        if(!(fts > out_of_seq_fts)) {
         cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
-            << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << endl;
+            << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
+        }
         waiting_for_seq = false;
+        out_of_seq_n = 0;
     }
 	//cout << "New cumulative ack is " << _cumulative_ack << endl;
 	// are there any additional received packets we can now ack?
@@ -614,13 +620,16 @@ TcpSink::receivePacket(Packet& pkt) {
     } else if (seqno < _cumulative_ack+1) {
     } else { // it's not the next expected sequence number
     //check whether the expected seqno was dropped. if not, it's a reorder
-    if(!_src->was_it_dropped(seqno, false)) {
+    if(!_src->was_it_dropped(_cumulative_ack+1, false)) {
         if(!waiting_for_seq) {
             waiting_for_seq = true;
             out_of_seq_fts = fts;
             out_of_seq_rxts = _src->eventlist().now();
         }
         out_of_seq_n += 1;
+    } else if(waiting_for_seq) {
+        waiting_for_seq = false;
+        out_of_seq_n = 0;
     }
         /*
         if(_src->get_flow_src() == 578 && _src->get_flow_dst() == 163 && _cumulative_ack+1 == 2873+1) {
