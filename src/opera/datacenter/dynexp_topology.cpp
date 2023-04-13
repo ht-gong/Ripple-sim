@@ -285,14 +285,19 @@ void DynExpTopology::count_queue(Queue* queue){
   _link_usage[queue] = _link_usage[queue] + 1;
 }
 
-int64_t DynExpTopology::get_host_buffer(int host){
+unsigned DynExpTopology::get_host_buffer(int host){
     return _host_buffers[host];
 }
 
-void DynExpTopology::change_host_buffer(int host, int64_t mem) {
-    _host_buffers[host] += mem;
+void DynExpTopology::inc_host_buffer(int host) {
+    _host_buffers[host]++;
     if(_host_buffers[host] > _max_host_buffers[host]) {
         _max_host_buffers[host] = _host_buffers[host];
-        //cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
+        cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
     }
+}
+
+void DynExpTopology::decr_host_buffer(int host) {
+    assert(_host_buffers[host] > 0);
+    _host_buffers[host]--;
 }

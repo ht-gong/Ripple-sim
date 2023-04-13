@@ -612,8 +612,8 @@ TcpSink::receivePacket(Packet& pkt) {
 	//cout << "New cumulative ack is " << _cumulative_ack << endl;
 	// are there any additional received packets we can now ack?
     while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
-        _src->_top->change_host_buffer(_src->get_flow_dst(), -size);
-        _src->buffer_change -= size;
+        _src->_top->decr_host_buffer(_src->get_flow_dst());
+        _src->buffer_change--;
         _received.pop_front();
         _cumulative_ack+= size;
     }
@@ -628,6 +628,7 @@ TcpSink::receivePacket(Packet& pkt) {
         }
         out_of_seq_n += 1;
     } else if(waiting_for_seq) {
+        //it could have been dropped while arriving late...
         waiting_for_seq = false;
         out_of_seq_n = 0;
     }
@@ -636,19 +637,21 @@ TcpSink::receivePacket(Packet& pkt) {
             cout << "EXPECTING 2874 GOT " << seqno << " " << ts/1E6 << endl;
         }
         */
-        _src->_top->change_host_buffer(_src->get_flow_dst(), size);
-        _src->buffer_change += size;
 	if (_received.empty()) {
 	    _received.push_front(seqno);
 	    //it's a drop in this simulator there are no reorderings.
 	    _drops += (1000 + seqno-_cumulative_ack-1)/1000;
 	} else if (seqno > _received.back()) { // likely case
 	    _received.push_back(seqno);
+        _src->_top->inc_host_buffer(_src->get_flow_dst());
+        _src->buffer_change++;
 	} else { // uncommon case - it fills a hole
 	    list<uint64_t>::iterator i;
 	    for (i = _received.begin(); i != _received.end(); i++) {
 		if (seqno == *i) break; // it's a bad retransmit
 		if (seqno < (*i)) {
+            _src->_top->inc_host_buffer(_src->get_flow_dst());
+            _src->buffer_change++;
 		    _received.insert(i, seqno);
 		    break;
 		}
