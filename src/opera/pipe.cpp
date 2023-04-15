@@ -217,7 +217,7 @@ void Pipe::sendFromPipe(Packet *pkt) {
                         cout << "    current slice = " << slice << endl;
                         cout << "    slice sent = " << pkt->get_slice_sent() << endl;
                         cout << "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
-                        TcpPacket *tcppkt = (TcpPacket*)&pkt;
+                        TcpPacket *tcppkt = (TcpPacket*)pkt;
                         tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
                         pkt->free();
                         break;
