@@ -93,7 +93,7 @@ void Queue::sendFromQueue(Packet* pkt) {
                         break;
                     case TCP:
                         cout << "!!! TCP";
-                        TcpPacket *tcppkt = (TcpPacket*)&pkt;
+                        TcpPacket *tcppkt = (TcpPacket*)pkt;
                         tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
                 }
                 cout << " packet dropped: port & dst didn't match! (queue.cpp)" << endl;
@@ -105,6 +105,11 @@ void Queue::sendFromQueue(Packet* pkt) {
                 return;
             }
         }
+        /*
+        if(pkt->type() == TCP && pkt->get_src() == 186 && pkt->get_dst() == 121) {
+        cout << "SENTOUT " << eventlist().now() << endl;
+        }
+        */
         nextpipe = top->get_pipe_tor(pkt->get_crtToR(), pkt->get_crtport());
         nextpipe->receivePacket(*pkt);
 

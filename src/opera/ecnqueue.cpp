@@ -61,6 +61,7 @@ ECNQueue::receivePacket(Packet & pkt)
         if(pkt.type() == TCP){
             TcpPacket *tcppkt = (TcpPacket*)&pkt;
             tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
+            cout << "DROPPED\n";
         }
         pkt.free();
         _num_drops++;
