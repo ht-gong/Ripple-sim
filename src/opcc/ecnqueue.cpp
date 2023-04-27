@@ -37,10 +37,11 @@ ECNQueue::receivePacket(Packet & pkt)
     }
     //downlink ports only have one queue
     int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
-    /*
+/*
     cout << "Queue " << _tor << "," << _port << " receivePacket seq " << seqno << 
-        " pktslice " << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << endl;
-    */
+        " pktslice " << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
+	" src,dst " << pkt.get_src() << "," << pkt.get_dst() << endl;
+*/
 
     if (queuesize()+pkt.size() > _maxsize) {
         /* if the packet doesn't fit in the queue, drop it */
@@ -110,10 +111,11 @@ ECNQueue::completeService()
         seqno = ((TcpAck*)pkt)->ackno();
     }
     int pkt_slice = pkt->get_crtslice();
-    /*
+/*
     cout << "Queue " << _tor << "," << _port << " completeService seq " << seqno << 
-        " pktslice" << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << endl;
-    */
+        " pktslice" << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
+	" src,dst " << pkt->get_src() << "," << pkt->get_dst() << endl;
+*/
 
     sendFromQueue(_sending_pkt);
     _sending_pkt = NULL;
@@ -131,7 +133,7 @@ mem_b ECNQueue::slice_queuesize(int slice){
 
 mem_b ECNQueue::queuesize() {
     if(_top->is_downlink(_port))
-        return _queuesize[_dl_queue];
+        return _queuesize[0];
     int sum = 0;
     int i;
     for(i = 0; i < _top->get_nsuperslice()*2; i++){

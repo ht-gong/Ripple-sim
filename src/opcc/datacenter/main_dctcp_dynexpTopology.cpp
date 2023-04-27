@@ -35,7 +35,7 @@ uint32_t delay_ToR2ToR = 500; // tor-to-tor link delay in nanoseconds
 #define DEFAULT_HEADER_SIZE 64 // header size, Bytes
     // note: there is another parameter defined in `ndppacket.h`: "ACKSIZE". This should be set to the same size.
 // set the NDP queue size in units of packets (of length DEFAULT_PACKET_SIZE Bytes)
-#define DEFAULT_QUEUE_SIZE 8
+#define DEFAULT_QUEUE_SIZE 999
 
 //enable/disable long flows
 #define LONG_FLOWS_ENABLED 1

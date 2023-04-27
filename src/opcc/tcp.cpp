@@ -418,7 +418,7 @@ TcpSrc::send_packets() {
 
         uint16_t size = _highest_sent+_mss <= _flow_size ? _mss : _flow_size-_highest_sent+1;
         TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _highest_sent+1, data_seq, size);
-        //cout << "sending seqno:" << p->seqno() << endl;
+        //cout << "sending seqno: " << p->seqno() << " flowsize: " << _flow_size << endl;
         //p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
         p->set_ts(eventlist().now());
 

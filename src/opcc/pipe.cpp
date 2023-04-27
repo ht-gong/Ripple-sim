@@ -126,7 +126,7 @@ void Pipe::sendFromPipe(Packet *pkt) {
             int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
             if (nextToR >= 0) {// the rotor switch is up
                 pkt->set_crtToR(nextToR);
-                //cout << "Pipe next hop for " << seqno << " is " << pkt->get_crtToR() << endl;
+                //cout << "Pipe next hop for " << seqno << "," << pkt->get_src() << "," << pkt->get_dst() << " is " << pkt->get_crtToR() << endl;
 
             } else { // the rotor switch is down, "drop" the packet
 
@@ -179,18 +179,19 @@ void Pipe::sendFromPipe(Packet *pkt) {
                         break;
                     case TCP:
                         cout << "!!! TCP packet clipped in pipe (rotor switch down)" << 
-                            "    time = " << timeAsUs(eventlist().now()) << " us"
-                            "    current slice = " << slice << 
-                            "    slice sent = " << pkt->get_slice_sent() << 
-                            "    slice scheduled = " << pkt->get_crtslice() << 
-                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << 
-                            " seq " << ((TcpAck*)pkt)->ackno() << endl;
+                            "time = " << timeAsUs(eventlist().now()) << " us"
+                            " current slice = " << slice << 
+                            " slice sent = " << pkt->get_slice_sent() << 
+                            " slice scheduled = " << pkt->get_crtslice() << 
+                            " src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << 
+                            " seq " << ((TcpPacket*)pkt)->seqno() << endl;
                         TcpPacket *tcppkt = (TcpPacket*)pkt;
                         tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
                         //cout << "    FAILED " << pkt->get_ndpsrc()->get_flowsize() << " bytes" << endl; 
                         pkt->free();
                         break;
                 }
+		assert(0);
                 return;
             }
         }
