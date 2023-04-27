@@ -9,10 +9,11 @@
 #include <list>
 #include <utility>
 #include "config.h"
-#include "compositequeue.h"
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
+#include "queue.h"
+#include "hoho_utils.h"
 
 
 class Pipe : public EventSource, public PacketSink {
@@ -35,7 +36,7 @@ class Pipe : public EventSource, public PacketSink {
     list<pktrecord_t> _inflight; // the packets in flight (or being serialized)
     string _nodename;
 
-    HopDelayForward _hop_delay_forward;
+    HohoRouting _hoho_routing;
 };
 
 class UtilMonitor : public EventSource {

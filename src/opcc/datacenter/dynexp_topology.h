@@ -14,7 +14,7 @@
 
 #ifndef QT
 #define QT
-typedef enum {COMPOSITE} queue_type;
+typedef enum {DEFAULT, COMPOSITE, ECN} queue_type;
 #endif
 
 class Queue;
@@ -59,6 +59,9 @@ class DynExpTopology: public Topology{
   int get_no_paths(int srcToR, int dstToR, int slice);
   pair<int, int> get_routing(int srcToR, int dstToR, int slice); // Hop-by-hop routing
   pair<int, int> get_direct_routing(int srcToR, int dstToR, int slice); // Direct routing between src and dst ToRs
+  unsigned get_host_buffer(int host);
+  void inc_host_buffer(int host);
+  void decr_host_buffer(int host);
 
 
   Logfile* logfile;
@@ -90,6 +93,8 @@ class DynExpTopology: public Topology{
 
  private:
   map<Queue*,int> _link_usage;
+  map<int, unsigned> _host_buffers;
+  map<int, unsigned> _max_host_buffers;
   void read_params(string topfile);
   void set_params();
   // Tor-to-Tor connections across time

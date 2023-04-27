@@ -29,8 +29,6 @@
 // *** don't change this default - override it by calling NdpSrc::setMinRTO()
 #define DEFAULT_RTO_MIN 5000
 
-enum RouteStrategy {NOT_SET, SINGLE_PATH, SCATTER_PERMUTE, SCATTER_RANDOM, PULL_BASED};
-
 class NdpSink;
 
 class Queue;

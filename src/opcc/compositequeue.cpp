@@ -9,6 +9,7 @@
 
 #include "dynexp_topology.h"
 #include "ndp.h"
+#include "hoho_utils.h"
 
 //use clearing calendar queues
 //#define CALENDAR_CLEAR
@@ -27,11 +28,8 @@ extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist,
         QueueLogger* logger, DynExpTopology* topology, int tor, int port)
-    : Queue(bitrate, maxsize, eventlist, logger), _hop_delay_forward(HopDelayForward(eventlist)), _top(topology),
-      _alarm(QueueAlarm(eventlist, port, this, topology))
+    : Queue(bitrate, maxsize, eventlist, logger, tor, port, topology), _hop_delay_forward(HopDelayForward(eventlist))
 {
-    _tor = tor;
-    _port = port;
     // original version:
     //_ratio_high = 10; // number of headers to send per data packet (originally 24 for Jan '18 version)
     //_ratio_low = 1; // number of full packets
@@ -358,7 +356,7 @@ void CompositeQueue::doNextEvent() {
     completeService();
 }
 
-void CompositeQueue::receivePacket(Packet& _pkt) {
+void CompositeQueue::receivePacket(Packet& _pkt, int slice) {
     Packet* pkt = &_pkt;
     Packet* booted_pkt = NULL;
     bool packet_added = false;
@@ -799,9 +797,10 @@ void HopDelayForward::bouncePkt(Packet* pkt) {
                                 // YX: no need to set a limit to # max hops, need double check.
         pkt->set_maxhops(INT_MAX);
 
-        simtime_picosec sent_time = routing(pkt, eventlist().now());
-        insertBouncedQ(sent_time, pkt);
-        eventlist().sourceIsPending(*this, sent_time);
+        //TODO uncomment and fix below lol
+        //simtime_picosec sent_time = _routing->routing(pkt, eventlist().now());
+        //insertBouncedQ(sent_time, pkt);
+        //eventlist().sourceIsPending(*this, sent_time);
     }
 }
 
@@ -815,6 +814,7 @@ void HopDelayForward::doNextEvent() {
     _bounced_pkts.pop_back();
 }
 
+/*
 simtime_picosec HopDelayForward::routing(Packet* pkt, simtime_picosec t) {
 	DynExpTopology* top = pkt->get_topology();
 	int slice = top->time_to_slice(t);
@@ -932,3 +932,4 @@ void QueueAlarm::doNextEvent(){
     assert(next_time > t);
     eventlist().sourceIsPending(*this, next_time); 
 }
+*/
