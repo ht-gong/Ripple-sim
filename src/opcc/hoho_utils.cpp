@@ -66,31 +66,25 @@ simtime_picosec HohoRouting::routing(Packet* pkt, simtime_picosec t) {
 
     Queue* q = top->get_queue_tor(pkt->get_crtToR(), uplink);
 
-/*
-       cout << "Routing sent_slice==slice hop " << pkt->get_crthop() << " crtToR " << 
-       pkt->get_crtToR() << " port " << pkt->get_crtport() << " seqno " << seqno <<
-       " sent_slice " << sent_slice << " slice " << slice << endl;
-*/
-    // YX: TODO: calculate delay considering the queue occupancy, same below
-    // FD: TODO: idk why draintime*2 but it works lol
+    //calculate delay considering the queue occupancy
     int finish_slice = top->time_to_slice(t + q->get_queueing_delay(sent_slice) +
-            /*q->drainTime(pkt)*2*/ 229760 + timeFromNs(delay_ToR2ToR)); // plus the link delay
+            q->drainTime(pkt) /*229760*/ + timeFromNs(delay_ToR2ToR)); // plus the link delay
 
     if (finish_slice == sent_slice) {
-/*
+        /*
         cout << "Routing finish_slice==slice slice=" << slice << " t=" << 
-            (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt)*2) + timeFromNs(delay_ToR2ToR) << endl;
+            (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt)) + timeFromNs(delay_ToR2ToR) << endl;
         cout << "qdelay: " << q->get_queueing_delay(sent_slice) << " draintime: " 
-            << q->drainTime(pkt)*2 << " pktsize " << pkt->size() << " slice " << slice << " sent_slice: " << sent_slice << endl;
-*/
+            << q->drainTime(pkt) << " slice " << slice << " sent_slice: " <<  sent_slice << " seqno: " << seqno << endl;
+        */
         return (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt));
     } else {
-/*
-        cout << "Rerouting: " <<  (q->get_queueing_delay(sent_slice) + q->drainTime(pkt)*2 + timeFromNs(delay_ToR2ToR)) <<
-            " delay t="  << (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt)*2 + timeFromNs(delay_ToR2ToR)) << endl;
+        /*
+        cout << "Rerouting: " <<  (q->get_queueing_delay(sent_slice) + q->drainTime(pkt) + timeFromNs(delay_ToR2ToR)) <<
+            " delay t="  << (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt) + timeFromNs(delay_ToR2ToR)) << endl;
         cout << "qdelay: " << q->get_queueing_delay(sent_slice) << " draintime: " 
-            << q->drainTime(pkt) << " slice " << slice << " sent_slice: " << sent_slice << endl;
-*/
+            << q->drainTime(pkt) << " slice " << slice << " sent_slice: " << sent_slice << " seqno: " << seqno << endl;
+        */
         int next_absolute_slice = top->time_to_absolute_slice(t) + 1;
         simtime_picosec next_time = top->get_slice_start_time(next_absolute_slice);
         return routing(pkt, next_time);

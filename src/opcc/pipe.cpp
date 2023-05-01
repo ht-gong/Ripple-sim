@@ -27,6 +27,13 @@ void Pipe::receivePacket(Packet& pkt)
     // debug:
     // cout << "   Pipe received a packet." << endl;
     // cout << "long flow? " << pkt.get_longflow() << endl;
+    unsigned seqno = 0;
+    if(pkt.type() == TCP) {
+        seqno = ((TcpPacket*)&pkt)->seqno();
+    } else if (pkt.type() == TCPACK) {
+        seqno = ((TcpAck*)&pkt)->ackno();
+    }
+    //cout << "Pipe receivePacket at " << eventlist().now() << " seqno " << seqno << " delay " << _delay << endl;
 
     if (_inflight.empty()){
         /* no packets currently inflight; need to notify the eventlist
@@ -60,6 +67,13 @@ uint64_t Pipe::reportBytes() {
 
 // YX: TODO: this is routing for short flows, need to change for long flows
 void Pipe::sendFromPipe(Packet *pkt) {
+    unsigned seqno = 0;
+    if(pkt->type() == TCP) {
+        seqno = ((TcpPacket*)&pkt)->seqno();
+    } else if (pkt->type() == TCPACK) {
+        seqno = ((TcpAck*)&pkt)->ackno();
+    }
+    //cout << "Pipe sendFromPipe at " << eventlist().now() << " seqno " << seqno << endl;
     if (pkt->is_lasthop()) {
         // we'll be delivering to an NdpSink or NdpSrc based on packet type
         switch (pkt->type()) {
