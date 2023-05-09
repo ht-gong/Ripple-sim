@@ -70,9 +70,11 @@ class TcpSrc : public PacketSink, public EventSource {
     uint64_t _packets_sent;
     uint64_t _flow_size;
     uint32_t _cwnd;
+    uint32_t _old_cwnd;
     uint32_t _maxcwnd;
     uint64_t _last_acked;
     uint32_t _ssthresh;
+    uint32_t _old_ssthresh;
     uint16_t _dupacks;
 #ifdef PACKET_SCATTER
     uint16_t DUPACK_TH;
@@ -99,6 +101,7 @@ class TcpSrc : public PacketSink, public EventSource {
     uint64_t _recoverq;
     uint16_t _pkt_size; // packet size. Equal to _flow_size when _flow_size < _mss. Else equal to _mss
     bool _in_fast_recovery;
+    simtime_picosec _fast_recovery_start;
 
     bool _established;
 
@@ -195,6 +198,7 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
 
     bool waiting_for_seq = false;
     unsigned out_of_seq_n = 0;
+    unsigned cons_out_of_seq_n = 0;
     simtime_picosec out_of_seq_fts = 0;
     simtime_picosec out_of_seq_rxts = 0;
 
