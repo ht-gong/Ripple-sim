@@ -98,6 +98,8 @@ public:
 	inline seq_t data_ackno() const {return _data_ackno;}
 	inline simtime_picosec ts() const {return _ts;}
 	inline void set_ts(simtime_picosec ts) {_ts = ts;}
+    void set_sack(list<pair<seq_t, seq_t>> sacks) {_sacks = sacks;}
+    list<pair<seq_t, seq_t>> get_sack() {return _sacks;}
     virtual inline TcpSrc* get_tcpsrc(){return _tcp_src;}
     virtual inline TcpSink* get_tcpsink(){return _tcp_sink;}
 
@@ -108,6 +110,7 @@ protected:
     TcpSink *_tcp_sink;
 	seq_t _seqno;
 	seq_t _ackno, _data_ackno;
+    list<pair<seq_t, seq_t>> _sacks;
 	simtime_picosec _ts;
 	static PacketDB<TcpAck> _packetdb;
 };

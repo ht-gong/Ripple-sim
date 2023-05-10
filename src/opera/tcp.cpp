@@ -1,12 +1,14 @@
 // -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #include "tcp.h"
 //#include "mtcp.h"
+#include "config.h"
 #include "datacenter/dynexp_topology.h"
 #include "ecn.h"
 #include <iostream>
 #include <algorithm>
 
 #define KILL_THRESHOLD 5
+//#define TCP_SACK
 ////////////////////////////////////////////////////////////////
 //  TCP SOURCE
 ////////////////////////////////////////////////////////////////
@@ -131,6 +133,8 @@ TcpSrc::receivePacket(Packet& pkt)
     simtime_picosec ts;
     TcpAck *p = (TcpAck*)(&pkt);
     TcpAck::seq_t seqno = p->ackno();
+    list<pair<uint64_t, uint64_t>> sacks = p->get_sack();
+    bool is_sack_loss;
     //cout << "TcpSrc receive packet ackno:" << seqno << endl;
 
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
@@ -193,6 +197,9 @@ TcpSrc::receivePacket(Packet& pkt)
         _finished = true;
     }
 
+#ifdef TCP_SACK
+    _sack_handler.update(_last_acked, sacks, ts);
+#endif
     if (seqno > _last_acked) { // a brand new ack
         _RFC2988_RTO_timeout = eventlist().now() + _rto;// RFC 2988 5.3
         _last_ping = eventlist().now();
@@ -203,17 +210,13 @@ TcpSrc::receivePacket(Packet& pkt)
             _last_ping = timeInf;
         }
 
-#ifdef MODEL_RECEIVE_WINDOW
-        int cnt;
-
-        _sent_packets.ack_packet(seqno);
-
-        //if ((cnt = _sent_packets.ack_packet(seqno)) > 2)
-        //  cout << "ACK "<<cnt<<" packets on " << _flow.id << " " << _highest_sent+1 << " packets in flight " << _sent_packets.crt_count << " diff " << (_highest_sent+_mss-_last_acked)/1000 << " last_acked " << _last_acked << " at " << timeAsMs(eventlist().now()) << endl;
-#endif
-
+#ifdef TCP_SACK
+        is_sack_loss = _sack_handler.isLost(_last_acked+1);
+        if (!_in_fast_recovery && !is_sack_loss) { //can also infer loss from sack, same behavior as 3dupack
+#else
         if (!_in_fast_recovery) { // best behaviour: proper ack of a new packet, when we were expecting it
                                   //clear timers
+#endif
 
             _last_acked = seqno;
             _dupacks = 0;
@@ -225,8 +228,6 @@ TcpSrc::receivePacket(Packet& pkt)
 
             _unacked = _cwnd;
             _effcwnd = _cwnd;
-            if (_logger) 
-                _logger->logTcp(*this, TcpLogger::TCP_RCV);
             send_packets();
             return;
         }
@@ -243,8 +244,6 @@ TcpSrc::receivePacket(Packet& pkt)
             _dupacks = 0;
             _in_fast_recovery = false;
 
-            if (_logger) 
-                _logger->logTcp(*this, TcpLogger::TCP_RCV_FR_END);
             send_packets();
             return;
         }
@@ -259,8 +258,6 @@ TcpSrc::receivePacket(Packet& pkt)
         else 
             _cwnd = 0;
         _cwnd += _mss;
-        if (_logger) 
-            _logger->logTcp(*this, TcpLogger::TCP_RCV_FR);
         retransmit_packet();
         send_packets();
         return;
@@ -285,7 +282,11 @@ TcpSrc::receivePacket(Packet& pkt)
     // Not yet in fast recovery. What should we do instead?
     _dupacks++;
 
+#ifdef TCP_SACK
+        if (_dupacks!=3 && !is_sack_loss)
+#else
         if (_dupacks!=3) 
+#endif
         { // not yet serious worry
             /*
             if (_logger) 
@@ -339,10 +340,6 @@ TcpSrc::receivePacket(Packet& pkt)
     _recoverq = _highest_sent; // _recoverq is the value of the
                                // first ACK that tells us things
                                // are back on track
-    /*
-       if (_logger) 
-       _logger->logTcp(*this, TcpLogger::TCP_RCV_DUP_FASTXMIT);
-       */
 }
 
 void TcpSrc::deflate_window(){
@@ -415,6 +412,30 @@ TcpSrc::send_packets() {
         //rtt in ms
         //printf("%d\n",c);
     }
+#ifdef TCP_SACK
+    //sack system will try to send possibly lost packets before sending new data
+    if(_in_fast_recovery) {
+        uint64_t in_flight = _sack_handler.setPipe();
+        while(_cwnd - in_flight >= _mss) {
+            uint64_t nextseq = _sack_handler.nextSeg();
+            TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, 
+                    nextseq, 0, _mss);
+            p->set_ts(eventlist().now());
+            if(nextseq <= _highest_sent) {
+                _sack_handler.updateHiRtx(nextseq);
+            }
+            if(nextseq > _highest_sent) {
+                _sack_handler.updateHiData(nextseq);
+            }
+
+            sendToNIC(p);
+            if(_RFC2988_RTO_timeout == timeInf) {// RFC2988 5.1
+                _RFC2988_RTO_timeout = eventlist().now() + _rto;
+            }
+            in_flight += _mss;
+        }
+    } else {
+#endif
 
     while ((_last_acked + c >= _highest_sent + _mss) 
             && (_highest_sent < _flow_size)) {
@@ -423,11 +444,13 @@ TcpSrc::send_packets() {
         uint16_t size = _highest_sent+_mss <= _flow_size ? _mss : _flow_size-_highest_sent+1;
         TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _highest_sent+1, data_seq, size);
         //cout << "sending seqno:" << p->seqno() << endl;
-        //p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
         p->set_ts(eventlist().now());
 
         _highest_sent += size;  //XX beware wrapping
         _packets_sent += size;
+#ifdef TCP_SACK
+        _sack_handler.updateHiData(_highest_sent);
+#endif
 
         sendToNIC(p);
 
@@ -435,6 +458,9 @@ TcpSrc::send_packets() {
             _RFC2988_RTO_timeout = eventlist().now() + _rto;
         }
     }
+#ifdef TCP_SACK
+    }
+#endif
     //cout << "stopped sending last_acked " << _last_acked << " _highest_sent " << _highest_sent << " c " << c << endl;
 }
 
@@ -453,6 +479,9 @@ TcpSrc::retransmit_packet() {
     uint64_t data_seq = 0;
 
     TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _last_acked+1, data_seq, _pkt_size);
+#ifdef TCP_SACK
+    _sack_handler.updateHiRtx(_last_acked+1);
+#endif
 
     //p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
     p->set_ts(eventlist().now());
@@ -686,6 +715,41 @@ TcpSink::send_ack(simtime_picosec ts,bool marked) {
     TcpAck *ack = TcpAck::newpkt(_src->_top, _src->_flow, _src->_flow_dst, _src->_flow_src, 
             _src, 0, 0, _cumulative_ack, 0);
 
+    //set SACKs
+    //SACK field is blocks in the format of seqx1-seqy1, seqx2-seqy2,... 
+    //indicating blocks of received data
+    uint16_t mss = _src->_mss;
+    list<pair<TcpAck::seq_t, TcpAck::seq_t>> sacks;
+    list<TcpAck::seq_t>::iterator it;
+    TcpAck::seq_t front = -1;
+    TcpAck::seq_t back = -1; 
+    for(it = _received.begin(); it != _received.end(); ++it){
+        TcpAck::seq_t seqno = (*it);
+        if(front == -1) {
+            front = seqno;
+            back = seqno+mss;
+        //contiguous sequence? then same sack block
+        } else if(seqno-back <= 0) {
+            back = seqno+mss;
+        //break in contiguity? then new sack block
+        } else {
+            sacks.push_back({front,back});
+            front = seqno;
+            back = seqno+mss;
+        }
+    }
+    //found at least one block
+    if(front != -1) sacks.push_back({front,back});
+    ack->set_sack(sacks);
+    /*
+    if (sacks.size() > 0) cout << "PRODUCED SACKS:\n";
+    for(auto p : sacks){
+        cout << "SACK " << p.first << "," << p.second << endl;
+    }
+    for(auto seq : _received){
+        cout << "RECVD " << seq << endl;
+    }
+    */
     //ack->flow().logTraffic(*ack,*this,TrafficLogger::PKT_CREATESEND);
     ack->set_ts(ts);
     if (marked) 
@@ -717,4 +781,97 @@ void TcpRtxTimerScanner::doNextEvent() {
 	(*i)->rtx_timer_hook(now,_scanPeriod);
     }
     eventlist().sourceIsPendingRel(*this, _scanPeriod);
+}
+
+////////////////////////////////////////////////////////////////
+//  TCP SACK HANDLER (sender side)
+////////////////////////////////////////////////////////////////
+
+TcpSACK::TcpSACK() {
+    _dupthresh = 3;
+    _mss = 1436;
+}
+
+void
+TcpSACK::update(uint64_t hiack, list<pair<uint64_t, uint64_t>> sacks, simtime_picosec ts) {
+    //assuming receiver has latest scoreboard, so we update ours if we ack is most recent
+    if(ts > _latest) {
+        _hiack = hiack;
+        _scoreboard = sacks;
+    }
+}
+
+bool
+TcpSACK::isLost(uint64_t seqno) {
+    list<pair<uint64_t, uint64_t>>::iterator it;
+    it = _scoreboard.begin();
+    //a packet is lost if either:
+    // 1) number of discontiguous sack after its seqno are >= thresh
+    // 2) number of sacked segments after its seqno are >= thresh
+    int seg_count = 0;
+    int seqs_count = 0;
+    while(it != _scoreboard.end()) {
+        uint64_t low = (*it).first, high = (*it).second; 
+        //should not get here...
+        if(seqno >= low && seqno < high) {
+            assert(0);
+            return false;
+        }
+        //does not count if sacks are previous to seqno
+        if(seqno >= high) {
+            ++it;
+            continue;
+        }
+        seg_count += high-low;
+        seqs_count++;
+        //either 1) or 2) is true, then we consider the segment lost
+        if(seg_count/_mss >= _dupthresh || seqs_count >= _dupthresh){
+            cout << "SACK LOSS " << ((seqs_count>=_dupthresh) ? "SEQS" : "SEGS") << endl;
+            for(auto p : _scoreboard){
+                cout << "SACK " << p.first << "," << p.second << endl;
+            }
+            return true;
+        }
+        ++it;
+    }
+    return false;
+}
+
+bool TcpSACK::isSacked(uint64_t seqno) {
+    list<pair<uint64_t, uint64_t>>::iterator it;
+    if(seqno < _hiack) return true;
+    for(it = _scoreboard.begin(); it != _scoreboard.end(); ++it) {
+        uint64_t low = (*it).first, high = (*it).second; 
+        if(seqno >= low && seqno < high) return true; 
+    } 
+    return false;
+}
+
+// Returns number of in-flight bytes according to sack subsystem
+uint64_t
+TcpSACK::setPipe() {
+    uint64_t in_flight = 0;
+    for(uint64_t seqno = _hiack; seqno <= _hidata+_mss; seqno += _mss) {
+        if(isLost(seqno)) {
+            in_flight += _mss;
+        } 
+        if(seqno <= _hirtx){
+            in_flight += _mss;
+        }
+    }
+    return in_flight;
+}
+
+// Returns next segment to send in case we're in recovery.
+// Priority to possibly lost segments in the scoreboard, otherwise send new data
+uint64_t
+TcpSACK::nextSeg() {
+    for(uint64_t seqno = _hiack; seqno <= _hidata+_mss; seqno += _mss) {
+        if (isSacked(seqno)) continue;
+        uint64_t highest_sack = _scoreboard.back().second;
+        if(seqno > _hirtx && seqno < highest_sack && isLost(seqno)) {
+            return seqno;
+        }
+    } 
+    return _hidata+1;
 }

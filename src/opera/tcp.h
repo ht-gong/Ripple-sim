@@ -26,8 +26,26 @@
 //#define MAX_SENT 10000
 
 class TcpSink;
-//class MultipathTcpSrc;
-//class MultipathTcpSink;
+
+class TcpSACK {
+ public:
+    TcpSACK();
+    void update(uint64_t hiack, list<pair<uint64_t, uint64_t>> sacks, simtime_picosec ts);
+    uint64_t setPipe();
+    bool isLost(uint64_t seqno);
+    bool isSacked(uint64_t seqno);
+    uint64_t nextSeg();
+
+    void updateHiRtx(uint64_t hirtx) {_hirtx = hirtx;}
+    void updateHiData(uint64_t hidata) {_hidata = hidata;}
+ private:
+    uint64_t _hiack, _hidata, _hirtx;
+    uint32_t _pipe;
+    uint16_t _mss;
+    unsigned _dupthresh;
+    simtime_picosec _latest;
+    list<pair<uint64_t, uint64_t>> _scoreboard;
+};
 
 class TcpSrc : public PacketSink, public EventSource {
     friend class TcpSink;
@@ -121,10 +139,6 @@ class TcpSrc : public PacketSink, public EventSource {
     void send_packets();
 
 	
-#ifdef MODEL_RECEIVE_WINDOW
-    SentPackets _sent_packets;
-    uint64_t _highest_data_seq;
-#endif
     int _subflow_id;
 
     virtual void inflate_window();
@@ -134,6 +148,8 @@ class TcpSrc : public PacketSink, public EventSource {
     //const Route* _old_route;
     uint64_t _last_packet_with_old_route;
     vector<uint64_t> _dropped_at_queue;
+    vector<pair<TcpAck::seq_t, TcpAck::seq_t>> _sacks;
+    TcpSACK _sack_handler;
 
     // Housekeeping
     TcpLogger* _logger;
@@ -186,8 +202,6 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
  private:
     // Connectivity
     uint16_t _crt_path;
-
-    //FD info tracking
     simtime_picosec last_ts = 0;
     unsigned last_hops = 0;
     unsigned last_queueing = 0;
@@ -217,5 +231,6 @@ class TcpRtxTimerScanner : public EventSource {
     typedef list<TcpSrc*> tcps_t;
     tcps_t _tcps;
 };
+
 
 #endif
