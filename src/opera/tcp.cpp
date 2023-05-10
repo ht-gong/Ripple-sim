@@ -237,6 +237,17 @@ TcpSrc::receivePacket(Packet& pkt)
             // got ACKs for all the "recovery window": resume
             // normal service
             uint32_t flightsize = _highest_sent - seqno;
+	    //FD reordering euristics?
+	    /*
+	    if(eventlist().now() - _fast_recovery_start <= _rtt) {
+            cout << "EURISTICS ts " << eventlist().now() << " frt " << _fast_recovery_start << " rtt " << _rtt << endl;
+            _ssthresh = _old_ssthresh;
+	    assert(_old_ssthresh != 0);
+	    } else {
+            cout << "NOEURISTICS ts " << eventlist().now() << " frt " << _fast_recovery_start << " rtt " << _rtt << endl;
+            _cwnd = min(_ssthresh, flightsize + _mss);
+	    }
+	    */
             _cwnd = min(_ssthresh, flightsize + _mss);
             _unacked = _cwnd;
             _effcwnd = _cwnd;
@@ -315,13 +326,14 @@ TcpSrc::receivePacket(Packet& pkt)
     if (!was_it_dropped(_last_acked+1, true)) {
         cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size  << " " << seqno << endl;
         _found_retransmit++;
-#define ORACLE
+//#define ORACLE
 #ifdef ORACLE
         //we know this was not dropped, do not deflate window/retransmit
         return;
 #endif
     }
 
+    _old_ssthresh = _ssthresh;
     deflate_window();
 
     if (_sawtooth>0)
@@ -337,12 +349,15 @@ TcpSrc::receivePacket(Packet& pkt)
     _unacked = _ssthresh;
     _effcwnd = 0;
     _in_fast_recovery = true;
+    _fast_recovery_start = eventlist().now();
     _recoverq = _highest_sent; // _recoverq is the value of the
                                // first ACK that tells us things
                                // are back on track
 }
 
 void TcpSrc::deflate_window(){
+	assert(_ssthresh != 0);
+	_old_ssthresh = _ssthresh;
 	_ssthresh = max(_cwnd/2, (uint32_t)(2 * _mss));
 }
 
@@ -602,14 +617,14 @@ TcpSink::receivePacket(Packet& pkt) {
     simtime_picosec fts = p->get_fabricts();
 
     /*
-    if(_src->get_flow_src() == 355 && _src->get_flow_dst() == 429) {
-    cout << "PKT " << fts << " " << seqno << endl;
+    if(_src->get_flow_src() == 506 && _src->get_flow_dst() == 337) {
+    cout << "PKT " << fts << " " << seqno << "AT " << _src->eventlist().now() << endl;
     }
     */
 
     bool marked = p->flags()&ECN_CE;
     
-    int size = p->size(); // TODO: the following code assumes all packets are the same size
+    int size = p->size();
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
     if (last_ts > fts){
         cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
@@ -635,14 +650,6 @@ TcpSink::receivePacket(Packet& pkt) {
 
     if (seqno == _cumulative_ack+1) { // it's the next expected seq no
 	_cumulative_ack = seqno + size - 1;
-    if (waiting_for_seq) {
-        if(!(fts > out_of_seq_fts)) {
-        cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
-            << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
-        }
-        waiting_for_seq = false;
-        out_of_seq_n = 0;
-    }
 	//cout << "New cumulative ack is " << _cumulative_ack << endl;
 	// are there any additional received packets we can now ack?
     while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
@@ -650,6 +657,21 @@ TcpSink::receivePacket(Packet& pkt) {
         _src->buffer_change--;
         _received.pop_front();
         _cumulative_ack+= size;
+    }
+    //outofseq is solved once all the missing holes have been filled
+    if (waiting_for_seq) {
+	if(_received.empty() || cons_out_of_seq_n < 3) {
+            if(!(fts > out_of_seq_fts)) {
+            cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
+                << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
+            }
+            waiting_for_seq = false;
+            out_of_seq_n = 0;
+	    cons_out_of_seq_n = 0;
+	} else {
+	    //cout << "NOTYETSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " ack " << seqno << " next " << _received.front() << endl;
+            out_of_seq_n++;
+        }
     }
     } else if (seqno < _cumulative_ack+1) {
     } else { // it's not the next expected sequence number
@@ -660,11 +682,13 @@ TcpSink::receivePacket(Packet& pkt) {
             out_of_seq_fts = fts;
             out_of_seq_rxts = _src->eventlist().now();
         }
-        out_of_seq_n += 1;
+        out_of_seq_n++;
+	cons_out_of_seq_n++;
     } else if(waiting_for_seq) {
         //it could have been dropped while arriving late...
         waiting_for_seq = false;
         out_of_seq_n = 0;
+	cons_out_of_seq_n = 0;
     }
         /*
         if(_src->get_flow_src() == 578 && _src->get_flow_dst() == 163 && _cumulative_ack+1 == 2873+1) {
