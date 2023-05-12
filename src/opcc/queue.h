@@ -85,7 +85,6 @@ class Queue : public EventSource, public PacketSink {
     int _num_drops;
     string _nodename;
     int _crt_tx_slice = 0;
-    int _dl_queue;
     Packet *_sending_pkt = NULL;
     HohoRouting *_routing;
     QueueAlarm *_queue_alarm;

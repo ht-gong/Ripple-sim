@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "dynexp_topology.h"
+#include "network.h"
 #include "tcppacket.h"
 #include "ndp.h"
 
@@ -21,6 +22,8 @@ simtime_picosec HohoRouting::routing(Packet* pkt, simtime_picosec t) {
         seqno = ((TcpPacket*)pkt)->seqno();
     } else if (pkt->type() == TCPACK) {
         seqno = ((TcpAck*)pkt)->ackno();
+    } else if (pkt->type() == NDP) {
+        seqno = ((NdpPacket*)pkt)->seqno();
     }
 	DynExpTopology* top = pkt->get_topology();
 	int slice = top->time_to_slice(t);
@@ -29,7 +32,6 @@ simtime_picosec HohoRouting::routing(Packet* pkt, simtime_picosec t) {
 	if (pkt->get_longflow()) {
 		// YX: get_crtToR() should give you the first ToR only, please test
         //cout << "direct routing between " << pkt->get_crtToR() << " & " << top->get_firstToR(pkt->get_dst()) << endl;
-        assert(0);
 		route = top->get_direct_routing(pkt->get_crtToR(), top->get_firstToR(pkt->get_dst()), slice);
 	} else {
 		route = top->get_routing(pkt->get_crtToR(), top->get_firstToR(pkt->get_dst()), slice);
@@ -72,18 +74,22 @@ simtime_picosec HohoRouting::routing(Packet* pkt, simtime_picosec t) {
 
     if (finish_slice == sent_slice) {
         /*
+        if(pkt->get_src() == 489 && pkt->get_dst() == 0){
         cout << "Routing finish_slice==slice slice=" << slice << " t=" << 
             (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt)) + timeFromNs(delay_ToR2ToR) << endl;
         cout << "qdelay: " << q->get_queueing_delay(sent_slice) << " draintime: " 
             << q->drainTime(pkt) << " slice " << slice << " sent_slice: " <<  sent_slice << " seqno: " << seqno << endl;
+        }
         */
         return (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt));
     } else {
         /*
+        if(pkt->get_src() == 489 && pkt->get_dst() == 0){
         cout << "Rerouting: " <<  (q->get_queueing_delay(sent_slice) + q->drainTime(pkt) + timeFromNs(delay_ToR2ToR)) <<
             " delay t="  << (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt) + timeFromNs(delay_ToR2ToR)) << endl;
         cout << "qdelay: " << q->get_queueing_delay(sent_slice) << " draintime: " 
             << q->drainTime(pkt) << " slice " << slice << " sent_slice: " << sent_slice << " seqno: " << seqno << endl;
+        }
         */
         int next_absolute_slice = top->time_to_absolute_slice(t) + 1;
         simtime_picosec next_time = top->get_slice_start_time(next_absolute_slice);

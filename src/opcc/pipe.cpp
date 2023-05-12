@@ -151,7 +151,8 @@ void Pipe::sendFromPipe(Packet *pkt) {
                             "    current slice = " << slice << 
                             "    slice sent = " << pkt->get_slice_sent() << 
                             "    slice scheduled = " << pkt->get_crtslice() << 
-                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
+                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() <<
+                            " seq " << ((TcpPacket*)pkt)->seqno() << " long? " << pkt->get_longflow() << endl;
                         pkt->free();
                         break;
                     case NDPACK:

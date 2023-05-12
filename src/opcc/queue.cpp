@@ -25,9 +25,6 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
     _logger(logger), _bitrate(bitrate), _num_drops(0)
 {
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
-    int slices = top ? top->get_nsuperslice()*2 : 1;
-    //the _dl_queueth element of the vectors is the downlink implementation (so a normal queue)
-    _dl_queue = slices;
     stringstream ss;
     _routing = new HohoRouting();
     _queue_alarm = new QueueAlarm(eventlist, port, this, top);
@@ -145,7 +142,7 @@ simtime_picosec Queue::serviceTime() {
 }
 
 int Queue::next_tx_slice(int crt_slice){
-    assert(crt_slice != _dl_queue); 
+    assert(crt_slice != _top->get_nsuperslice()*2); 
     int now =_top->time_to_slice(eventlist().now());
     if(crt_slice == now)
         return now;
@@ -160,39 +157,18 @@ int Queue::next_tx_slice(int crt_slice){
 }
 
 simtime_picosec Queue::get_queueing_delay(int slice){
-    /*
-    assert(slice != _dl_queue);
-    int i = _crt_tx_slice;
-    mem_b bytes = 0;
-    while (i != slice){
-        bytes += slice_queuesize(i); 
-        i = (i+1)%(_top->get_nsuperslice()*2);
-    }
-    return (bytes+slice_queuesize(slice))*_ps_per_byte;
-    */
     return slice_queuesize(slice)*_ps_per_byte;
 }
 
 mem_b Queue::slice_queuesize(int slice){
-    assert(slice <= _dl_queue);
+    assert(slice <= _top->get_nsuperslice()*2);
     return _queuesize;
 }
 
 mem_b Queue::queuesize() {
     return _queuesize;    
 }
-/*
-mem_b Queue::queuesize() {
-    if(_top->is_downlink(_port))
-        return _queuesize[_dl_queue];
-    int sum = 0;
-    int i;
-    for(i = 0; i < _top->get_nsuperslice()*2; i++){
-        sum += _queuesize[i];
-    }
-    return sum;
-}
-*/
+
 //////////////////////////////////////////////////
 //              Priority Queue                  //
 //////////////////////////////////////////////////

@@ -47,7 +47,7 @@ class CompositeQueue : public Queue {
  public:
     CompositeQueue(linkspeed_bps bitrate, mem_b maxsize,
 		   EventList &eventlist, QueueLogger* logger, DynExpTopology* topology, int tor, int port);
-    virtual void receivePacket(Packet& pkt, int slice = 0);
+    virtual void receivePacket(Packet& pkt);
     virtual void doNextEvent();
     // should really be private, but loggers want to see
     vector<mem_b> _queuesize_low, _queuesize_high, _queuesize_low_prime, _queuesize_high_prime;
@@ -72,9 +72,6 @@ class CompositeQueue : public Queue {
     }
     virtual const string& nodename() { return _nodename; }
 
-    int _tor; // the ToR switch this queue belongs to
-    int _port; // the port this queue belongs to
-
     int _num_packets;
     int _num_headers; // only includes data packets stripped to headers, not acks or nacks
     int _num_acks;
@@ -98,7 +95,6 @@ class CompositeQueue : public Queue {
     int _serv;
     int _ratio_high, _ratio_low, _ratio_high_prime, _ratio_low_prime, _crt;
     int _crt_send_ratio_high, _crt_send_ratio_low, _crt_trim_ratio;
-    DynExpTopology* _top;
 
     vector<list<Packet*>> _enqueued_low;
     vector<list<Packet*>> _enqueued_high;
@@ -113,7 +109,6 @@ class CompositeQueue : public Queue {
     // Must sum up to 1.0, can be tuned
     double _shortflow_bound = 0.6;
     double _longflow_bound = 0.4;
-    int _dl_queue;
 
     HopDelayForward _hop_delay_forward;
     //for events
