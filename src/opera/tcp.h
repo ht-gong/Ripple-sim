@@ -103,16 +103,13 @@ class TcpSrc : public PacketSink, public EventSource {
     //variables that are split between states in TDTCP
 #ifdef TDTCP
     vector<uint32_t> _cwnd;
-    vector<uint32_t> _old_cwnd;
     vector<uint32_t> _ssthresh;
-    vector<uint32_t> _old_ssthresh;
 #else
     uint32_t _cwnd;
-    uint32_t _old_cwnd;
-    uint32_t _maxcwnd;
     uint32_t _ssthresh;
-    uint32_t _old_ssthresh;
 #endif
+    uint32_t _old_cwnd;
+    uint32_t _old_ssthresh;
 
     int32_t _app_limited;
     DynExpTopology *_top;

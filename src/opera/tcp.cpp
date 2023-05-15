@@ -38,12 +38,13 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
 
     //_ssthresh = 30000;
 #ifdef TDTCP
+    //damn this is heavy for memory. init only at flow start and free after finished
+    /*
     _cwnd.resize(_top->get_nslices());
-    _old_cwnd.resize(_top->get_nslices());
     _ssthresh.resize(_top->get_nslices());
-    _old_ssthresh.resize(_top->get_nslices());
     for(int i = 0; i < _ssthresh.size(); i++)
         _ssthresh[i] = 0xffffffff;
+    */
 #else
     _ssthresh = 0xffffffff;
 #endif
@@ -83,6 +84,10 @@ void
 TcpSrc::startflow() {
     //cout << "startflow()\n";
 #ifdef TDTCP
+    _cwnd.resize(_top->get_nslices());
+    _ssthresh.resize(_top->get_nslices());
+    for(int i = 0; i < _ssthresh.size(); i++)
+        _ssthresh[i] = 0xffffffff;
     for(int i = 0; i < _cwnd.size(); i++)
         _cwnd[i] = 10*_mss;
     _unacked = _cwnd[0];
@@ -166,7 +171,7 @@ TcpSrc::receivePacket(Packet& pkt)
     ts = p->ts();
     p->free();
 
-    if (seqno < _last_acked) {
+    if (_finished || seqno < _last_acked) {
         //cout << "O seqno" << seqno << " last acked "<< _last_acked;
         return;
     }
@@ -219,6 +224,9 @@ TcpSrc::receivePacket(Packet& pkt)
         }
         */
         _finished = true;
+        _cwnd.clear();
+        _ssthresh.clear();
+        return;
     }
 
 #ifdef TCP_SACK
@@ -405,7 +413,7 @@ TcpSrc::receivePacket(Packet& pkt)
     }
 
 #ifdef TDTCP
-    _old_ssthresh[pktslice] = _ssthresh[pktslice];
+    _old_ssthresh = _ssthresh[pktslice];
     deflate_window(pktslice);
 #else
     _old_ssthresh = _ssthresh;
@@ -439,7 +447,7 @@ TcpSrc::receivePacket(Packet& pkt)
 #ifdef TDTCP
 void TcpSrc::deflate_window(int slice){
 	assert(_ssthresh[slice] != 0);
-	_old_ssthresh[slice] = _ssthresh[slice];
+	_old_ssthresh = _ssthresh[slice];
 	_ssthresh[slice] = max(_cwnd[slice]/2, (uint32_t)(2 * _mss));
 }
 
