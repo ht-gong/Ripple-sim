@@ -8,6 +8,9 @@
 #include <algorithm>
 
 #define KILL_THRESHOLD 5
+
+
+
 //#define TCP_SACK
 ////////////////////////////////////////////////////////////////
 //  TCP SOURCE
@@ -34,10 +37,15 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
     _effcwnd = 0;
 
     //_ssthresh = 30000;
+#ifdef TDTCP
+    _cwnd.resize(_top->get_nslices());
+    _old_cwnd.resize(_top->get_nslices());
+    _ssthresh.resize(_top->get_nslices());
+    _old_ssthresh.resize(_top->get_nslices());
+    for(int i = 0; i < _ssthresh.size(); i++)
+        _ssthresh[i] = 0xffffffff;
+#else
     _ssthresh = 0xffffffff;
-
-#ifdef MODEL_RECEIVE_WINDOW
-    _highest_data_seq = 0;
 #endif
 
     _last_acked = 0;
@@ -60,6 +68,7 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
     _nodename = "tcpsrc";
 }
 
+/*
 void TcpSrc::set_app_limit(int pktps) {
     if (_app_limited==0 && pktps){
 	_cwnd = _mss;
@@ -68,12 +77,19 @@ void TcpSrc::set_app_limit(int pktps) {
     _app_limited = pktps;
     send_packets();
 }
+*/
 
 void 
 TcpSrc::startflow() {
     //cout << "startflow()\n";
+#ifdef TDTCP
+    for(int i = 0; i < _cwnd.size(); i++)
+        _cwnd[i] = 10*_mss;
+    _unacked = _cwnd[0];
+#else
     _cwnd = 10*_mss;
     _unacked = _cwnd;
+#endif
     _established = false;
 
     send_packets();
@@ -97,7 +113,12 @@ bool TcpSrc::was_it_dropped(uint64_t seqno, bool clear) {
     }
 }
 uint32_t TcpSrc::effective_window() {
-    return _in_fast_recovery?_ssthresh:_cwnd;
+#ifdef TDTCP
+    int slice = _top->time_to_slice(eventlist().now());
+    return _in_fast_recovery? _ssthresh[slice] : _cwnd[slice];
+#else
+    return _in_fast_recovery? _ssthresh : _cwnd;
+#endif
 }
 
 void 
@@ -135,6 +156,9 @@ TcpSrc::receivePacket(Packet& pkt)
     TcpAck::seq_t seqno = p->ackno();
     list<pair<uint64_t, uint64_t>> sacks = p->get_sack();
     bool is_sack_loss;
+    //we update slice for TDTCP based on corresponding data packet slice
+    int pktslice = p->get_tcp_slice();
+    int slice = _top->time_to_slice(eventlist().now());
     //cout << "TcpSrc receive packet ackno:" << seqno << endl;
 
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
@@ -220,14 +244,28 @@ TcpSrc::receivePacket(Packet& pkt)
 
             _last_acked = seqno;
             _dupacks = 0;
-            inflate_window();
 
+#ifdef TDTCP
+            inflate_window(pktslice);
+#else
+            inflate_window();
+#endif
+
+#ifdef TDTCP
+            if (_cwnd[slice]>_maxcwnd) {
+                _cwnd[slice] = _maxcwnd;
+            }
+
+            _unacked = _cwnd[slice];
+            _effcwnd = _cwnd[slice];
+#else
             if (_cwnd>_maxcwnd) {
                 _cwnd = _maxcwnd;
             }
 
             _unacked = _cwnd;
             _effcwnd = _cwnd;
+#endif
             send_packets();
             return;
         }
@@ -248,9 +286,15 @@ TcpSrc::receivePacket(Packet& pkt)
             _cwnd = min(_ssthresh, flightsize + _mss);
 	    }
 	    */
+#ifdef TDTCP
+            _cwnd[pktslice] = min(_ssthresh[pktslice], flightsize + _mss);
+            _unacked = _cwnd[pktslice];
+            _effcwnd = _cwnd[pktslice];
+#else
             _cwnd = min(_ssthresh, flightsize + _mss);
             _unacked = _cwnd;
             _effcwnd = _cwnd;
+#endif
             _last_acked = seqno;
             _dupacks = 0;
             _in_fast_recovery = false;
@@ -264,17 +308,40 @@ TcpSrc::receivePacket(Packet& pkt)
         // got lost, not just the one that triggered FR.
         uint32_t new_data = seqno - _last_acked;
         _last_acked = seqno;
+#ifdef TDTCP
+        //track sliced network that lost the packet for TDTCP
+        _fast_recovery_slice = pktslice;
+        _rtx_to_slice[_last_acked+1] = pktslice;
+        if (new_data < _cwnd[pktslice]) 
+            _cwnd[pktslice] -= new_data; 
+        else 
+            _cwnd[pktslice] = 0;
+        _cwnd[pktslice] += _mss;
+#else
         if (new_data < _cwnd) 
             _cwnd -= new_data; 
         else 
             _cwnd = 0;
         _cwnd += _mss;
+#endif
         retransmit_packet();
         send_packets();
         return;
     }
     // It's a dup ack
-    if (_in_fast_recovery) { // still in fast recovery; hopefully the prodigal ACK is on it's way 
+    if (_in_fast_recovery) { // still in fast recovery; hopefully the prodigal ACK is on its way 
+#ifdef TDTCP
+        _cwnd[pktslice] += _mss;
+        if (_cwnd[pktslice] > _maxcwnd) {
+            _cwnd[pktslice] = _maxcwnd;
+        }
+        // When we restart, the window will be set to
+        // min(_ssthresh, flightsize+_mss), so keep track of
+        // this
+        _unacked = min(_ssthresh[pktslice], (uint32_t)(_highest_sent-_recoverq+_mss)); 
+        if (_last_acked+_cwnd[pktslice] >= _highest_sent+_mss) 
+            _effcwnd=_unacked; // starting to send packets again
+#else
         _cwnd += _mss;
         if (_cwnd>_maxcwnd) {
             _cwnd = _maxcwnd;
@@ -285,8 +352,7 @@ TcpSrc::receivePacket(Packet& pkt)
         _unacked = min(_ssthresh, (uint32_t)(_highest_sent-_recoverq+_mss)); 
         if (_last_acked+_cwnd >= _highest_sent+_mss) 
             _effcwnd=_unacked; // starting to send packets again
-        if (_logger) 
-            _logger->logTcp(*this, TcpLogger::TCP_RCV_DUP_FR);
+#endif
         send_packets();
         return;
     }
@@ -321,6 +387,11 @@ TcpSrc::receivePacket(Packet& pkt)
     
     //only count drops in CA state
     _drops++;
+#ifdef TDTCP
+    //track sliced network that lost the packet for TDTCP
+    _fast_recovery_slice = pktslice;
+    _rtx_to_slice[_last_acked+1] = pktslice;
+#endif
     //print if retransmission is due to reordered packet (was not dropped)
     //also as we're retransmitting it, clear the seqno from the dropped list
     if (!was_it_dropped(_last_acked+1, true)) {
@@ -333,8 +404,13 @@ TcpSrc::receivePacket(Packet& pkt)
 #endif
     }
 
+#ifdef TDTCP
+    _old_ssthresh[pktslice] = _ssthresh[pktslice];
+    deflate_window(pktslice);
+#else
     _old_ssthresh = _ssthresh;
     deflate_window();
+#endif
 
     if (_sawtooth>0)
         _rtt_avg = _rtt_cum/_sawtooth;
@@ -345,8 +421,13 @@ TcpSrc::receivePacket(Packet& pkt)
     _rtt_cum = timeFromMs(0);
 
     retransmit_packet();
+#ifdef TDTCP
+    _cwnd[pktslice] = _ssthresh[pktslice] + 3 * _mss;
+    _unacked = _ssthresh[pktslice];
+#else
     _cwnd = _ssthresh + 3 * _mss;
     _unacked = _ssthresh;
+#endif
     _effcwnd = 0;
     _in_fast_recovery = true;
     _fast_recovery_start = eventlist().now();
@@ -355,6 +436,43 @@ TcpSrc::receivePacket(Packet& pkt)
                                // are back on track
 }
 
+#ifdef TDTCP
+void TcpSrc::deflate_window(int slice){
+	assert(_ssthresh[slice] != 0);
+	_old_ssthresh[slice] = _ssthresh[slice];
+	_ssthresh[slice] = max(_cwnd[slice]/2, (uint32_t)(2 * _mss));
+}
+
+void
+TcpSrc::inflate_window(int slice) {
+    int newly_acked = (_last_acked + _cwnd[slice]) - _highest_sent;
+    // be very conservative - possibly not the best we can do, but
+    // the alternative has bad side effects.
+    if (newly_acked > _mss) newly_acked = _mss; 
+    if (newly_acked < 0)
+        return;
+    if (_cwnd < _ssthresh) { //slow start
+        int increase = min(_ssthresh[slice] - _cwnd[slice], (uint32_t)newly_acked);
+        _cwnd[slice] += increase;
+        newly_acked -= increase;
+    } else {
+        // additive increase
+        uint32_t pkts = _cwnd[slice]/_mss;
+
+        double queued_fraction = 1 - ((double)_base_rtt/_rtt);
+
+        if (queued_fraction>=0.5&&_cap)
+            return;
+
+        _cwnd[slice] += (newly_acked * _mss) / _cwnd[slice];  //XXX beware large windows, when this increase gets to be very small
+
+        if (pkts!=_cwnd[slice]/_mss) {
+            _rtt_cum += _rtt;
+            _sawtooth ++;
+        }
+    }
+}
+#else
 void TcpSrc::deflate_window(){
 	assert(_ssthresh != 0);
 	_old_ssthresh = _ssthresh;
@@ -390,11 +508,18 @@ TcpSrc::inflate_window() {
         }
     }
 }
+#endif
+
 
 // Note: the data sequence number is the number of Byte1 of the packet, not the last byte.
 void 
 TcpSrc::send_packets() {
+    int slice = _top->time_to_slice(eventlist().now());
+#ifdef TDTCP
+    int c = _cwnd[slice];
+#else
     int c = _cwnd;
+#endif
 
     if (!_established){
         //cout << "need to establish\n";
@@ -460,6 +585,7 @@ TcpSrc::send_packets() {
         TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _highest_sent+1, data_seq, size);
         //cout << "sending seqno:" << p->seqno() << endl;
         p->set_ts(eventlist().now());
+        p->set_tcp_slice(slice);
 
         _highest_sent += size;  //XX beware wrapping
         _packets_sent += size;
@@ -515,11 +641,18 @@ void TcpSrc::rtx_timer_hook(simtime_picosec now, simtime_picosec period) {
 
     if (_highest_sent == 0) 
         return;
-
+    #ifdef TDTCP
+    int slice = _top->time_to_slice(eventlist().now());
+    cout <<"At " << now/(double)1000000000<< " RTO " << _rto/1000000000 << " MDEV " 
+        << _mdev/1000000000 << " RTT "<< _rtt/1000000000 << " SEQ " << _last_acked / _mss << " HSENT "  << _highest_sent 
+        << " CWND "<< _cwnd[slice]/_mss << " FAST RECOVERY? " << 	_in_fast_recovery << " Flow ID " 
+        << str()  << endl;
+#else
     cout <<"At " << now/(double)1000000000<< " RTO " << _rto/1000000000 << " MDEV " 
         << _mdev/1000000000 << " RTT "<< _rtt/1000000000 << " SEQ " << _last_acked / _mss << " HSENT "  << _highest_sent 
         << " CWND "<< _cwnd/_mss << " FAST RECOVERY? " << 	_in_fast_recovery << " Flow ID " 
         << str()  << endl;
+#endif
 
     // here we can run into phase effects because the timer is checked
     // only periodically for ALL flows but if we keep the difference
@@ -550,13 +683,24 @@ void TcpSrc::rtx_timer_hook(simtime_picosec now, simtime_picosec period) {
 }
 
 void TcpSrc::doNextEvent() {
+    //TODO how to manage timeouts in TDTCP exactly?
     if(_rtx_timeout_pending) {
+    int slice = _top->time_to_slice(eventlist().now());
 	_rtx_timeout_pending = false;
 
-	if (_logger) 
-	    _logger->logTcp(*this, TcpLogger::TCP_TIMEOUT);
-
 	if (_in_fast_recovery) {
+#ifdef TDTCP
+	    uint32_t flightsize = _highest_sent - _last_acked;
+	    _cwnd[slice] = min(_ssthresh[slice], flightsize + _mss);
+	}
+
+	deflate_window(slice);
+
+	_cwnd[slice] = _mss;
+
+	_unacked = _cwnd[slice];
+	_effcwnd = _cwnd[slice];
+#else
 	    uint32_t flightsize = _highest_sent - _last_acked;
 	    _cwnd = min(_ssthresh, flightsize + _mss);
 	}
@@ -567,6 +711,8 @@ void TcpSrc::doNextEvent() {
 
 	_unacked = _cwnd;
 	_effcwnd = _cwnd;
+
+#endif
 	_in_fast_recovery = false;
 	_recoverq = _highest_sent;
 

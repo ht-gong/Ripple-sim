@@ -277,6 +277,23 @@ int DynExpTopology::get_no_hops(int srcToR, int dstToR, int slice, int path_ind)
   return sz;
 }
 
+int DynExpTopology::time_to_slice(simtime_picosec t){
+    int64_t superslice = (t / get_slicetime(3)) %
+        get_nsuperslice();
+    // next, get the relative time from the beginning of that superslice
+    int64_t reltime = t - superslice*get_slicetime(3) -
+        (t / (get_nsuperslice()*get_slicetime(3))) * 
+        (get_nsuperslice()*get_slicetime(3));
+    int slice; // the current slice
+    if (reltime < get_slicetime(0))
+        slice = 0 + superslice*3;
+    else if (reltime < get_slicetime(0) + get_slicetime(1))
+        slice = 1 + superslice*3;
+    else
+        slice = 2 + superslice*3;
+    return slice;
+}
+
 void DynExpTopology::count_queue(Queue* queue){
   if (_link_usage.find(queue)==_link_usage.end()){
     _link_usage[queue] = 0;

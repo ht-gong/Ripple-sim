@@ -18,12 +18,27 @@ DCTCPSrc::DCTCPSrc(TcpLogger* logger, TrafficLogger* pktlogger, EventList &event
     _pkts_seen = 0;
     _pkts_marked = 0;
     _alfa = 0;
+#ifdef TDTCP
+    _past_cwnd.resize(_top->get_nslices());
+    for(int i = 0; i < _past_cwnd.size(); i++)
+        _past_cwnd[i] = 2*Packet::data_packet_size();
+#else
     _past_cwnd = 2*Packet::data_packet_size();
+#endif
     _rto = timeFromMs(10);    
 }
 
 //drop detected
+#ifdef TDTCP
 void
+DCTCPSrc::deflate_window(int slice){
+    _pkts_seen = 0;
+    _pkts_marked = 0;
+	_ssthresh[slice] = max(_cwnd[slice]/2, (uint32_t)(2 * _mss));
+
+    _past_cwnd[slice] = _cwnd[slice];
+}
+#else
 DCTCPSrc::deflate_window(){
     _pkts_seen = 0;
     _pkts_marked = 0;
@@ -31,11 +46,14 @@ DCTCPSrc::deflate_window(){
 
     _past_cwnd = _cwnd;
 }
+#endif
 
 
 void
 DCTCPSrc::receivePacket(Packet& pkt) 
 {
+    TcpAck *p = (TcpAck*)(&pkt);
+    int slice = p->get_tcp_slice();
     _pkts_seen++;
 
     if (pkt.flags() & ECN_ECHO){
@@ -46,7 +64,7 @@ DCTCPSrc::receivePacket(Packet& pkt)
 	    _ssthresh = _cwnd;
     }
 
-    if (_pkts_seen * _mss >= _past_cwnd){
+    if (_pkts_seen * _mss >= _past_cwnd[slice]){
 	//update window, once per RTT
 	
 	double f = (double)_pkts_marked/_pkts_seen;
@@ -56,6 +74,17 @@ DCTCPSrc::receivePacket(Packet& pkt)
 	_pkts_seen = 0;
 	_pkts_marked = 0;
 
+#ifdef TDTCP
+	if (_alfa>0){
+	    _cwnd[slice] = _cwnd[slice] * (1-_alfa/2);
+
+	    if (_cwnd[slice]<_mss)
+		_cwnd[slice] = _mss;
+
+	    _ssthresh = _cwnd;
+	}
+	_past_cwnd[slice] = _cwnd[slice];
+#else
 	if (_alfa>0){
 	    _cwnd = _cwnd * (1-_alfa/2);
 
@@ -65,6 +94,7 @@ DCTCPSrc::receivePacket(Packet& pkt)
 	    _ssthresh = _cwnd;
 	}
 	_past_cwnd = _cwnd;
+#endif
 
 	//cout << ntoa(timeAsMs(eventlist().now())) << " UPDATE " << str() << " CWND " << _cwnd << " alfa " << ntoa(_alfa)<< " marked " << ntoa(f) << endl;
     }
