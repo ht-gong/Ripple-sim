@@ -144,7 +144,7 @@ RlbModule* DynExpTopology::alloc_rlb_module(DynExpTopology* top, int node) {
 }
 
 Queue* DynExpTopology::alloc_src_queue(DynExpTopology* top, QueueLogger* queueLogger, int node) {
-    return new PriorityQueue(top, speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node);
+    return new PriorityQueue(speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node, this);
 }
 
 Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, int tor, int port) {
@@ -153,13 +153,11 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, in
 
 Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port) {
     if (qt==COMPOSITE)
-        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this);
     else if (qt==DEFAULT)
-        return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+        return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this);
     else if (qt==ECN)
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port);
-    //else if (qt==CTRL_PRIO)
-    //  return new CtrlPrioQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
+        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port, this);
     assert(0);
 }
 

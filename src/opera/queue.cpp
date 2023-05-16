@@ -1,6 +1,7 @@
 // -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #include <sstream>
 #include <math.h>
+#include "datacenter/dynexp_topology.h"
 #include "queue.h"
 #include "tcppacket.h"
 #include "ndppacket.h"
@@ -14,7 +15,7 @@
 #include "rlbmodule.h"
 
 Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger)
-  : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(0), _port(0),
+  : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(0), _port(0), _top(NULL),
     _logger(logger), _bitrate(bitrate), _num_drops(0)
 {
     _queuesize = 0;
@@ -24,8 +25,8 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
     //_nodename = ss.str();
 }
 
-Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger, int tor, int port)
-  : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(tor), _port(port),
+Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger, int tor, int port, DynExpTopology *top)
+  : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(tor), _port(port), _top(top),
     _logger(logger), _bitrate(bitrate), _num_drops(0)
 {
     _queuesize = 0;
@@ -138,14 +139,12 @@ void Queue::receivePacket(Packet& pkt) {
     _num_drops++;
 	return;
     }
-    //pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_ARRIVE);
 
     /* enqueue the packet */
     bool queueWasEmpty = _enqueued.empty();
     _enqueued.push_front(&pkt);
     _queuesize += pkt.size();
     pkt.inc_queueing(_queuesize);
-    //if (_logger) _logger->logQueue(*this, QueueLogger::PKT_ENQUEUE, pkt);
 
     if (queueWasEmpty) {
 	/* schedule the dequeue event */
@@ -162,15 +161,24 @@ simtime_picosec Queue::serviceTime() {
     return _queuesize * _ps_per_byte;
 }
 
+//format "tor,port,slice0max,slice1max,slice2max...,slicenmax"
+void Queue::reportMaxqueuesize(){
+    cout << _tor << "," << _port << ",";
+    for(int i = 0; i < _max_recorded_size.size(); i++) {
+        cout << _max_recorded_size[i] << ",";
+        _max_recorded_size[i] = 0;
+    }
+    cout << endl;
+}
+
 //////////////////////////////////////////////////
 //              Priority Queue                  //
 //////////////////////////////////////////////////
 
-PriorityQueue::PriorityQueue(DynExpTopology* top, linkspeed_bps bitrate, mem_b maxsize, 
-			     EventList& eventlist, QueueLogger* logger, int node)
+PriorityQueue::PriorityQueue(linkspeed_bps bitrate, mem_b maxsize, 
+			     EventList& eventlist, QueueLogger* logger, int node, DynExpTopology *top)
     : Queue(bitrate, maxsize, eventlist, logger)
 {
-    _top = top;
     _node = node;
 
     _bytes_sent = 0;

@@ -1,6 +1,7 @@
 // -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #include "ecnqueue.h"
 #include <math.h>
+#include "datacenter/dynexp_topology.h"
 #include "ecn.h"
 #include "tcp.h"
 #include "dctcp.h"
@@ -10,8 +11,8 @@
 
 ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize, 
 			 EventList& eventlist, QueueLogger* logger, mem_b  K,
-             int tor, int port)
-    : Queue(bitrate,maxsize,eventlist,logger,tor,port), 
+             int tor, int port, DynExpTopology *top)
+    : Queue(bitrate,maxsize,eventlist,logger,tor,port,top), 
       _K(K)
 {
     _state_send = LosslessQueue::READY;
@@ -78,7 +79,12 @@ ECNQueue::receivePacket(Packet & pkt)
     _enqueued.push_front(&pkt);
     _queuesize += pkt.size();
     pkt.inc_queueing(_queuesize);
-    //if (_logger) _logger->logQueue(*this, QueueLogger::PKT_ENQUEUE, pkt);
+
+    //record queuesize per slice
+    int slice = _top->time_to_slice(eventlist().now());
+    if (queuesize() > _max_recorded_size[slice]) {
+        _max_recorded_size[slice] = queuesize();
+    }
 
     if (queueWasEmpty && _state_send==LosslessQueue::READY) {
 	/* schedule the dequeue event */
