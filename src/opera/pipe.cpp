@@ -300,7 +300,7 @@ void UtilMonitor::printAggUtil() {
 
     cout << "QueueReport" << endl;
     for (int tor = 0; tor < _top->no_of_tors(); tor++) {
-        for (int uplink = _top->no_of_hpr()+1; uplink < _top->no_of_hpr(); uplink++) {
+        for (int uplink = _top->no_of_hpr()+1; uplink < _top->no_of_hpr()*2; uplink++) {
             Queue* q = _top->get_queue_tor(tor, uplink);
             q->reportMaxqueuesize();
         }

@@ -181,6 +181,7 @@ PriorityQueue::PriorityQueue(linkspeed_bps bitrate, mem_b maxsize,
     : Queue(bitrate, maxsize, eventlist, logger)
 {
     _node = node;
+    _top = top;
 
     _bytes_sent = 0;
 
