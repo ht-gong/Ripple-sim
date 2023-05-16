@@ -19,7 +19,7 @@
 //#define MODEL_RECEIVE_WINDOW 1
 
 #define timeInf 0
-#define TDTCP
+//#define TDTCP
 
 //#define RANDOM_PATH 1
 

@@ -39,6 +39,7 @@ DCTCPSrc::deflate_window(int slice){
     _past_cwnd[slice] = _cwnd[slice];
 }
 #else
+void
 DCTCPSrc::deflate_window(){
     _pkts_seen = 0;
     _pkts_marked = 0;
@@ -64,7 +65,11 @@ DCTCPSrc::receivePacket(Packet& pkt)
 	    _ssthresh = _cwnd;
     }
 
+#ifdef TDTCP
     if (_pkts_seen * _mss >= _past_cwnd[slice]){
+#else
+    if (_pkts_seen * _mss >= _past_cwnd){
+#endif
 	//update window, once per RTT
 	
 	double f = (double)_pkts_marked/_pkts_seen;
