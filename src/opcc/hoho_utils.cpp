@@ -177,7 +177,7 @@ void QueueAlarm::doNextEvent(){
             " stuck in queue tor " << _queue->_tor << " port " << _queue->_port << " slice " << _queue->_crt_tx_slice << endl;
     }
     if(_queue->_tor == 94 && _queue->_port == 10) {
-        cout << "slice change at " << eventlist().now() << endl;
+        //cout << "slice change at " << eventlist().now() << endl;
     }
     assert(_queue->_crt_tx_slice != crt);
     _queue->_crt_tx_slice = crt;

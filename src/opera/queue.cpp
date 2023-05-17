@@ -412,7 +412,8 @@ void PriorityQueue::completeService() {
 	                _top->get_firstToR(pkt->get_dst()), slice);
 
 	            if (npaths == 0)
-	                cout << "Error: there were no paths!" << endl;
+	                cout << "Error: there were no paths for slice " << slice  << " src " << pkt->get_src_ToR() <<
+                        " dst " << _top->get_firstToR(pkt->get_dst()) << endl;
 	            assert(npaths > 0);
 
 	            // randomly choose a path for the packet
