@@ -144,7 +144,7 @@ RlbModule* DynExpTopology::alloc_rlb_module(DynExpTopology* top, int node) {
 }
 
 Queue* DynExpTopology::alloc_src_queue(DynExpTopology* top, QueueLogger* queueLogger, int node) {
-    return new PriorityQueue(top, speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node);
+    return new PriorityQueue(speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node, this);
 }
 
 Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, int tor, int port) {
@@ -153,13 +153,11 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, in
 
 Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port) {
     if (qt==COMPOSITE)
-        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this);
     else if (qt==DEFAULT)
-        return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+        return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this);
     else if (qt==ECN)
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port);
-    //else if (qt==CTRL_PRIO)
-    //  return new CtrlPrioQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
+        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port, this);
     assert(0);
 }
 
@@ -275,6 +273,23 @@ int DynExpTopology::get_no_paths(int srcToR, int dstToR, int slice) {
 int DynExpTopology::get_no_hops(int srcToR, int dstToR, int slice, int path_ind) {
   int sz = _lbls[srcToR][dstToR][slice][path_ind].size();
   return sz;
+}
+
+int DynExpTopology::time_to_slice(simtime_picosec t){
+    int64_t superslice = (t / get_slicetime(3)) %
+        get_nsuperslice();
+    // next, get the relative time from the beginning of that superslice
+    int64_t reltime = t - superslice*get_slicetime(3) -
+        (t / (get_nsuperslice()*get_slicetime(3))) * 
+        (get_nsuperslice()*get_slicetime(3));
+    int slice; // the current slice
+    if (reltime < get_slicetime(0))
+        slice = 0 + superslice*3;
+    else if (reltime < get_slicetime(0) + get_slicetime(1))
+        slice = 1 + superslice*3;
+    else
+        slice = 2 + superslice*3;
+    return slice;
 }
 
 void DynExpTopology::count_queue(Queue* queue){

@@ -298,6 +298,14 @@ void UtilMonitor::printAggUtil() {
 
     cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
+    cout << "QueueReport" << endl;
+    for (int tor = 0; tor < _top->no_of_tors(); tor++) {
+        for (int uplink = _top->no_of_hpr()+1; uplink < _top->no_of_hpr()*2; uplink++) {
+            Queue* q = _top->get_queue_tor(tor, uplink);
+            q->reportMaxqueuesize();
+        }
+    }
+
     if (eventlist().now() + _period < eventlist().getEndtime())
         eventlist().sourceIsPendingRel(*this, _period);
 

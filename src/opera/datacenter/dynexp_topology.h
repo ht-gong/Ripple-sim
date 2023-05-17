@@ -45,6 +45,7 @@ class DynExpTopology: public Topology{
 
   int64_t get_nsuperslice() {return _nsuperslice;}
   simtime_picosec get_slicetime(int ind) {return _slicetime[ind];} // picoseconds spent in each slice
+  int time_to_slice(simtime_picosec t);
   int get_firstToR(int node) {return node / _ndl;}
   int get_lastport(int dst) {return dst % _ndl;}
 
@@ -55,6 +56,7 @@ class DynExpTopology: public Topology{
   bool port_dst_match(int port, int crtToR, int dst);
   int get_no_paths(int srcToR, int dstToR, int slice);
   int get_no_hops(int srcToR, int dstToR, int slice, int path_ind);
+  int get_nslices() {return _nslice;} 
   unsigned get_host_buffer(int host);
   void inc_host_buffer(int host);
   void decr_host_buffer(int host);

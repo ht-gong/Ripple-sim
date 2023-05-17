@@ -33,9 +33,8 @@ uint32_t delay_ToR2ToR = 500; // tor-to-tor link delay in nanoseconds
 
 #define DEFAULT_PACKET_SIZE 1500 // MAXIMUM FULL packet size (includes header + payload), Bytes
 #define DEFAULT_HEADER_SIZE 64 // header size, Bytes
-    // note: there is another parameter defined in `ndppacket.h`: "ACKSIZE". This should be set to the same size.
-// set the NDP queue size in units of packets (of length DEFAULT_PACKET_SIZE Bytes)
-#define DEFAULT_QUEUE_SIZE 8
+
+#define DEFAULT_QUEUE_SIZE 300
 
 string ntoa(double n); // convert a double to a string
 string itoa(uint64_t n); // convert an int to a string

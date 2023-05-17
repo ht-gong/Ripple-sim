@@ -11,6 +11,7 @@
 // !!! NOTE: this has been modified to also include a lower priority RLB queue
 
 
+#include "datacenter/dynexp_topology.h"
 #define QUEUE_INVALID 0
 #define QUEUE_RLB 1 // modified
 #define QUEUE_LOW 2
@@ -27,7 +28,7 @@
 class CompositeQueue : public Queue {
  public:
     CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, 
-		   EventList &eventlist, QueueLogger* logger, int tor, int port);
+		   EventList &eventlist, QueueLogger* logger, int tor, int port, DynExpTopology *top);
     virtual void receivePacket(Packet& pkt);
     virtual void doNextEvent();
     // should really be private, but loggers want to see

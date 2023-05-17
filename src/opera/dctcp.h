@@ -15,12 +15,20 @@ class DCTCPSrc : public TcpSrc {
     ~DCTCPSrc(){}
 
     // Mechanism
+#ifdef TDTCP
+    virtual void deflate_window(int slice);
+#else
     virtual void deflate_window();
+#endif
     virtual void receivePacket(Packet& pkt);
     virtual void rtx_timer_hook(simtime_picosec now,simtime_picosec period);
 
  private:
+#ifdef TDTCP
+    vector<uint32_t> _past_cwnd;
+#else
     uint32_t _past_cwnd;
+#endif
     double _alfa;
     uint32_t _pkts_seen, _pkts_marked;
 };
