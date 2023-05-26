@@ -6,13 +6,12 @@ Hosts_p_rack=6;
 
 H=Nrack*Hosts_p_rack; % number of hosts
 
-loadfrac0=.01; % fraction of theoretically possible load
+loadfrac0=.10; % fraction of theoretically possible load
 
 % ----- define simulation length (time):
 
-totaltime=10.001; % seconds, probably want a little extra here...
+totaltime=1.0001; % seconds, probably want a little extra here...
 
-filename=sprintf('flows_%.0fpercLoad_10sec_%dhosts',100*loadfrac0,H);
 
 %% prio traffic:
 
@@ -39,14 +38,16 @@ tmcdf=(0:1/Ncons:1);
 % ----- define flow size distribution (bytes):
 
 % pfabric datamining workload:
-data=csvread('../../../traffic/datamining.csv');
+data=csvread('../../traffic/datamining.csv');
 flowsize=data(:,1).';
 flowcdf=data(:,2).';
 
 % ----- define load:
 
 avg_flowsize=sum(flowsize(2:end).*diff(flowcdf)); % bytes / flow
-linkrate=10e9/8; % bytes / second
+linkrate=1e10/8; % bytes / second
+
+filename=sprintf('flows_%.0fpercLoad_%.0fsec_%dhosts_%dGbps',100*loadfrac0, totaltime, H, linkrate*8/1e9);
 
 lambda_host_max=linkrate/avg_flowsize; % flows / second (per host)
 lambda_host=loadfrac0*lambda_host_max; % flows / second for each host

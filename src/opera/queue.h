@@ -8,7 +8,6 @@
 
 #include <list>
 #include "config.h"
-#include "datacenter/dynexp_topology.h"
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
@@ -19,8 +18,6 @@ class Queue : public EventSource, public PacketSink {
 
     Queue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
 	  QueueLogger* logger);
-    Queue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
-	  QueueLogger* logger, int tor, int port, DynExpTopology *top);
     virtual void receivePacket(Packet& pkt);
     void doNextEvent();
 
@@ -28,10 +25,6 @@ class Queue : public EventSource, public PacketSink {
 
     // should really be private, but loggers want to see
     mem_b _maxsize; 
-    vector <mem_b> _max_recorded_size;
-    int _tor; // the ToR switch this queue belongs to
-    int _port; // the port this queue belongs to
-    DynExpTopology* _top; //network topology
 
     inline simtime_picosec drainTime(Packet *pkt) { 
         return (simtime_picosec)(pkt->size() * _ps_per_byte); 
@@ -47,8 +40,6 @@ class Queue : public EventSource, public PacketSink {
     virtual void setRemoteEndpoint(Queue* q) {_remoteEndpoint = q;};
     virtual void setRemoteEndpoint2(Queue* q) {_remoteEndpoint = q;q->setRemoteEndpoint(this);};
     Queue* getRemoteEndpoint() {return _remoteEndpoint;}
-    
-    void reportMaxqueuesize();
 
     virtual void setName(const string& name) {
         Logged::setName(name);
@@ -85,8 +76,8 @@ class Queue : public EventSource, public PacketSink {
 class PriorityQueue : public Queue {
  public:
     typedef enum {Q_RLB=0, Q_LO=1, Q_MID=2, Q_HI=3, Q_NONE=4} queue_priority_t;
-    PriorityQueue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
-		  QueueLogger* logger, int node, DynExpTopology *top);
+    PriorityQueue(DynExpTopology* top, linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
+		  QueueLogger* logger, int node);
     virtual void receivePacket(Packet& pkt);
     virtual mem_b queuesize();
     simtime_picosec serviceTime(Packet& pkt);
@@ -95,6 +86,7 @@ class PriorityQueue : public Queue {
 
     int _bytes_sent; // keep track so we know when to send a push to RLB module
 
+    DynExpTopology* _top;
     int _node;
     int _crt_slice = -1; // the first packet to be sent will cause a path update
 

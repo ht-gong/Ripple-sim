@@ -93,11 +93,8 @@ NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger,
 }
 
 void NdpSrc::append_trace(uint32_t id, uint16_t size, int hop, int tor, uint64_t delay){
-    if(_flow_size < _mss){
-    	NdpSrc_Trace tr = {id, size, hop, tor, delay};
-    	_flow_trace.push_back(tr);
-    }
-    return;
+    NdpSrc_Trace tr = {id, size, hop, tor, delay};
+    _flow_trace.push_back(tr);
 }
 
 void NdpSrc::print_trace(){
@@ -136,7 +133,6 @@ void NdpSrc::startflow() {
 
     _acked_packets = 0;
     _packets_sent = 0;
-    _max_hops_per_trip = 0;
     _rtx_timeout_pending = false;
     _rtx_timeout = timeInf;
     _pull_window = 0;
@@ -375,7 +371,6 @@ void NdpSrc::processAck(const NdpAck& ack) {
 
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed << timeAsMs(get_start_time()); //<< endl;
-        cout << " " << _max_hops_per_trip;
         //print_trace();
         cout << endl;
         //flow ended, clear trace
@@ -400,9 +395,6 @@ void NdpSrc::processAck(const NdpAck& ack) {
 void NdpSrc::receivePacket(Packet& pkt)
 {
     pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
-    
-    if(pkt.get_crthop() > _max_hops_per_trip)
-        _max_hops_per_trip = pkt.get_crthop();
 
     switch (pkt.type()) {
     case NDP:
@@ -872,11 +864,6 @@ void NdpSink::receivePacket(Packet& pkt) {
     NdpPacket::seq_t pacer_no = p->pacerno();
     simtime_picosec ts = p->ts();
     bool last_packet = ((NdpPacket*)&pkt)->last_packet();
-
-    //track max no of hops
-    if(p->get_crthop() > p->get_ndpsrc()->_max_hops_per_trip)
-        p->get_ndpsrc()->_max_hops_per_trip = p->get_crthop();
-
     switch (pkt.type()) {
     case NDP:
 

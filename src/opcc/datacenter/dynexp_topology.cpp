@@ -10,8 +10,6 @@
 #include "queue.h"
 #include "pipe.h"
 #include "compositequeue.h"
-#include "ecnqueue.h"
-#include "ecn.h"
 //#include "prioqueue.h"
 
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
@@ -223,11 +221,11 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, in
 
 Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port) {
     if (qt==COMPOSITE)
+#ifdef CALENDAR_QUEUE
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, this, tor, port);
-    else if (qt==DEFAULT)
-        return new Queue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this);
-    else if (qt==ECN)
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port, this);
+#else
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port);
+#endif
     //else if (qt==CTRL_PRIO)
     //  return new CtrlPrioQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger);
     assert(0);
@@ -339,21 +337,4 @@ void DynExpTopology::count_queue(Queue* queue){
   }
 
   _link_usage[queue] = _link_usage[queue] + 1;
-}
-
-unsigned DynExpTopology::get_host_buffer(int host){
-    return _host_buffers[host];
-}
-
-void DynExpTopology::inc_host_buffer(int host) {
-    _host_buffers[host]++;
-    if(_host_buffers[host] > _max_host_buffers[host]) {
-        _max_host_buffers[host] = _host_buffers[host];
-        cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
-    }
-}
-
-void DynExpTopology::decr_host_buffer(int host) {
-    assert(_host_buffers[host] > 0);
-    _host_buffers[host]--;
 }

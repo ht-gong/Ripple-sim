@@ -1,7 +1,7 @@
 #OBJS=eventlist.o tcppacket.o pipe.o queue.o tcp.o dctcp.o mtcp.o loggers.o logfile.o clock.o config.o network.o randomqueue.o cbr.o cbrpacket.o sent_packets.o ndp.o ndppacket.o compositequeue.o prioqueue.o cpqueue.o compositeprioqueue.o fairpullqueue.o route.o
 #HDRS=network.h ndp.h compositequeue.h prioqueue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h tcp.h dctcp.h mtcp.h sent_packets.h tcppacket.h ndppacket.h compositeprioqueue.h 
-OBJS=eventlist.o hoho_utils.o pipe.o queue.o loggers.o logfile.o clock.o config.o network.o sent_packets.o ndp.o ndppacket.o compositequeue.o cpqueue.o fairpullqueue.o route.o tcppacket.o tcp.o dctcp.o ecnqueue.o
-HDRS=network.h ndp.h compositequeue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h sent_packets.h ndppacket.h tcppacket.h tcp.h dctcp.h hoho_utils.h ecn.h ecnqueue.h
+OBJS=eventlist.o pipe.o queue.o loggers.o logfile.o clock.o config.o network.o sent_packets.o ndp.o ndppacket.o compositequeue.o cpqueue.o fairpullqueue.o route.o
+HDRS=network.h ndp.h compositequeue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h sent_packets.h ndppacket.h
 
 CRT=`pwd`
 INC= -I/$(CRT)/datacenter -I$(CRT) 
@@ -28,9 +28,8 @@ pipe.o:		pipe.cpp $(HDRS)
 network.o:	network.cpp  $(HDRS)
 fairpullqueue.o:	fairpullqueue.cpp  $(HDRS)
 route.o:	route.cpp  $(HDRS)
-tcppacket.o:	tcppacket.cpp $(HDRS)
-tcp.o:		tcp.cpp  $(HDRS)
-dctcp.o:		dctcp.cpp  $(HDRS)
+#tcp.o:		tcp.cpp  $(HDRS)
+#dctcp.o:		dctcp.cpp  $(HDRS)
 ndp.o:		ndp.cpp $(HDRS)
 ndplite.o:	ndplite.cpp $(HDRS)
 #mtcp.o:		mtcp.cpp $(HDRS)
@@ -39,8 +38,6 @@ loggers.o:	loggers.cpp $(HDRS)
 logfile.o:	logfile.cpp  $(HDRS)
 clock.o:	clock.cpp clock.h eventlist.h config.h
 compositequeue.o: compositequeue.cpp $(HDRS)
-ecnqueue.o:		ecnqueue.cpp $(HDRS)	
-hoho_utils.o:	hoho_utils.cpp $(HDRS)	
 #prioqueue.o: prioqueue.cpp $(HDRS)
 cpqueue.o: cpqueue.cpp $(HDRS)
 #compositeprioqueue.o: compositeprioqueue.cpp $(HDRS)

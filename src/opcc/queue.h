@@ -8,21 +8,16 @@
 
 #include <list>
 #include "config.h"
-#include "datacenter/dynexp_topology.h"
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
 
-class QueueAlarm;
-class HohoRouting;
 
 class Queue : public EventSource, public PacketSink {
  public:
 
     Queue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist,
 	  QueueLogger* logger);
-    Queue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
-	  QueueLogger* logger, int tor, int port, DynExpTopology *top);
     virtual void receivePacket(Packet& pkt);
     void doNextEvent();
 
@@ -30,9 +25,6 @@ class Queue : public EventSource, public PacketSink {
 
     // should really be private, but loggers want to see
     mem_b _maxsize;
-    int _tor; // the ToR switch this queue belongs to
-    int _port; // the port this queue belongs to
-    DynExpTopology *_top;
 
     inline simtime_picosec drainTime(Packet *pkt) {
         return (simtime_picosec)(pkt->size() * _ps_per_byte);
@@ -41,10 +33,7 @@ class Queue : public EventSource, public PacketSink {
         return (mem_b)(timeAsSec(t) * (double)_bitrate);
     }
     virtual mem_b queuesize();
-    virtual mem_b slice_queuesize(int slice);
-    simtime_picosec get_queueing_delay(int slice);
     simtime_picosec serviceTime();
-
     int num_drops() const {return _num_drops;}
     void reset_drops() {_num_drops = 0;}
 
@@ -61,8 +50,6 @@ class Queue : public EventSource, public PacketSink {
     }
     virtual const string& nodename() { return _nodename; }
 
-    friend class QueueAlarm;
-    friend class HohoRouting;
  protected:
     // Housekeeping
     Queue* _remoteEndpoint;
@@ -76,18 +63,12 @@ class Queue : public EventSource, public PacketSink {
     // wrap up serving the item at the head of the queue
     virtual void completeService();
 
-    int next_tx_slice(int crt_slice);
-
     linkspeed_bps _bitrate;
     simtime_picosec _ps_per_byte;  // service time, in picoseconds per byte
     mem_b _queuesize;
     list<Packet*> _enqueued;
     int _num_drops;
     string _nodename;
-    int _crt_tx_slice = 0;
-    Packet *_sending_pkt = NULL;
-    HohoRouting *_routing;
-    QueueAlarm *_queue_alarm;
 };
 
 /* implement a 4-level priority queue */

@@ -357,7 +357,7 @@ void NdpSrc::processAck(const NdpAck& ack) {
         // FCT output for processing: (src dst bytes fct_ms timestarted_ms)
 
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
-            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed << timeAsMs(get_start_time()) << " " << _max_hops_per_trip << endl;
+            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed << timeAsMs(get_start_time()) << endl;
 
         // debug a certain connection:
         //if ( get_flow_src() == 84 && get_flow_dst() == 0) {
@@ -378,9 +378,6 @@ void NdpSrc::processAck(const NdpAck& ack) {
 void NdpSrc::receivePacket(Packet& pkt)
 {
     pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
- 
-    if(pkt.get_crthop() > _max_hops_per_trip)
-        _max_hops_per_trip = pkt.get_crthop();
 
     update_rtx_time();
     switch (pkt.type()) {
@@ -849,11 +846,6 @@ void NdpSink::receivePacket(Packet& pkt) {
     NdpPacket::seq_t pacer_no = p->pacerno();
     simtime_picosec ts = p->ts();
     bool last_packet = ((NdpPacket*)&pkt)->last_packet();
-
-    //track max no of hops
-    if(p->get_crthop() > p->get_ndpsrc()->_max_hops_per_trip)
-        p->get_ndpsrc()->_max_hops_per_trip = p->get_crthop();
-
     switch (pkt.type()) {
     case NDP:
 

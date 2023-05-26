@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 flows = defaultdict(list)
-with open("./hoho65ecn.txt", "r") as f:
+with open("../sim/General_10Gbps_25perc.txt", "r") as f:
     lines = f.readlines()
     for line in lines:
         line = line.split()
@@ -23,7 +23,7 @@ for flowsize in flowsizes:
 fcts_base = np.array(fcts_base)
 
 flows = defaultdict(list)
-with open("./hohooracle65ecn.txt", "r") as f:
+with open("../sim/Hoho_10Gbps_25perc.txt", "r") as f:
     lines = f.readlines()
     for line in lines:
         line = line.split()
@@ -52,7 +52,7 @@ plt.xscale("log")
 plt.xlabel("Flow Size (bytes)")
 plt.ylabel("FCT reduction (%)")
 
-name = "hoho65ecn7.3us99"
+name = "opera_hoho_25percload"
 plt.title(f"FCT reduction {name}")
 plt.savefig(f"./fct_reduction_{name}.png")
 

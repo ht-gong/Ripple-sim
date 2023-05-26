@@ -7,11 +7,8 @@
 #include <sstream>
 #include <algorithm>
 
-#include "config.h"
 #include "dynexp_topology.h"
 #include "ndp.h"
-#include "hoho_utils.h"
-#include "network.h"
 
 //use clearing calendar queues
 //#define CALENDAR_CLEAR
@@ -30,9 +27,15 @@ extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist,
         QueueLogger* logger, DynExpTopology* topology, int tor, int port)
-    : Queue(bitrate, maxsize, eventlist, logger, tor, port, topology), _hop_delay_forward(HopDelayForward(eventlist))
+    : Queue(bitrate, maxsize, eventlist, logger), _hop_delay_forward(HopDelayForward(eventlist)), _top(topology),
+      _alarm(QueueAlarm(eventlist, port, this, topology))
 {
-    assert(topology);
+    _tor = tor;
+    _port = port;
+    // original version:
+    //_ratio_high = 10; // number of headers to send per data packet (originally 24 for Jan '18 version)
+    //_ratio_low = 1; // number of full packets
+    // new version:
     _ratio_high = 640; // bytes (640 = 10 64B headers)
     _ratio_low = 1500; // bytes (1500 = 1 1500B packet)
     _crt = 0;
@@ -51,6 +54,8 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
     _crt_tx_slice = topology->time_to_slice(eventlist.now());
 
     int slices = topology->get_nsuperslice()*2;
+    //the _dl_queueth element of the vectors is the downlink implementation (so a normal queue)
+    _dl_queue = slices;
 
     _enqueued_high.resize(slices+1);
     _enqueued_low.resize(slices+1);
@@ -76,10 +81,15 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
 }
 
 void CompositeQueue::beginService(){
+    //cout << "beginService " << _tor << " " << _port << endl;
     assert(_serv == QUEUE_INVALID);
     Packet* sent_pkt =  NULL;
-    int crt = _top->is_downlink(_port) ? 0 : _crt_tx_slice;
-
+#ifdef CALENDAR_CLEAR
+    int crt = _top->is_downlink(_port) ? _dl_queue : _top->time_to_slice(eventlist().now());
+#else
+    int crt = _top->is_downlink(_port) ? _dl_queue : _crt_tx_slice;
+#endif
+    bool sent_succeed = false;
     //at least one high prio queue and one low prio queue have to send
     if ( (!_enqueued_high[crt].empty() || !_enqueued_high_prime[crt].empty()) && (!_enqueued_low[crt].empty() || !_enqueued_low_prime[crt].empty())){
         if (_crt >= (_ratio_high+_ratio_low))
@@ -173,98 +183,176 @@ void CompositeQueue::beginService(){
             _serv = QUEUE_INVALID;
         }
     }
-    mem_b *queuesize; 
-    list<Packet*> *enqueued;
-    
     switch(_serv){
         case QUEUE_HIGH:
         {
-            queuesize = &_queuesize_high[crt];
-            enqueued = &_enqueued_high[crt];
+            sent_pkt = _enqueued_high[crt].back();
+            if(crt != _dl_queue) assert(sent_pkt->get_crtslice() == crt);
+            int finish_slice = _top->time_to_slice(eventlist().now()+drainTime(sent_pkt) + timeFromNs(delay_ToR2ToR));
+            bool in_time = (crt != _dl_queue) && _top->get_nextToR(crt, sent_pkt->get_crtToR(), sent_pkt->get_crtport()) 
+                == _top->get_nextToR(finish_slice, sent_pkt->get_crtToR(), sent_pkt->get_crtport());
+            if (crt==_dl_queue || in_time) {
+                assert(!_enqueued_high[crt].empty());
+                _enqueued_high[crt].pop_back();
+                _queuesize_high[crt] -= sent_pkt->size();
+                if (sent_pkt->type() == NDPACK)
+                    _num_acks++;
+                else if (sent_pkt->type() == NDPNACK)
+                    _num_nacks++;
+                else if (sent_pkt->type() == NDPPULL)
+                    _num_pulls++;
+                else {
+                    _num_headers++;
+                }
+                eventlist().sourceIsPendingRel(*this, drainTime(sent_pkt));
+                _sending_pkt = sent_pkt;
+                sent_succeed = true;
+            } else {
+                _queuesize_high[crt] -= sent_pkt->size();
+                _enqueued_high[crt].pop_back();
+            }
             break;
         }
         case QUEUE_LOW:
         {
-            queuesize = &_queuesize_low[crt];
-            enqueued = &_enqueued_low[crt];
+            sent_pkt = _enqueued_low[crt].back();
+            if(crt != _dl_queue) assert(sent_pkt->get_crtslice() == crt);
+            int finish_slice = _top->time_to_slice(eventlist().now()+drainTime(sent_pkt) + timeFromNs(delay_ToR2ToR));
+            bool in_time = (crt != _dl_queue) && _top->get_nextToR(crt, sent_pkt->get_crtToR(), sent_pkt->get_crtport()) 
+                == _top->get_nextToR(finish_slice, sent_pkt->get_crtToR(), sent_pkt->get_crtport());
+            if (crt==_dl_queue || in_time) {
+                assert(!_enqueued_low[crt].empty());
+                _enqueued_low[crt].pop_back();
+                _queuesize_low[crt] -= sent_pkt->size();
+                _num_packets++;
+                eventlist().sourceIsPendingRel(*this, drainTime(sent_pkt));
+                _sending_pkt = sent_pkt;
+                sent_succeed = true;
+            } else {
+                _queuesize_low[crt] -= sent_pkt->size();
+                _enqueued_low[crt].pop_back();
+            }
             break;
         }
         case QUEUE_HIGH_PRIME:
         {
-            queuesize = &_queuesize_high_prime[crt];
-            enqueued = &_enqueued_high_prime[crt];
+            sent_pkt = _enqueued_high_prime[crt].back();
+            if(crt != _dl_queue) assert(sent_pkt->get_crtslice() == crt);
+            int finish_slice = _top->time_to_slice(eventlist().now()+drainTime(sent_pkt) + timeFromNs(delay_ToR2ToR));
+            bool in_time = (crt != _dl_queue) && _top->get_nextToR(crt, sent_pkt->get_crtToR(), sent_pkt->get_crtport()) 
+                == _top->get_nextToR(finish_slice, sent_pkt->get_crtToR(), sent_pkt->get_crtport());
+            if (crt==_dl_queue || in_time) {
+                assert(!_enqueued_high_prime[crt].empty());
+                _enqueued_high_prime[crt].pop_back();
+                _queuesize_high_prime[crt] -= sent_pkt->size();
+                if (sent_pkt->type() == NDPACK)
+                    _num_acks++;
+                else if (sent_pkt->type() == NDPNACK)
+                    _num_nacks++;
+                else if (sent_pkt->type() == NDPPULL)
+                    _num_pulls++;
+                else {
+                    _num_headers++;
+                }
+                eventlist().sourceIsPendingRel(*this, drainTime(sent_pkt));
+                _sending_pkt = sent_pkt;
+                sent_succeed = true;
+            } else {
+                _queuesize_high_prime[crt] -= sent_pkt->size();
+                _enqueued_high_prime[crt].pop_back();
+            }
             break;
         }
         case QUEUE_LOW_PRIME:
         {
-            queuesize = &_queuesize_low_prime[crt];
-            enqueued = &_enqueued_low_prime[crt];
+            sent_pkt = _enqueued_low_prime[crt].back();
+            if(crt != _dl_queue) assert(sent_pkt->get_crtslice() == crt);
+            int finish_slice = _top->time_to_slice(eventlist().now()+drainTime(sent_pkt) + timeFromNs(delay_ToR2ToR));
+            bool in_time = (crt != _dl_queue) && _top->get_nextToR(crt, sent_pkt->get_crtToR(), sent_pkt->get_crtport()) 
+                == _top->get_nextToR(finish_slice, sent_pkt->get_crtToR(), sent_pkt->get_crtport());
+            if (crt==_dl_queue || in_time) {
+                assert(!_enqueued_low_prime[crt].empty());
+                _enqueued_low_prime[crt].pop_back();
+                _queuesize_low_prime[crt] -= sent_pkt->size();
+                _num_packets++;
+                eventlist().sourceIsPendingRel(*this, drainTime(sent_pkt));
+                _sending_pkt = sent_pkt;
+                sent_succeed = true;
+                _crt_trim_ratio = 0;
+            } else {
+                _queuesize_low_prime[crt] -= sent_pkt->size();
+                _enqueued_low_prime[crt].pop_back();
+            }
             break;
         }
         default:
-            queuesize = NULL;
-            enqueued = NULL;
             assert(0);
-    } 
-    sent_pkt = enqueued->back();
-    assert(!enqueued->empty());
-    enqueued->pop_back();
-    (*queuesize) -= sent_pkt->size();
-    if (sent_pkt->type() == NDPACK)
-        _num_acks++;
-    else if (sent_pkt->type() == NDPNACK)
-        _num_nacks++;
-    else if (sent_pkt->type() == NDPPULL)
-        _num_pulls++;
-    else {
-        _num_headers++;
     }
-    simtime_picosec finish_time = eventlist().now()+drainTime(sent_pkt)+timeFromNs(delay_ToR2ToR);
-	int finish_slice = _top->time_to_slice(finish_time);
-    /*
-    if(sent_pkt->get_src() == 489 && sent_pkt->get_dst() == 0){
-        unsigned seqno = 0;
-        if(sent_pkt->type() == NDP) seqno = ((NdpPacket*)sent_pkt)->seqno();
-    cout << "beginService " << _tor << " " << _port << " " << (_top->is_downlink(_port)? "downlink" : "") <<
-        " seq " << seqno << " size " << sent_pkt->size() << " time " << eventlist().now() << " finish_time " << finish_time <<
-        " crt_slice " << _crt_tx_slice << " finish_slice " << finish_slice << endl;
-    }
-    */
-    //packet cannot make it to destination, this can happen despite our calculations due to priority queueing
-    if (finish_slice != _crt_tx_slice && !_top->is_downlink(_port)) {
-        //if it's a trimmed packet, try bouncing it
+
+    // No silent failures allowed with no RTO
+    if(!sent_succeed){
+        //cout << "Missed send timing" << endl;
         if (sent_pkt->header_only()){
-            //if it's already been bounced once, it gets dropped
             if(sent_pkt->bounced()){
                 sent_pkt->free();
                 _top->update_tot_pkt(-1);
             } else
                 _hop_delay_forward.bouncePkt(sent_pkt);
         } else {
-            //if it's a data packet, try enqueueing it again as a trimmed packet, it may make it
             sent_pkt->strip_payload();
             receivePacket(*sent_pkt);
         }
         _serv = QUEUE_INVALID;
-    } else {
-        eventlist().sourceIsPendingRel(*this, drainTime(sent_pkt));
-        _sending_pkt = sent_pkt;
     }
+    if(sent_pkt->get_src() == 69 && sent_pkt->get_dst() == 337) cout << "queue delay " << drainTime(sent_pkt) << "hop " << sent_pkt->get_crthop() << endl;
+
+#ifdef CALENDAR_CLEAR 
+    if (!sent_succeed && slice_queuesize(crt) > 0) {
+        beginService();
+    }
+#else
+    if (!sent_succeed){
+        assert(crt != _dl_queue);
+        if(slice_queuesize(crt) > 0){
+            beginService();
+        } else {
+            _crt_tx_slice = next_tx_slice(crt);
+            if (slice_queuesize(_crt_tx_slice) > 0)
+                beginService();
+        }
+    }
+#endif
 }
 
 void CompositeQueue::completeService() {
     //cout << "completeService " << _tor << " " << _port << endl;
     assert(_sending_pkt != NULL);
 
-    int crt = _top->is_downlink(_port) ? 0 : _crt_tx_slice;
+#ifdef CALENDAR_CLEAR
+    int crt = _top->is_downlink(_port) ? _dl_queue : _top->time_to_slice(eventlist().now());
+#else
+    int crt = _top->is_downlink(_port) ? _dl_queue : _crt_tx_slice;
+#endif
 
     sendFromQueue(_sending_pkt);
 
     _sending_pkt = NULL;
     _serv = QUEUE_INVALID;
 
+#ifdef CALENDAR_CLEAR 
     if (slice_queuesize(crt) > 0)
         beginService();
+#else
+    //does this calendar have more to send?
+    if (slice_queuesize(crt) > 0){
+        beginService();
+    //if not and this is not a downlink, switch to next calendar
+    } else if (crt != _dl_queue) {
+       _crt_tx_slice = next_tx_slice(crt);
+       if (slice_queuesize(_crt_tx_slice) > 0)
+           beginService();
+    }
+#endif
 }
 
 void CompositeQueue::doNextEvent() {
@@ -274,17 +362,10 @@ void CompositeQueue::doNextEvent() {
 void CompositeQueue::receivePacket(Packet& _pkt) {
     Packet* pkt = &_pkt;
     Packet* booted_pkt = NULL;
-    int crt = _top->is_downlink(_port) ? 0 : _pkt.get_crtslice();
-    /*
-    if(pkt->get_src() == 489 && pkt->get_dst() == 0){
-        unsigned seqno = 0;
-        if(pkt->type() == NDP) seqno = ((NdpPacket*)pkt)->seqno();
-    cout << "receivePacket " << _tor << " " << _port << " for pkt " << pkt->get_src() << " " << pkt->get_dst() <<
-        " " << crt << " current slice " << _crt_tx_slice << " hop " << pkt->get_crthop() << " seqno " << seqno << 
-            " queuesize " << slice_queuesize(_crt_tx_slice) << " downlink? " << _top->is_downlink(_port) << 
-            " time " << eventlist().now() << endl;
-    }
-    */
+    bool packet_added = false;
+    int crt = _top->is_downlink(_port) ? _dl_queue : _pkt.get_crtslice();
+    int time_crt = _top->time_to_slice(eventlist().now());
+    //cout << "receivePacket " << _tor << " " << _port << " for pkt " << pkt->get_src() << " " << pkt->get_dst() << " " << crt << " current slice " << time_crt << " hop " << pkt->get_crthop() << " invalid? " << (_serv==QUEUE_INVALID) << endl;
     if (!pkt->get_longflow()) {
         bool drop_long = false;
         if (!pkt->header_only()){
@@ -342,6 +423,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
                     assert(slice_queuesize_low(crt) + pkt->size() <= slice_maxqueuesize(crt));
                     _enqueued_low[crt].push_front(pkt);
                     _queuesize_low[crt] += pkt->size();
+                    packet_added = true;
                 } else {
                     // the packet wouldn't fit if we booted the existing packet
                     pkt->strip_payload();
@@ -366,7 +448,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
             //so using the overall queue size might break something
             //if (slice_queuesize(crt) + pkt->size() > slice_maxqueuesize(crt)){
             if (slice_queuesize_high(crt) + pkt->size() > slice_maxqueuesize(crt)){
-                //cout << "Nospace for header" << endl;
+                cout << "Nospace for header" << endl;
                 if (pkt->bounced() == false) {
                     _hop_delay_forward.bouncePkt(pkt);
                     _num_bounced++;
@@ -384,6 +466,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
             } else {
                 _enqueued_high[crt].push_front(pkt);
                 _queuesize_high[crt] += pkt->size();
+                packet_added = true;
             }
         }
     }
@@ -436,6 +519,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
                     assert(slice_queuesize_low(crt) + pkt->size() <= slice_maxqueuesize(crt));
                     _enqueued_low_prime[crt].push_front(pkt);
                     _queuesize_low_prime[crt] += pkt->size();
+                    packet_added = true;
                 } else {
                     // the packet wouldn't fit if we booted the existing packet
                     pkt->strip_payload();
@@ -457,7 +541,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
         if (pkt->header_only()) {
             //if (slice_queuesize(crt) + pkt->size() > slice_maxqueuesize(crt)){
             if (slice_queuesize_high(crt) + pkt->size() > slice_maxqueuesize(crt)){
-                //cout << "Nospace for header" << endl;
+                cout << "Nospace for header" << endl;
                 if (pkt->bounced() == false) {
                     _hop_delay_forward.bouncePkt(pkt);
                     _num_bounced++;
@@ -474,6 +558,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
             } else {
                 _enqueued_high_prime[crt].push_front(pkt);
                 _queuesize_high_prime[crt] += pkt->size();
+                packet_added = true;
             }
         }
     }
@@ -488,7 +573,8 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
     pkt_src->append_trace(pkt->id(), pkt->header_only() ? 64 : pkt->size(), pkt->get_crthop(), _tor,
             pkt->header_only() ? queuesize_short_ctl() : queuesize_short_data());
 
-    if (_serv == QUEUE_INVALID && slice_queuesize(_crt_tx_slice) > 0) {
+    if (_serv == QUEUE_INVALID && ((crt==_dl_queue && slice_queuesize(_dl_queue) > 0) || slice_queuesize(time_crt)) > 0) {
+        _crt_tx_slice = time_crt;
         beginService();
     }
 }
@@ -563,7 +649,7 @@ void CompositeQueue::clearSliceQueue(int slice){
 }
 
 int CompositeQueue::next_tx_slice(int crt_slice){
-    assert(crt_slice < _top->get_nsuperslice()*2); 
+    assert(crt_slice != _dl_queue); 
     int now =_top->time_to_slice(eventlist().now());
     if(crt_slice == now)
         return now;
@@ -579,7 +665,7 @@ int CompositeQueue::next_tx_slice(int crt_slice){
 
 
 simtime_picosec CompositeQueue::get_queueing_delay(int slice){
-    assert(slice < _top->get_nsuperslice()*2);
+    assert(slice != _dl_queue);
     int i = _crt_tx_slice;
     mem_b bytes = 0;
     while (i != slice){
@@ -591,28 +677,34 @@ simtime_picosec CompositeQueue::get_queueing_delay(int slice){
 
 //return queuesize according to corresponding slice duration
 mem_b CompositeQueue::slice_maxqueuesize(int slice){
-    assert(slice < _top->get_nsuperslice()*2);
-    return _maxsize;
+    //return _maxsize;
+    assert(slice <= _dl_queue);
+    if (slice == _dl_queue){
+        return _maxsize;
+    } else {
+        //duration of slice * queue tx time
+        return _ps_per_byte*_top->get_slicetime(slice%2);
+    }
 }
 
 mem_b CompositeQueue::slice_queuesize_low(int slice){
-    assert(slice < _top->get_nsuperslice()*2);
+    assert(slice <= _dl_queue);
     return _queuesize_low[slice]+_queuesize_low_prime[slice];
 }
 mem_b CompositeQueue::slice_queuesize_high(int slice){
-    assert(slice < _top->get_nsuperslice()*2);
+    assert(slice <= _dl_queue);
     return _queuesize_high[slice]+_queuesize_high_prime[slice];
 }
 mem_b CompositeQueue::slice_queuesize(int slice){
-    assert(slice < _top->get_nsuperslice()*2);
+    assert(slice <= _dl_queue);
     return _queuesize_high[slice]+_queuesize_low[slice]
         +_queuesize_high_prime[slice]+_queuesize_low_prime[slice];
 }
 
 mem_b CompositeQueue::queuesize() {
     if(_top->is_downlink(_port))
-        return _queuesize_high[0] + _queuesize_low[0] + 
-            _queuesize_high_prime[0] + _queuesize_low_prime[0];
+        return _queuesize_high[_dl_queue] + _queuesize_low[_dl_queue] + 
+            _queuesize_high_prime[_dl_queue] + _queuesize_low_prime[_dl_queue];
     int sum = 0;
     int i;
     for(i = 0; i < _top->get_nsuperslice()*2; i++){
@@ -625,7 +717,7 @@ mem_b CompositeQueue::queuesize() {
 }
 mem_b CompositeQueue::queuesize_short() {
     if(_top->is_downlink(_port))
-        return _queuesize_high[0] + _queuesize_low[0];
+        return _queuesize_high[_dl_queue] + _queuesize_low[_dl_queue];
     int sum = 0;
     int i;
     for(i = 0; i < _top->get_nsuperslice()*2; i++){
@@ -636,7 +728,7 @@ mem_b CompositeQueue::queuesize_short() {
 }
 mem_b CompositeQueue::queuesize_short_data() {
     if(_top->is_downlink(_port))
-        return _queuesize_low[0];
+        return _queuesize_low[_dl_queue];
     int sum = 0;
     int i;
     for(i = 0; i < _top->get_nsuperslice()*2; i++){
@@ -646,7 +738,7 @@ mem_b CompositeQueue::queuesize_short_data() {
 }
 mem_b CompositeQueue::queuesize_short_ctl() {
     if(_top->is_downlink(_port))
-        return _queuesize_high[0];
+        return _queuesize_high[_dl_queue];
     int sum = 0;
     int i;
     for(i = 0; i < _top->get_nsuperslice()*2; i++){
@@ -708,10 +800,9 @@ void HopDelayForward::bouncePkt(Packet* pkt) {
                                 // YX: no need to set a limit to # max hops, need double check.
         pkt->set_maxhops(INT_MAX);
 
-        //TODO uncomment and fix below lol
-        //simtime_picosec sent_time = _routing->routing(pkt, eventlist().now());
-        //insertBouncedQ(sent_time, pkt);
-        //eventlist().sourceIsPending(*this, sent_time);
+        simtime_picosec sent_time = routing(pkt, eventlist().now());
+        insertBouncedQ(sent_time, pkt);
+        eventlist().sourceIsPending(*this, sent_time);
     }
 }
 
@@ -725,7 +816,6 @@ void HopDelayForward::doNextEvent() {
     _bounced_pkts.pop_back();
 }
 
-/*
 simtime_picosec HopDelayForward::routing(Packet* pkt, simtime_picosec t) {
 	DynExpTopology* top = pkt->get_topology();
 	int slice = top->time_to_slice(t);
@@ -843,4 +933,3 @@ void QueueAlarm::doNextEvent(){
     assert(next_time > t);
     eventlist().sourceIsPending(*this, next_time); 
 }
-*/

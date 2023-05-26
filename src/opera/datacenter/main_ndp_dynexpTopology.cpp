@@ -175,7 +175,6 @@ int main(int argc, char **argv) {
             vector<int64_t> vtemp;
             getline(input, line);
             stringstream stream(line);
-            if (line.length() <= 0) continue;
             while (stream >> temp)
                 vtemp.push_back(temp);
             //cout << "src = " << vtemp[0] << ", dest = " << vtemp[1] << ", bytes =  " << vtemp[2] << ", start_time[us] " << vtemp[3] << endl;
@@ -205,7 +204,6 @@ int main(int argc, char **argv) {
                 sinkLogger.monitorSink(flowSnk);
 
             }  else { // background flow, send it over RLB
-                continue;
 
                 // generate an RLB source/sink:
 
@@ -225,15 +223,15 @@ int main(int argc, char **argv) {
 
     cout << "Traffic loaded." << endl;
 
-    //RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
-    //master->start();
+    RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+    master->start();
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);
     UM->start(timeFromSec(utiltime)); // print utilization every X milliseconds.
 
     // debug:
-    cout << "Starting... " << endl;
+    //cout << "Starting... " << endl;
 
 
     // Record the setup

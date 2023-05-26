@@ -27,7 +27,6 @@
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
-#include "hoho_utils.h"
 
 class CompositeQueue;
 
@@ -37,10 +36,20 @@ class HopDelayForward : public EventSource {
    HopDelayForward(EventList &eventlist);
    void bouncePkt(Packet* pkt);
    void doNextEvent();
-   //simtime_picosec routing(Packet* pkt, simtime_picosec t);
+   simtime_picosec routing(Packet* pkt, simtime_picosec t);
    void insertBouncedQ(simtime_picosec t, Packet* pkt);
  private:
    vector<pair<simtime_picosec, Packet*>> _bounced_pkts; // sorted with decreasing timestamp, pop from back
+};
+
+// Set events to activate next calendar queue
+class QueueAlarm : public EventSource {
+    public:
+        QueueAlarm(EventList &eventlist, int port, CompositeQueue* q, DynExpTopology* top);
+        void doNextEvent();
+    private:
+        CompositeQueue* _queue; 
+        DynExpTopology* _top;
 };
 
 class CompositeQueue : public Queue {
@@ -72,6 +81,9 @@ class CompositeQueue : public Queue {
     }
     virtual const string& nodename() { return _nodename; }
 
+    int _tor; // the ToR switch this queue belongs to
+    int _port; // the port this queue belongs to
+
     int _num_packets;
     int _num_headers; // only includes data packets stripped to headers, not acks or nacks
     int _num_acks;
@@ -95,6 +107,8 @@ class CompositeQueue : public Queue {
     int _serv;
     int _ratio_high, _ratio_low, _ratio_high_prime, _ratio_low_prime, _crt;
     int _crt_send_ratio_high, _crt_send_ratio_low, _crt_trim_ratio;
+    int _crt_tx_slice;
+    DynExpTopology* _top;
 
     vector<list<Packet*>> _enqueued_low;
     vector<list<Packet*>> _enqueued_high;
@@ -109,9 +123,12 @@ class CompositeQueue : public Queue {
     // Must sum up to 1.0, can be tuned
     double _shortflow_bound = 0.6;
     double _longflow_bound = 0.4;
+    int _dl_queue;
 
     HopDelayForward _hop_delay_forward;
+    QueueAlarm _alarm;
     //for events
+    friend class QueueAlarm;
     friend class HopDelayForward;
 };
 

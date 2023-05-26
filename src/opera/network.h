@@ -15,12 +15,9 @@ class PacketFlow;
 class PacketSink;
 typedef uint32_t packetid_t;
 //void print_route(const Route& route);
-enum RouteStrategy {NOT_SET, SINGLE_PATH, SCATTER_PERMUTE, SCATTER_RANDOM, PULL_BASED};
 
 class NdpSink;
 class NdpSrc;
-class TcpSink;
-class TcpSrc;
 class RlbSink;
 class RlbSrc;
 
@@ -143,9 +140,6 @@ class Packet {
     int get_maxhops() {return _maxhops;}
     void set_crtport(int port) {_crtport = port;}
     int get_crtport() {return _crtport;}
-    void set_queueing(unsigned queueing) {_queueing = queueing;}
-    unsigned get_queueing() {return _queueing;}
-    void inc_queueing(unsigned queueing) {_queueing += queueing;}
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -155,8 +149,6 @@ class Packet {
 
     virtual inline NdpSink* get_ndpsink(){return NULL;}
     virtual inline NdpSrc* get_ndpsrc(){return NULL;}
-    virtual inline TcpSrc* get_tcpsrc(){return NULL;}
-    virtual inline TcpSink* get_tcpsink(){return NULL;}
 
     // stuff used for RLB:
     void set_dst(int dst) {_dst = dst;} // the current sending host
@@ -179,8 +171,6 @@ class Packet {
     void set_time_sent(uint64_t time) {_time_sent = time;}
     uint64_t get_time_sent() {return _time_sent;}
     uint64_t _time_sent;
-    void set_fabricts(simtime_picosec ts) {_fabricts = ts;}
-    simtime_picosec get_fabricts() {return _fabricts;}
 
 
  protected:
@@ -197,8 +187,6 @@ class Packet {
     bool _bounced; // packet has hit a full queue, and is being bounced back to the sender
     bool _been_bounced; // packet has been bounced previously (for debugging only as of 9/4/18)
     uint32_t _flags; // used for ECN & friends
-    simtime_picosec _fabricts; //timestamp from nic sentout
-    unsigned _queueing; //amount of queueing packet goes through
 
     ///////// For RLB //////////
 

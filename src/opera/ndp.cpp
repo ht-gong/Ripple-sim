@@ -153,7 +153,6 @@ void NdpSrc::processRTS(NdpPacket& pkt){
     // need to reset the sounrce and destination:
     pkt.set_src(_flow_src);
     pkt.set_dst(_flow_dst);
-    cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
     
     _sent_times.erase(pkt.seqno());
     //resend from front of RTX
@@ -356,9 +355,13 @@ void NdpSrc::processAck(const NdpAck& ack) {
         // FCT output for processing: (src dst bytes fct_ms timestarted_ms)
         
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
-            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << endl;
-        //if (get_flow_src() == 403 && get_flow_dst() == 19) exit(0);
+            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed << timeAsMs(get_start_time()) << endl;
+
+        // debug a certain connection:
+        //if ( get_flow_src() == 84 && get_flow_dst() == 0) {
+        //cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
+        //    " " << timeAsMs(eventlist().now() - get_start_time()) << " " << get_id() << endl;
+        //}
     }
 
     update_rtx_time();
@@ -427,7 +430,7 @@ void NdpSrc::receivePacket(Packet& pkt)
 	    //printf("Receive PULL: %s\n", p->pull_bitmap().to_string().c_str());
 
 	    pull_packets(p->pullno(), p->pacerno());
-            pkt.free();
+
 	    return;
 	}
     case NDPACK:
@@ -472,7 +475,7 @@ void NdpSrc::pull_packets(NdpPull::seq_t pull_no, NdpPull::seq_t pacer_no) {
     }
 }
 
-Queue* NdpSrc::sendToNIC(Packet* pkt) {
+Queue* NdpSrc::sendToNIC(NdpPacket* pkt) {
     DynExpTopology* top = pkt->get_topology();
     Queue* nic = top->get_queue_serv_tor(pkt->get_src()); // returns pointer to nic queue
     nic->receivePacket(*pkt); // send this packet to the nic queue
@@ -502,13 +505,7 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
         _rtx_queue.pop_front();
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_SEND);
         p->set_ts(eventlist().now()); // set transmission time
-        p->set_queueing(0);
         p->set_pacerno(pacer_no);
-        /*
-        if (get_flow_src() == 403 && get_flow_dst() == 19) {
-            cout << "RESENDING " << p->seqno() << endl;
-        }
-        */
 
         //PacketSink* sink = p->sendOn();
         //PacketSink* sink = p->sendToNIC();
@@ -557,17 +554,11 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
 
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
         p->set_ts(eventlist().now());
-        p->set_queueing(0);
-
+    
         _flight_size += _pkt_size;
         _highest_sent += _pkt_size;  //XX beware wrapping
         _packets_sent++;
         _new_packets_sent++;
-        /*
-        if (get_flow_src() == 403 && get_flow_dst() == 19 && p->seqno() > 920000 && p->seqno() < 930000) {
-        cout << "SENDING " << p->seqno() << endl;
-        }
-        */
 
         //PacketSink* sink = p->sendOn();
         //PacketSink* sink = p->sendToNIC();
@@ -627,7 +618,6 @@ void NdpSrc::process_cumulative_ack(NdpPacket::seq_t cum_ackno) {
 }
 
 void NdpSrc::retransmit_packet() {
-    assert(0);
     //cout << "starting retransmit_packet\n";
     NdpPacket* p;
     map<NdpPacket::seq_t, simtime_picosec>::iterator i, i_next;
@@ -865,7 +855,6 @@ void NdpSink::receivePacket(Packet& pkt) {
     NdpPacket::seq_t seqno = p->seqno();
     NdpPacket::seq_t pacer_no = p->pacerno();
     simtime_picosec ts = p->ts();
-    simtime_picosec fts = p->get_fabricts();
     bool last_packet = ((NdpPacket*)&pkt)->last_packet();
     switch (pkt.type()) {
     case NDP:
@@ -896,30 +885,11 @@ void NdpSink::receivePacket(Packet& pkt) {
         //    cout << " Sending NACK" << endl;
         //}
 
-        //cout << "NACK " << _flow_src << " " << _flow_dst << " " << ((NdpPacket*)&pkt)->seqno() << endl;
         send_nack(ts,((NdpPacket*)&pkt)->seqno(), pacer_no);	  
         pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
         p->free();
         return;
     }
-
-    if (last_ts > fts){
-        cout << "REORDER " << " " << _flow_src << " " << _flow_dst << " "
-            << _src->get_flowsize() << " " << 
-            "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
-            "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
-        _src->_found_reorder++;
-    }
-    last_ts = fts;
-    last_hops = p->get_crthop();
-    last_queueing = p->get_queueing();
-
-/*
-    if (_flow_src == 403 && _flow_dst == 19 && !pkt.header_only()) {
-        cout << "SEQ " << p->seqno() << " TIME " << p->get_fabricts()/1E6 <<  
-            " SLICE " << p->get_slice_sent() << " NHOPS " << p->get_crthop() << endl;
-    }
-    */
 
     int size = p->size()-ACKSIZE; // TODO: the following code assumes all packets are the same size
 
@@ -946,21 +916,17 @@ void NdpSink::receivePacket(Packet& pkt) {
         // are there any additional received packets we can now ack?
         while (!_received.empty() && (_received.front() == _cumulative_ack+1) ) {
             _received.pop_front();
-            _top->decr_host_buffer(_flow_dst);
             _cumulative_ack+= size;
         }
     } else if (seqno < _cumulative_ack+1) {
         //must have been a bad retransmit
     } else { // it's not the next expected sequence number
-        _top->inc_host_buffer(_flow_dst);
-        
         if (_received.empty()) {
             _received.push_front(seqno);
             //it's a drop in this simulator there are no reorderings.
             _drops += (size + seqno-_cumulative_ack-1)/size;
         } else if (seqno > _received.back()) { // likely case
             _received.push_back(seqno);
-            //cout << "OOO? " << _flow_src << " " << _flow_dst << " " << size << " " << seqno << " " << _received.back() << endl;
         } 
         else { // uncommon case - it fills a hole
             list<uint64_t>::iterator i;
@@ -968,8 +934,6 @@ void NdpSink::receivePacket(Packet& pkt) {
                 if (seqno == *i) break; // it's a bad retransmit
                 if (seqno < (*i)) {
                     _received.insert(i, seqno);
-                    //cout << "Filled " << _flow_src << " " << _flow_dst << " " 
-                     //   << size << " " << seqno << " " << _last_packet_seqno << endl;
                     break;
                 }
             }

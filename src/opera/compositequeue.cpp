@@ -8,15 +8,14 @@
 #include "dynexp_topology.h"
 #include "rlbpacket.h" // added for debugging
 #include "rlbmodule.h"
-#include "ndppacket.h"
 
 // !!! NOTE: this one does selective RLB packet dropping.
 
 // !!! NOTE: this has been modified to also include a lower priority RLB queue
 
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, 
-			       QueueLogger* logger, int tor, int port, DynExpTopology *top)
-  : Queue(bitrate, maxsize, eventlist, logger, tor, port, top)
+			       QueueLogger* logger, int tor, int port)
+  : Queue(bitrate, maxsize, eventlist, logger)
 {
   _tor = tor;
   _port = port;
@@ -250,16 +249,6 @@ void CompositeQueue::receivePacket(Packet& pkt) {
         break;
     }
     case NDP:
-    {
-        NdpPacket *p = (NdpPacket*)&pkt;
-        p->inc_queueing(_queuesize_low);
-        /*
-        if (p->get_src() == 403 && p->get_dst() == 19 && (p->seqno() == 1066949 || p->seqno() == 1065513)) {
-            cout << "SEQ " << p->seqno() << " INQUEUE " << nodename() << " AT " << 
-                eventlist().now()/1E6 << endl;
-        }
-        */
-    }
     case NDPACK:
     case NDPNACK:
     case NDPPULL:

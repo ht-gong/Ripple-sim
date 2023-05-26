@@ -175,7 +175,6 @@ int main(int argc, char **argv) {
         while(!input.eof()){
             vector<int64_t> vtemp;
             getline(input, line);
-            if (line.size() <= 0) continue;
             stringstream stream(line);
             while (stream >> temp)
                 vtemp.push_back(temp);

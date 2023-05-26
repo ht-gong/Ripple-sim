@@ -226,6 +226,7 @@ string TrafficLoggerSimple::event_to_str(RawLogEvent& event) {
     return ss.str();
 }
 
+/*
 void TcpTrafficLogger::logTraffic(Packet& pkt, Logged& location, 
 				     TrafficEvent ev) {
     _logfile->writeRecord(Logger::TCP_TRAFFIC,
@@ -275,6 +276,7 @@ string TcpTrafficLogger::event_to_str(RawLogEvent& event) {
     return ss.str()
 ;
 }
+*/
 
 #define NDP_IS_ACK 1<<31
 #define NDP_IS_NACK 1<<30
@@ -690,6 +692,7 @@ void SinkLoggerSampling::doNextEvent(){
     }
     */
 }
+/*
 
 TcpSinkLoggerSampling::TcpSinkLoggerSampling(simtime_picosec period, 
 		      EventList& eventlist):
@@ -726,6 +729,7 @@ string TcpSinkLoggerSampling::event_to_str(RawLogEvent& event) {
     }
     return ss.str();
 }
+*/
 
 
 NdpSinkLoggerSampling::NdpSinkLoggerSampling(simtime_picosec period, 

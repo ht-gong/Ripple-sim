@@ -288,7 +288,7 @@ void CompositeQueue::beginService(){
 
     // No silent failures allowed with no RTO
     if(!sent_succeed){
-        //cout << "Missed send timing" << endl;
+        // cout << "Missed send timing" << endl;
         if (sent_pkt->header_only()){
             if(sent_pkt->bounced())
                 sent_pkt->free();
@@ -394,7 +394,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
                         chk = true;
 
                         if (drop_long){
-                            //cout << "Dropping LONG for SHORT packet" << endl;
+                            cout << "Dropping LONG for SHORT packet" << endl;
                             _enqueued_low_prime[crt].pop_front();
                             _queuesize_low_prime[crt] -= booted_pkt->size();
                             _crt_trim_ratio++;
@@ -560,7 +560,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
     }
 
     //track max queue occupancy
-    mem_b crt_tot_qsize = queuesize_short();
+    mem_b crt_tot_qsize = queuesize();
     mem_b crt_slice_qsize = slice_queuesize(crt);
     _max_tot_qsize = crt_tot_qsize > _max_tot_qsize ? crt_tot_qsize : _max_tot_qsize;
     _max_slice_qsize[crt] = crt_slice_qsize > _max_slice_qsize[crt] ? crt_slice_qsize : _max_slice_qsize[crt];
@@ -713,27 +713,13 @@ mem_b CompositeQueue::queuesize_high() {
     return sum;
 }
 mem_b CompositeQueue::queuesize() {
-    if(_top->is_downlink(_port))
-        return _queuesize_high[_dl_queue] + _queuesize_low[_dl_queue] + 
-            _queuesize_high_prime[_dl_queue] + _queuesize_low_prime[_dl_queue];
     int sum = 0;
     int i;
-    for(i = 0; i < _top->get_nsuperslice()*2; i++){
+    for(i = 0; i < _top->get_nsuperslice()*3; i++){
         sum += _queuesize_high[i];
         sum += _queuesize_low[i];
         sum += _queuesize_high_prime[i];
         sum += _queuesize_low_prime[i];
-    }
-    return sum;
-}
-mem_b CompositeQueue::queuesize_short() {
-    if(_top->is_downlink(_port))
-        return _queuesize_high[_dl_queue] + _queuesize_low[_dl_queue];
-    int sum = 0;
-    int i;
-    for(i = 0; i < _top->get_nsuperslice()*2; i++){
-        sum += _queuesize_high[i];
-        sum += _queuesize_low[i];
     }
     return sum;
 }

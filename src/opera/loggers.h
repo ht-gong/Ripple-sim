@@ -24,11 +24,13 @@ class TrafficLoggerSimple : public TrafficLogger {
     static string event_to_str(RawLogEvent& event);
 };
 
+/*
 class TcpTrafficLogger : public TrafficLogger {
  public:
     void logTraffic(Packet& pkt, Logged& location, TrafficEvent ev);
     static string event_to_str(RawLogEvent& event);
 };
+*/
 
 class NdpTrafficLogger : public TrafficLogger {
  public:
@@ -114,11 +116,13 @@ class SinkLoggerSampling : public Logger, public EventSource {
     int _event_type;
 };
 
+/*
 class TcpSinkLoggerSampling : public SinkLoggerSampling {
  public:
     TcpSinkLoggerSampling(simtime_picosec period, EventList& eventlist);
     static string event_to_str(RawLogEvent& event);
 };
+*/
 
 class NdpSinkLoggerSampling : public SinkLoggerSampling {
     virtual void doNextEvent();

@@ -70,7 +70,6 @@ class CompositeQueue : public Queue {
     mem_b queuesize_low();
     mem_b queuesize_high();
     virtual mem_b queuesize();
-    mem_b queuesize_short();
     mem_b slice_queuesize(int slice);
     mem_b slice_queuesize_high(int slice);
     mem_b slice_queuesize_low(int slice);
