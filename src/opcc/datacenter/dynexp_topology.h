@@ -80,13 +80,6 @@ class DynExpTopology: public Topology{
   int no_of_tors() const {return _ntor;} // number of racks
   int no_of_hpr() const {return _ndl;} // number of hosts per rack = number of downlinks
 
-  uint64_t _total_packets;
-  uint64_t _max_total_packets;
-  void update_tot_pkt(int val){
-    _total_packets += val;
-    if(_total_packets > _max_total_packets)
-      _max_total_packets = _total_packets;
-  }
 
  private:
   map<Queue*,int> _link_usage;

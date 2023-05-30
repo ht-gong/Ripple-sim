@@ -245,7 +245,7 @@ void UtilMonitor::doNextEvent() {
 }
 
 extern int max_used_queues;
-#define OCC_SAMPLE 100
+#define OCC_SAMPLE 1000
 void UtilMonitor::printAggUtil() {
 
     uint64_t B_sum = 0;
@@ -263,7 +263,7 @@ void UtilMonitor::printAggUtil() {
 
     double util = (double)B_sum / (double)_max_B_in_period;
 
-    cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << " MaxPkts: " << _top->_max_total_packets << endl;
+    cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
     cout << "Used max: " << max_used_queues << endl;
 

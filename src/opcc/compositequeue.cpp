@@ -8,7 +8,6 @@
 #include <algorithm>
 
 #include "dynexp_topology.h"
-#include "ndp.h"
 
 //use clearing calendar queues
 //#define CALENDAR_CLEAR
@@ -293,10 +292,9 @@ void CompositeQueue::beginService(){
     if(!sent_succeed){
         //cout << "Missed send timing" << endl;
         if (sent_pkt->header_only()){
-            if(sent_pkt->bounced()){
+            if(sent_pkt->bounced())
                 sent_pkt->free();
-                _top->update_tot_pkt(-1);
-            } else
+            else
                 _hop_delay_forward.bouncePkt(sent_pkt);
         } else {
             sent_pkt->strip_payload();
@@ -304,7 +302,6 @@ void CompositeQueue::beginService(){
         }
         _serv = QUEUE_INVALID;
     }
-    if(sent_pkt->get_src() == 69 && sent_pkt->get_dst() == 337) cout << "queue delay " << drainTime(sent_pkt) << "hop " << sent_pkt->get_crthop() << endl;
 
 #ifdef CALENDAR_CLEAR 
     if (!sent_succeed && slice_queuesize(crt) > 0) {
@@ -460,7 +457,6 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
                     //pkt->flow().logTraffic(pkt,*this,TrafficLogger::PKT_DROP);
 
                     pkt->free();
-                    _top->update_tot_pkt(-1);
                     _num_drops++;
                 }
             } else {
@@ -552,7 +548,6 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
                     //pkt->flow().logTraffic(pkt,*this,TrafficLogger::PKT_DROP);
 
                     pkt->free();
-                    _top->update_tot_pkt(-1);
                     _num_drops++;
                 }
             } else {
@@ -564,14 +559,10 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
     }
 
     //track max queue occupancy
-    mem_b crt_tot_qsize = queuesize_short();
+    mem_b crt_tot_qsize = queuesize();
     mem_b crt_slice_qsize = slice_queuesize(crt);
     _max_tot_qsize = crt_tot_qsize > _max_tot_qsize ? crt_tot_qsize : _max_tot_qsize;
     _max_slice_qsize[crt] = crt_slice_qsize > _max_slice_qsize[crt] ? crt_slice_qsize : _max_slice_qsize[crt];
-
-    NdpSrc* pkt_src = pkt->get_ndpsrc();
-    pkt_src->append_trace(pkt->id(), pkt->header_only() ? 64 : pkt->size(), pkt->get_crthop(), _tor,
-            pkt->header_only() ? queuesize_short_ctl() : queuesize_short_data());
 
     if (_serv == QUEUE_INVALID && ((crt==_dl_queue && slice_queuesize(_dl_queue) > 0) || slice_queuesize(time_crt)) > 0) {
         _crt_tx_slice = time_crt;
@@ -677,7 +668,7 @@ simtime_picosec CompositeQueue::get_queueing_delay(int slice){
 
 //return queuesize according to corresponding slice duration
 mem_b CompositeQueue::slice_maxqueuesize(int slice){
-    //return _maxsize;
+    return _maxsize;
     assert(slice <= _dl_queue);
     if (slice == _dl_queue){
         return _maxsize;
@@ -702,9 +693,6 @@ mem_b CompositeQueue::slice_queuesize(int slice){
 }
 
 mem_b CompositeQueue::queuesize() {
-    if(_top->is_downlink(_port))
-        return _queuesize_high[_dl_queue] + _queuesize_low[_dl_queue] + 
-            _queuesize_high_prime[_dl_queue] + _queuesize_low_prime[_dl_queue];
     int sum = 0;
     int i;
     for(i = 0; i < _top->get_nsuperslice()*2; i++){
@@ -712,37 +700,6 @@ mem_b CompositeQueue::queuesize() {
         sum += _queuesize_low[i];
         sum += _queuesize_high_prime[i];
         sum += _queuesize_low_prime[i];
-    }
-    return sum;
-}
-mem_b CompositeQueue::queuesize_short() {
-    if(_top->is_downlink(_port))
-        return _queuesize_high[_dl_queue] + _queuesize_low[_dl_queue];
-    int sum = 0;
-    int i;
-    for(i = 0; i < _top->get_nsuperslice()*2; i++){
-        sum += _queuesize_high[i];
-        sum += _queuesize_low[i];
-    }
-    return sum;
-}
-mem_b CompositeQueue::queuesize_short_data() {
-    if(_top->is_downlink(_port))
-        return _queuesize_low[_dl_queue];
-    int sum = 0;
-    int i;
-    for(i = 0; i < _top->get_nsuperslice()*2; i++){
-        sum += _queuesize_low[i];
-    }
-    return sum;
-}
-mem_b CompositeQueue::queuesize_short_ctl() {
-    if(_top->is_downlink(_port))
-        return _queuesize_high[_dl_queue];
-    int sum = 0;
-    int i;
-    for(i = 0; i < _top->get_nsuperslice()*2; i++){
-        sum += _queuesize_high[i];
     }
     return sum;
 }

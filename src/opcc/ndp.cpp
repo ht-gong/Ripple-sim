@@ -92,18 +92,6 @@ NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger,
     _log_me = false;
 }
 
-void NdpSrc::append_trace(uint32_t id, uint16_t size, int hop, int tor, uint64_t delay){
-    NdpSrc_Trace tr = {id, size, hop, tor, delay};
-    _flow_trace.push_back(tr);
-}
-
-void NdpSrc::print_trace(){
-    std::list<NdpSrc_Trace>::iterator it;
-    for(it = _flow_trace.begin(); it != _flow_trace.end(); ++it){
-        cout << " [" << "id:" << it->pkt_id << " s:" << it->pkt_size << " hop:" << it->hop << " tor:" << it->tor << " qdelay:" << it->q_delay << "] ";  
-    }
-}
-
 void NdpSrc::set_flowsize(uint64_t flow_size_in_bytes) {
 
     _flow_size = flow_size_in_bytes;
@@ -245,7 +233,6 @@ void NdpSrc::processNack(const NdpNack& nack){
     p = NdpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, nack.ackno(),
         0, _pkt_size, true, last_packet, get_longflow());
 
-    _top->update_tot_pkt(1);
     // debug:
     //if (p->been_bounced() == true)
     //    cout << "    * * * 'new' packet shows that it's been bounced" << endl;
@@ -370,17 +357,14 @@ void NdpSrc::processAck(const NdpAck& ack) {
         // FCT output for processing: (src dst bytes fct_ms timestarted_ms)
 
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
-            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed << timeAsMs(get_start_time()); //<< endl;
-        //print_trace();
-        cout << endl;
-        //flow ended, clear trace
-        _flow_trace.clear();
+            " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed << timeAsMs(get_start_time());
+        cout << " " << _max_hops_per_trip << endl;
 
         // debug a certain connection:
         //if ( get_flow_src() == 84 && get_flow_dst() == 0) {
         //cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
         //    " " << timeAsMs(eventlist().now() - get_start_time()) << " " << get_id() << endl;
-        //
+        //}
     }
 
     update_rtx_time();
@@ -395,6 +379,9 @@ void NdpSrc::processAck(const NdpAck& ack) {
 void NdpSrc::receivePacket(Packet& pkt)
 {
     pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
+
+    if(pkt.get_crthop() > _max_hops_per_trip)
+        _max_hops_per_trip = pkt.get_crthop();
 
     switch (pkt.type()) {
     case NDP:
@@ -421,7 +408,6 @@ void NdpSrc::receivePacket(Packet& pkt)
 	    }*/
 	    processNack((const NdpNack&)pkt);
 	    pkt.free();
-        _top->update_tot_pkt(-1);
 	    return;
 	}
     case NDPPULL:
@@ -450,7 +436,6 @@ void NdpSrc::receivePacket(Packet& pkt)
 	    //printf("Receive PULL: %s\n", p->pull_bitmap().to_string().c_str());
 
 	    pull_packets(p->pullno(), p->pacerno());
-        pkt.free();
 
 	    return;
 	}
@@ -469,7 +454,6 @@ void NdpSrc::receivePacket(Packet& pkt)
 	    //}
 	    processAck((const NdpAck&)pkt);
 	    pkt.free();
-        _top->update_tot_pkt(-1);
 	    return;
 	}
     }
@@ -581,7 +565,6 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
         _highest_sent += _pkt_size;  //XX beware wrapping
         _packets_sent++;
         _new_packets_sent++;
-        _top->update_tot_pkt(1);
 
         //PacketSink* sink = p->sendOn();
         //PacketSink* sink = p->sendToNIC();
@@ -678,7 +661,6 @@ void NdpSrc::retransmit_packet() {
         sendToNIC(p);
         _packets_sent++;
         _rtx_packets_sent++;
-        _top->update_tot_pkt(1);
     }
     update_rtx_time();
 }
@@ -864,6 +846,10 @@ void NdpSink::receivePacket(Packet& pkt) {
     NdpPacket::seq_t pacer_no = p->pacerno();
     simtime_picosec ts = p->ts();
     bool last_packet = ((NdpPacket*)&pkt)->last_packet();
+
+    if(p->get_crthop() > p->get_ndpsrc()->_max_hops_per_trip)
+        p->get_ndpsrc()->_max_hops_per_trip = p->get_crthop();
+
     switch (pkt.type()) {
     case NDP:
 
@@ -880,7 +866,6 @@ void NdpSink::receivePacket(Packet& pkt) {
         assert(pkt.bounced());
         cout << "Got bounced feedback packet!\n";
         p->free(); // delete packet
-        _top->update_tot_pkt(-1);
         return;
     }
 
@@ -897,7 +882,6 @@ void NdpSink::receivePacket(Packet& pkt) {
         send_nack(ts,((NdpPacket*)&pkt)->seqno(), pacer_no);
         pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
         p->free();
-        _top->update_tot_pkt(-1);
         return;
     }
 
@@ -911,7 +895,6 @@ void NdpSink::receivePacket(Packet& pkt) {
 
     pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
     p->free();
-    _top->update_tot_pkt(-1);
 
     _total_received+=size;
 
@@ -994,7 +977,6 @@ void NdpSink::send_ack(simtime_picosec ts, NdpPacket::seq_t ackno, NdpPacket::se
 
     ack->flow().logTraffic(*ack,*this,TrafficLogger::PKT_CREATE);
     ack->set_ts(ts);
-    _top->update_tot_pkt(1);
 
     _pacer->sendPacket(ack, pacer_no, this);
 }
@@ -1009,7 +991,6 @@ void NdpSink::send_nack(simtime_picosec ts, NdpPacket::seq_t ackno, NdpPacket::s
 
     nack->flow().logTraffic(*nack,*this,TrafficLogger::PKT_CREATE);
     nack->set_ts(ts);
-    _top->update_tot_pkt(1);
     _pacer->sendPacket(nack, pacer_no, this);
 }
 

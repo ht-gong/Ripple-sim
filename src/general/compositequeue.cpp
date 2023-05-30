@@ -394,7 +394,7 @@ void CompositeQueue::receivePacket(Packet& _pkt) {
                         chk = true;
 
                         if (drop_long){
-                            cout << "Dropping LONG for SHORT packet" << endl;
+                            // cout << "Dropping LONG for SHORT packet" << endl;
                             _enqueued_low_prime[crt].pop_front();
                             _queuesize_low_prime[crt] -= booted_pkt->size();
                             _crt_trim_ratio++;

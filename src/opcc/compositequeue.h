@@ -68,9 +68,6 @@ class CompositeQueue : public Queue {
     int num_nacks() const { return _num_nacks;}
     int num_pulls() const { return _num_pulls;}
     virtual mem_b queuesize();
-    mem_b queuesize_short();
-    mem_b queuesize_short_data();
-    mem_b queuesize_short_ctl();
     mem_b slice_queuesize_low(int slice);
     mem_b slice_queuesize_high(int slice);
     mem_b slice_queuesize(int slice);

@@ -49,14 +49,6 @@ class ReceiptEvent {
 };
 */
 
-struct NdpSrc_Trace {
-    uint32_t pkt_id;
-    uint16_t pkt_size; 
-    int hop;
-    int tor;
-    uint64_t q_delay;
-};
-
 class NdpSrc : public PacketSink, public EventSource {
     friend class NdpSink;
  public:
@@ -101,6 +93,7 @@ class NdpSrc : public PacketSink, public EventSource {
     uint64_t _last_acked;
     uint32_t _flight_size;
     uint32_t _acked_packets;
+    uint32_t _max_hops_per_trip;
 
     // the following are used with SCATTER_PERMUTE, SCATTER_RANDOM and PULL_BASED route strategies
 
@@ -157,10 +150,6 @@ class NdpSrc : public PacketSink, public EventSource {
     int _flow_dst; // the receiver (sink) for this flow
 
     DynExpTopology* _top;
-
-    void append_trace(uint32_t id, uint16_t size, int hop, int tor, uint64_t delay);
-    void print_trace();
-    list<NdpSrc_Trace> _flow_trace;
 
  private:
     // Housekeeping

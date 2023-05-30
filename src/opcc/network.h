@@ -250,34 +250,22 @@ class PacketSink {
 template<class P>
 class PacketDB {
  public:
-    //static int tot_pkts;
     P* allocPacket() {
-    //cout << "Totpkts: " << ++tot_pkts << " " << typeid(P).name() <<  endl;
 	if (_freelist.empty()) {
-        //static int newpkt_n;
-        //cout << "Allocated " << ++newpkt_n << " " << typeid(P).name() << endl;
 	    return new P();
 	} else {
-        //static int recpkt_n;
-        //cout << "Recycled " << ++recpkt_n << " " << typeid(P).name() << endl;
 	    P* p = _freelist.back();
 	    _freelist.pop_back();
 	    return p;
 	}
     };
     void freePacket(P* pkt) {
-    //static int freepkt_n;
-    //cout << "Freed: " << ++freepkt_n << " " << typeid(P).name() << endl;
-    //tot_pkts--;
 	_freelist.push_back(pkt);
     };
 
  protected:
     vector<P*> _freelist; // Irek says it's faster with vector than with list
 };
-
-//template<class P>
-//int PacketDB<P>::tot_pkts;
 
 
 #endif

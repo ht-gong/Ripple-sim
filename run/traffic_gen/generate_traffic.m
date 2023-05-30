@@ -6,11 +6,11 @@ Hosts_p_rack=6;
 
 H=Nrack*Hosts_p_rack; % number of hosts
 
-loadfrac0=.10; % fraction of theoretically possible load
+loadfrac0=.40; % fraction of theoretically possible load
 
 % ----- define simulation length (time):
 
-totaltime=1.0001; % seconds, probably want a little extra here...
+totaltime=10.0001; % seconds, probably want a little extra here...
 
 
 %% prio traffic:
