@@ -94,6 +94,7 @@ class NdpSrc : public PacketSink, public EventSource {
     uint32_t _flight_size;
     uint32_t _acked_packets;
     uint32_t _max_hops_per_trip;
+    uint32_t _last_hop_per_trip;
 
     // the following are used with SCATTER_PERMUTE, SCATTER_RANDOM and PULL_BASED route strategies
 

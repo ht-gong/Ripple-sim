@@ -5,7 +5,7 @@ from collections import defaultdict
 import itertools
 
 marker = itertools.cycle(('x', '+', '.', 'o', '*')) 
-for perc_load in [1, 10, 25, 30]:
+for perc_load in [1, 10, 25, 30, 40]:
     flows = defaultdict(list)
     with open(f"../sim/General_{perc_load}percLoad_10Gbps.txt", "r") as f:
         lines = f.readlines()
@@ -59,7 +59,7 @@ plt.xscale("log")
 plt.xlabel("Flow Size (bytes)")
 plt.ylabel("FCT reduction (%)")
 
-name = "opera_hoho"
+name = "opera_hoho_1s"
 plt.title(f"FCT reduction {name}")
 plt.savefig(f"./fct_reduction_{name}.png")
 
