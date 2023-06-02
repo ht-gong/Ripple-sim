@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 import csv
 from itertools import islice
+import matplotlib.pyplot as plt
 
 tor_count = 108
 uplink_count = 6
@@ -22,16 +23,19 @@ for tor in range(tor_count):
 
 f = open('ksp.txt', 'w')
 
+bucket_shortest = np.zeros(10)
+bucket_topk = np.zeros(10)
+
 for cycle in range(cycle_count):
-    print(f"Calculating KSP for slice {cycle}:")
+    print(f"Calculating KSP for slice {cycle}")
     lines = []
     for tor in range(tor_count):
         line = str(tor) + ' ' + ' '.join(str(i) for i in top[tor, : , cycle])
         lines.append(line)
 
     G = nx.parse_adjlist(lines, nodetype=int)
-
     path_dict = {}
+
     for i in range(0, tor_count):
         for j in range(i + 1, tor_count):
             path_gen = nx.shortest_simple_paths(G, i, j)
@@ -39,6 +43,10 @@ for cycle in range(cycle_count):
             rev_paths = [list(reversed(path)) for path in paths]
             path_dict[(i, j)] = paths
             path_dict[(j, i)] = rev_paths
+
+            bucket_shortest[len(paths[0]) - 1] += 1
+            for path in paths:
+                bucket_topk[len(path) - 1] += 1
 
     f.write(str(cycle) + '\n')
     for src in range(tor_count):
@@ -54,8 +62,23 @@ for cycle in range(cycle_count):
                 mapped_uplink = [src, dst] + mapped_uplink
                 f.write(' '.join(str(i) for i in mapped_uplink) + '\n')
 
+bucket_shortest = bucket_shortest[1:max(np.flatnonzero(bucket_shortest)) + 1]
+ind = np.arange(1, len(bucket_shortest) + 1, dtype=int)
+print(f"Shortest path avg hop no. = {np.sum(bucket_shortest * ind) / np.sum(bucket_shortest)}")
+plt.bar(ind, bucket_shortest / np.sum(bucket_shortest), color='g')
+plt.title("PDF of length of shortest path")
+plt.savefig(f"./tmp/shortest_path_hist.png")  
 
+plt.clf()
 
+bucket_topk = bucket_topk[1:max(np.flatnonzero(bucket_topk)) + 1]
+ind = np.arange(1, len(bucket_topk) + 1, dtype=int)
+print(f"Top {K} paths avg hop no. = {np.sum(bucket_topk * ind) / np.sum(bucket_topk)}")
+plt.title(f"PDF of length of top {K} paths")
+plt.bar(ind, bucket_topk / np.sum(bucket_topk), color='g')
+plt.savefig(f"./tmp/top{K}_paths_hist.png")  
+
+f.close()
 
 
     
