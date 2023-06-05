@@ -1,4 +1,4 @@
-// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #include "config.h"
 #include <sstream>
 #include <strstream>
@@ -21,6 +21,8 @@
 
 // Choose the topology here:
 #include "dynexp_topology.h"
+#include "rlb.h"
+#include "rlbmodule.h"
 
 // Simulation params
 
@@ -34,9 +36,6 @@ uint32_t delay_ToR2ToR = 500; // tor-to-tor link delay in nanoseconds
     // note: there is another parameter defined in `ndppacket.h`: "ACKSIZE". This should be set to the same size.
 // set the NDP queue size in units of packets (of length DEFAULT_PACKET_SIZE Bytes)
 #define DEFAULT_QUEUE_SIZE 8
-
-//enable/disable long flows
-#define LONG_FLOWS_ENABLED 1
 
 string ntoa(double n); // convert a double to a string
 string itoa(uint64_t n); // convert an int to a string
@@ -118,7 +117,7 @@ int main(int argc, char **argv) {
         } else {
             exit_error(argv[0]);
         }
-
+        
         i++;
     }
     srand(13); // random seed
@@ -127,7 +126,7 @@ int main(int argc, char **argv) {
     Clock c(timeFromSec(5 / 100.), eventlist);
 
     route_strategy = SCATTER_RANDOM; // only one routing strategy for now...
-
+      
     if (route_strategy == NOT_SET) {
 	   fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \nValid values are perm, rand, pull, rg and single\n");
 	   exit(1);
@@ -175,8 +174,8 @@ int main(int argc, char **argv) {
         while(!input.eof()){
             vector<int64_t> vtemp;
             getline(input, line);
-            if (line.size() <= 0) continue;
             stringstream stream(line);
+            if (line.length() <= 0) continue;
             while (stream >> temp)
                 vtemp.push_back(temp);
             //cout << "src = " << vtemp[0] << ", dest = " << vtemp[1] << ", bytes =  " << vtemp[2] << ", start_time[us] " << vtemp[3] << endl;
@@ -185,15 +184,10 @@ int main(int argc, char **argv) {
             int flow_src = vtemp[0];
             int flow_dst = vtemp[1];
 
-            if (vtemp[2] < cutoff || LONG_FLOWS_ENABLED) { // priority flow, sent it over NDP
+            if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
 
                 // generate an NDP source/sink:
-
-                // FD: Set true for only long flows, false for only short flows, vtemp[2]>=cutoff for both
-                //NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst, true);
-                NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst, vtemp[2] >= cutoff);
-
-                //NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
+                NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
                 flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
                 flowSrc->set_flowsize(vtemp[2]); // bytes
 
@@ -202,29 +196,44 @@ int main(int argc, char **argv) {
                 NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); // 1 = pull at line rate
                 //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, .17);
 
-                // FD: Set true for only long flows, false for only short flows, vtemp[2]>=cutoff for both
-                //NdpSink* flowSnk = new NdpSink(top, flowpacer, flow_src, flow_dst, true);
-                NdpSink* flowSnk = new NdpSink(top, flowpacer, flow_src, flow_dst, vtemp[2] >= cutoff);
-                //NdpSink* flowSnk = new NdpSink(top, flowpacer, flow_src, flow_dst);
+                NdpSink* flowSnk = new NdpSink(top, flowpacer, flow_src, flow_dst);
                 ndpRtxScanner.registerNdp(*flowSrc);
 
                 // set up the connection event
                 flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
 
                 sinkLogger.monitorSink(flowSnk);
+
+            }  else { // background flow, send it over RLB
+                continue;
+
+                // generate an RLB source/sink:
+
+                RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
+                // debug:
+                //cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
+                flowSrc->set_flowsize(vtemp[2]); // bytes
+
+                RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
+
+                // set up the connection event
+                flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
+
             }
         }
     }
 
-
     cout << "Traffic loaded." << endl;
+
+    //RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+    //master->start();
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);
     UM->start(timeFromSec(utiltime)); // print utilization every X milliseconds.
 
     // debug:
-    //cout << "Starting... " << endl;
+    cout << "Starting... " << endl;
 
 
     // Record the setup

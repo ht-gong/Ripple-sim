@@ -1,33 +1,38 @@
-// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #include <sstream>
 #include <math.h>
-#include <climits>
 #include "datacenter/dynexp_topology.h"
 #include "queue.h"
 #include "tcppacket.h"
 #include "ndppacket.h"
-#include "tcp.h"
-#include "ndp.h"
+#include "rlbpacket.h" // added
 #include "queue_lossless.h"
 
 #include "pipe.h"
 
+#include "rlb.h" // needed to make dummy packet
+#include "tcp.h"
+#include "rlbmodule.h"
+
 Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger)
-  : EventSource(eventlist,"queue"),
+  : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(0), _port(0), _top(NULL),
     _logger(logger), _bitrate(bitrate), _num_drops(0)
 {
-    Queue(bitrate, maxsize, eventlist, logger, 0, 0, NULL);
+    _queuesize = 0;
+    _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
+    stringstream ss;
+    //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
+    //_nodename = ss.str();
 }
 
-Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger, int tor, int port,
-        DynExpTopology *top)
+Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger, int tor, int port, DynExpTopology *top)
   : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(tor), _port(port), _top(top),
     _logger(logger), _bitrate(bitrate), _num_drops(0)
 {
+    _queuesize = 0;
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
     stringstream ss;
-    _routing = new HohoRouting();
-    _queue_alarm = new QueueAlarm(eventlist, port, this, top);
+    _max_recorded_size.resize(_top->get_nslices());
     //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
     //_nodename = ss.str();
 }
@@ -37,7 +42,6 @@ void Queue::beginService() {
     /* schedule the next dequeue event */
     assert(!_enqueued.empty());
     eventlist().sourceIsPendingRel(*this, drainTime(_enqueued.back()));
-    _sending_pkt = _enqueued.back();
 }
 
 void Queue::completeService() {
@@ -48,6 +52,7 @@ void Queue::completeService() {
     _queuesize -= pkt->size();
 
     /* tell the packet to move on to the next pipe */
+    //pkt->sendFromQueue();
     sendFromQueue(pkt);
 
     if (!_enqueued.empty()) {
@@ -60,13 +65,12 @@ void Queue::sendFromQueue(Packet* pkt) {
     Pipe* nextpipe; // the next packet sink will be a pipe
     DynExpTopology* top = pkt->get_topology();
     if (pkt->get_crthop() < 0) {
+        //cout << "sendFromQueue (from NIC) " << _tor << " " << _port << endl; 
         // we're sending out of the NIC
-        // debug:
-        //cout << "Sending out of the NIC onto pipe " << pkt->get_src() << endl;
-
         nextpipe = top->get_pipe_serv_tor(pkt->get_src());
         nextpipe->receivePacket(*pkt);
     } else {
+        //cout << "sendFromQueue (from ToR) " << _tor << " " << _port << endl; 
         // we're sending out of a ToR queue
         if (top->is_last_hop(pkt->get_crtport())) {
             pkt->set_lasthop(true);
@@ -74,6 +78,9 @@ void Queue::sendFromQueue(Packet* pkt) {
             if (!top->port_dst_match(pkt->get_crtport(), pkt->get_crtToR(), pkt->get_dst())) {
 
                 switch (pkt->type()) {
+                    case RLB:
+                        cout << "!!! RLB";
+                        break;
                     case NDP:
                         cout << "!!! NDP";
                         break;
@@ -88,21 +95,26 @@ void Queue::sendFromQueue(Packet* pkt) {
                         break;
                     case TCP:
                         cout << "!!! TCP";
-                        TcpPacket *tcppkt = (TcpPacket*)&pkt;
+                        TcpPacket *tcppkt = (TcpPacket*)pkt;
                         tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
                 }
                 cout << " packet dropped: port & dst didn't match! (queue.cpp)" << endl;
                 cout << "    ToR = " << pkt->get_crtToR() << ", port = " << pkt->get_crtport() <<
                     ", src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
-                cout << "    FAILED " << pkt->get_ndpsrc()->get_flowsize() << " bytes" << endl; 
 
                 pkt->free(); // drop the packet
 
                 return;
             }
         }
+        /*
+        if(pkt->type() == TCP && pkt->get_src() == 186 && pkt->get_dst() == 121) {
+        cout << "SENTOUT " << eventlist().now() << endl;
+        }
+        */
         nextpipe = top->get_pipe_tor(pkt->get_crtToR(), pkt->get_crtport());
         nextpipe->receivePacket(*pkt);
+
     }
 }
 
@@ -112,23 +124,28 @@ void Queue::doNextEvent() {
 
 
 void Queue::receivePacket(Packet& pkt) {
-    if (queuesize()+pkt.size() > _maxsize) {
+    if (_queuesize+pkt.size() > _maxsize) {
 	/* if the packet doesn't fit in the queue, drop it */
-	if (_logger)
+    /*
+	if (_logger) 
 	    _logger->logQueue(*this, QueueLogger::PKT_DROP, pkt);
 	pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_DROP);
+    */
 	pkt.free();
-    cout << "!!! Packet dropped: queue overflow!" << endl;
-	_num_drops++;
+    //cout << "!!! Packet dropped: queue overflow!" << endl;
+    if(pkt.type() == TCP){
+        TcpPacket *tcppkt = (TcpPacket*)&pkt;
+        tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
+    }
+    _num_drops++;
 	return;
     }
-    pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_ARRIVE);
 
     /* enqueue the packet */
     bool queueWasEmpty = _enqueued.empty();
     _enqueued.push_front(&pkt);
     _queuesize += pkt.size();
-    if (_logger) _logger->logQueue(*this, QueueLogger::PKT_ENQUEUE, pkt);
+    pkt.inc_queueing(_queuesize);
 
     if (queueWasEmpty) {
 	/* schedule the dequeue event */
@@ -137,48 +154,34 @@ void Queue::receivePacket(Packet& pkt) {
     }
 }
 
-simtime_picosec Queue::serviceTime() {
-    return queuesize() * _ps_per_byte;
-}
-
-int Queue::next_tx_slice(int crt_slice){
-    assert(crt_slice != _top->get_nsuperslice()*2); 
-    int now =_top->time_to_slice(eventlist().now());
-    if(crt_slice == now)
-        return now;
-    int i = (crt_slice+1)%(_top->get_nsuperslice()*2);
-    //look for next slice queue that has to send
-    while (i != now){
-        if (slice_queuesize(i) > 0)
-            return i;
-        i = (i+1)%(_top->get_nsuperslice()*2);
-    }
-    return now;
-}
-
-simtime_picosec Queue::get_queueing_delay(int slice){
-    return slice_queuesize(slice)*_ps_per_byte;
-}
-
-mem_b Queue::slice_queuesize(int slice){
-    assert(slice <= _top->get_nsuperslice()*2);
+mem_b Queue::queuesize() {
     return _queuesize;
 }
 
-mem_b Queue::queuesize() {
-    return _queuesize;    
+simtime_picosec Queue::serviceTime() {
+    return _queuesize * _ps_per_byte;
+}
+
+//format "tor,port,slice0max,slice1max,slice2max...,slicenmax"
+void Queue::reportMaxqueuesize(){
+    cout << _tor << "," << _port << ",";
+    for(int i = 0; i < _max_recorded_size.size(); i++) {
+        cout << _max_recorded_size[i] << ",";
+        _max_recorded_size[i] = 0;
+    }
+    cout << endl;
 }
 
 //////////////////////////////////////////////////
 //              Priority Queue                  //
 //////////////////////////////////////////////////
 
-PriorityQueue::PriorityQueue(DynExpTopology* top, linkspeed_bps bitrate, mem_b maxsize,
-			     EventList& eventlist, QueueLogger* logger, int node)
+PriorityQueue::PriorityQueue(linkspeed_bps bitrate, mem_b maxsize, 
+			     EventList& eventlist, QueueLogger* logger, int node, DynExpTopology *top)
     : Queue(bitrate, maxsize, eventlist, logger)
 {
-    _top = top;
     _node = node;
+    _top = top;
 
     _bytes_sent = 0;
 
@@ -188,8 +191,6 @@ PriorityQueue::PriorityQueue(DynExpTopology* top, linkspeed_bps bitrate, mem_b m
     _queuesize[Q_HI] = 0;
     _servicing = Q_NONE;
     //_state_send = LosslessQueue::READY;
-    //TODO Why do I need to redefine this for it to not be 0????
-    _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
 }
 
 PriorityQueue::queue_priority_t PriorityQueue::getPriority(Packet& pkt) {
@@ -206,27 +207,20 @@ PriorityQueue::queue_priority_t PriorityQueue::getPriority(Packet& pkt) {
         break;
     case NDP:
         if (pkt.header_only()) {
-            if (pkt.get_longflow()) {
-                prio = _q_hi;
-            } else {
-                prio = Q_HI;
-            }
+            prio = Q_HI;
         } else {
+        /*
             NdpPacket* np = (NdpPacket*)(&pkt);
             if (np->retransmitted()) {
-                if (pkt.get_longflow()) {
-                    prio = _q_mid;
-                } else {
-                    prio = Q_MID;
-                }
+                prio = Q_MID;
             } else {
-                if (pkt.get_longflow()) {
-                    prio = _q_lo;
-                } else {
-                    prio = Q_LO;
-                }
+                prio = Q_LO;
             }
+        */
         }
+        break;
+    case RLB:
+        prio = Q_RLB;
         break;
     case TCP:
     case IP:
@@ -237,7 +231,7 @@ PriorityQueue::queue_priority_t PriorityQueue::getPriority(Packet& pkt) {
         cout << "NIC couldn't identify packet type." << endl;
         abort();
     }
-
+    
     return prio;
 }
 
@@ -254,27 +248,57 @@ simtime_picosec PriorityQueue::serviceTime(Packet& pkt) {
 	   //cout << "q_hi: " << _queuesize[Q_LO] << " ";
 	   return _queuesize[Q_HI] * _ps_per_byte;
     case Q_RLB:
-      //abort(); // we should never check this for an RLB packet
-      // YX: Modified because long flows may have low priority.
-      return (_queuesize[Q_HI] + _queuesize[Q_MID] + _queuesize[Q_LO] + _queuesize[Q_RLB]) * _ps_per_byte;
-
+        abort(); // we should never check this for an RLB packet
     default:
 	   abort();
     }
 }
 
+void PriorityQueue::doorbell(bool rlbwaiting) {
+
+    if (rlbwaiting) { // add a dummy packet to the queue
+
+        // debug:
+        //cout << "NIC[node" << _node << "] - doorbell that RLB has packets" << endl;
+
+        //if (_node == 345 && timeAsUs(eventlist().now()) > 18100) {
+    	//	cout << "   Doorbell TRUE at " << timeAsUs(eventlist().now()) << " us." << endl;
+    	//}
+
+
+        RlbPacket* pkt = RlbPacket::newpkt(1500); // make a dummy packet
+        pkt->set_dummy(true);
+        receivePacket(*pkt); // put that dummy packet in the RLB queue
+            // ! note - use `receivePacket` so we trigger service to begin
+    } else {
+        // the RLB module isn't ready to send more packets right now
+        // drop the dummy packet in the queue so we don't try to pull from the RLB module
+
+        //if (_node == 345 && timeAsUs(eventlist().now()) > 18100) {
+    	//	cout << "   Doorbell FALSE at " << timeAsUs(eventlist().now()) << " us." << endl;
+    	//}
+
+        Packet* pkt = _queue[0].front(); // RLB enumerates to 0
+        pkt->free();
+        _queue[0].pop_front();
+        _queuesize[0] = 0; // set queuesize to zero. 
+    }
+}
+
 void PriorityQueue::receivePacket(Packet& pkt) {
+    //cout << "PrioQueue receivePacket " << pkt.get_src() << " " << pkt.get_dst() << " size:" << pkt.size() << endl;
 
     queue_priority_t prio = getPriority(pkt);
 
     // debug:
-    // cout << "   NIC received a packet." << endl;
-    // cout << "long flow? " << pkt.get_longflow() << endl;
+    //cout << "   NIC received a packet." << endl;
 
     //pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_ARRIVE);
 
     /* enqueue the packet */
-    bool queueWasEmpty = queuesize() == 0;
+    bool queueWasEmpty = false;
+    if (queuesize() == 0)
+        queueWasEmpty = true;
 
     _queuesize[prio] += pkt.size();
     _queue[prio].push_front(&pkt);
@@ -295,42 +319,83 @@ void PriorityQueue::beginService() {
     /* schedule the next dequeue event */
     for (int prio = Q_HI; prio >= Q_RLB; --prio) {
         if (_queuesize[prio] > 0) {
-            eventlist().sourceIsPendingRel(*this, drainTime(_queue[prio].back()));
-            /*
-            cout << "PrioQueue (node " << _node << ") sending a packet of size " << 
-                _queue[prio].back()->size() << " at " << timeAsUs(eventlist().now()) << " us" << endl;
+            int slice = _top->time_to_absolute_slice(eventlist().now());
+            // if(slice % 3 != 0) {
+                // eventlist().sourceIsPendingRel(*this, _top->get_slice_start_time(slice + (3 - slice % 3)) - eventlist().now() + drainTime(_queue[prio].back()));
+            // } else {
+                eventlist().sourceIsPendingRel(*this, drainTime(_queue[prio].back()));
+            // }
+            cout << "PrioQueue (node " << _node << ") sending a packet at " << timeAsUs(eventlist().now()) << " us" << endl;
             cout << "   will be drained in " << timeAsUs(drainTime(_queue[prio].back())) << " us" << endl;
-            */
 
             _servicing = (queue_priority_t)prio;
+
+            // debug:
+            //if (_node == 345 && timeAsUs(eventlist().now()) > 18100) {
+    		//	cout << "   beginService on _servicing: [" << _servicing << "] at " << timeAsUs(eventlist().now()) << " us." << endl;
+    		//}
+
             return;
         }
     }
 }
 
 void PriorityQueue::completeService() {
-
-
-	// the below doesn't work because RLB can shut down the queue in between `beginService` and `completeService`
-    //assert(!_queue[_servicing].empty());
-    //assert(_servicing != Q_NONE);
-
 	if (!_queue[_servicing].empty()) {
 
 	    Packet* pkt;
 
 	    switch (_servicing) {
 	    case Q_RLB:
+	    {
+	        RlbModule* mod = _top->get_rlb_module(_node);
+	        pkt = mod->NICpull(); // get the packet from the RLB module
+
+	        // check if the packet is a dummy (spacer packet for rate limiting)
+	        // If so, free the packet, and return;
+	        if (pkt->is_dummy()) {
+	            pkt->free();
+	            break;
+	        } else {
+	            // RLB only applies to packets between racks.
+                // for RLB, we actually set `slice_sent` when it's committed by the RLB module, not when it's sent by the NIC
+
+                pkt->set_src_ToR(_top->get_firstToR(pkt->get_src())); // set the sending ToR. This is used for subsequent routing
+
+	            // send on the first path (index 0) to the "intermediate" destination
+	            int path_index = 0; // index 0 ensures it's the direct path
+	            pkt->set_path_index(path_index); // set which path the packet will take
+
+	            // set some initial packet parameters used for routing
+	            pkt->set_lasthop(false);
+	            pkt->set_crthop(-1);
+	            pkt->set_crtToR(-1);
+	            pkt->set_maxhops(_top->get_no_hops(pkt->get_src_ToR(),
+	                _top->get_firstToR(pkt->get_dst()), pkt->get_slice_sent(), path_index));
+	        }
+	        /* tell the packet to move on to the next pipe */
+	        sendFromQueue(pkt);
+
+	        break;
+	    }
 	    case Q_LO:
 	    case Q_MID:
 	    case Q_HI:
 	    {
+
 	        pkt = _queue[_servicing].back(); // get the pointer to the packet
 	        _queue[_servicing].pop_back(); // delete the element of the queue
 	        _queuesize[_servicing] -= pkt->size(); // decrement the queue size
 
 	        int new_bytes_sent = _bytes_sent + pkt->size();
+	        if (new_bytes_sent / 1500 > _bytes_sent / 1500) {
+	            // we sent a "full" packet ahead of RLB, notify RLB to push
+	            RlbModule* mod = _top->get_rlb_module(_node);
+	            mod->NICpush();
+	        }
 	        _bytes_sent = new_bytes_sent;
+
+
 
 	        // set the routing info
 
@@ -344,14 +409,16 @@ void PriorityQueue::completeService() {
 	            pkt->set_maxhops(0); // want to select a downlink port immediately
 	        } else {
 	            // the packet is being sent between racks
-              int slice = _top->time_to_slice(eventlist().now());
 
+	            // we will choose the path based on the current slice
+                int slice = _top->time_to_slice(eventlist().now());
 	            // get the number of available paths for this packet during this slice
 	            int npaths = _top->get_no_paths(pkt->get_src_ToR(),
 	                _top->get_firstToR(pkt->get_dst()), slice);
 
 	            if (npaths == 0)
-	                cout << "Error: there were no paths!" << endl;
+	                cout << "Error: there were no paths for slice " << slice  << " src " << pkt->get_src_ToR() <<
+                        " dst " << _top->get_firstToR(pkt->get_dst()) << endl;
 	            assert(npaths > 0);
 
 	            // randomly choose a path for the packet
@@ -359,6 +426,7 @@ void PriorityQueue::completeService() {
 	            int path_index = random() % npaths;
 
 	            pkt->set_slice_sent(slice); // "timestamp" the packet
+                pkt->set_fabricts(eventlist().now());
 	            pkt->set_path_index(path_index); // set which path the packet will take
 
 	            // set some initial packet parameters used for label switching
@@ -366,18 +434,11 @@ void PriorityQueue::completeService() {
 	            pkt->set_lasthop(false);
 	            pkt->set_crthop(-1);
 	            pkt->set_crtToR(-1);
-	            // pkt->set_maxhops(_top->get_no_hops(pkt->get_src_ToR(),
-	            //     _top->get_firstToR(pkt->get_dst()), slice, path_index));
-              // YX: no need to set a limit to # max hops, need double check.
-              pkt->set_maxhops(INT_MAX);
+	            pkt->set_maxhops(_top->get_no_hops(pkt->get_src_ToR(),
+	                _top->get_firstToR(pkt->get_dst()), slice, path_index));
 	        }
 
-            if(pkt->type() == TCP) {
-                TcpPacket *tcp_pkt = (TcpPacket*)pkt;
-                //cout << "NIC sending " << tcp_pkt->seqno() << " at " << eventlist().now() << endl;
-            }
 	        /* tell the packet to move on to the next pipe */
-            pkt->set_fabricts(eventlist().now());
 	        sendFromQueue(pkt);
 
 	        break;
@@ -391,10 +452,6 @@ void PriorityQueue::completeService() {
     if (queuesize() > 0) {
         beginService();
     } else {
-
-        // debug:
-        //cout << "NIC stopped sending" << endl;
-
         _servicing = Q_NONE;
     }
 }

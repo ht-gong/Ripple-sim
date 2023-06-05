@@ -1,4 +1,4 @@
-// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #ifndef NETWORK_H
 #define NETWORK_H
 
@@ -7,7 +7,6 @@
 #include "config.h"
 #include "loggertypes.h"
 //#include "route.h" // not needed anymore
-enum RouteStrategy {NOT_SET, SINGLE_PATH, SCATTER_PERMUTE, SCATTER_RANDOM, PULL_BASED};
 
 #include "dynexp_topology.h"
 
@@ -16,6 +15,7 @@ class PacketFlow;
 class PacketSink;
 typedef uint32_t packetid_t;
 //void print_route(const Route& route);
+enum RouteStrategy {NOT_SET, SINGLE_PATH, SCATTER_PERMUTE, SCATTER_RANDOM, PULL_BASED};
 
 class NdpSink;
 class NdpSrc;
@@ -50,7 +50,7 @@ class PacketFlow : public Logged {
 };
 
 
-typedef enum {IP, TCP, TCPACK, TCPNACK, NDP, NDPACK, NDPNACK, NDPPULL, NDPLITE, NDPLITEACK, NDPLITEPULL, NDPLITERTS, ETH_PAUSE} packet_type;
+typedef enum {IP, TCP, TCPACK, TCPNACK, NDP, NDPACK, NDPNACK, NDPPULL, NDPLITE, NDPLITEACK, NDPLITEPULL, NDPLITERTS, ETH_PAUSE, RLB} packet_type;
 
 class VirtualQueue {
  public:
@@ -72,7 +72,6 @@ class Packet {
         _been_bounced = false;
         _type = IP;
         _flags = 0;
-        _longflow = false;
     }
 
     /* say "this packet is no longer wanted". (doesn't necessarily
@@ -131,7 +130,7 @@ class Packet {
     int get_slice_sent() {return _slice_sent;}
     void set_path_index(int path_index) {_path_index = path_index;}
     int get_path_index() {return _path_index;}
-
+    
     // these are used as the packet traverses the network
     void set_crtToR(int crtToR) {_crtToR = crtToR;}
     int get_crtToR() {return _crtToR;}
@@ -144,8 +143,6 @@ class Packet {
     int get_maxhops() {return _maxhops;}
     void set_crtport(int port) {_crtport = port;}
     int get_crtport() {return _crtport;}
-    void set_crtslice(int slice) {_crtslice = slice;}
-    int get_crtslice() {return _crtslice;}
     void set_queueing(unsigned queueing) {_queueing = queueing;}
     unsigned get_queueing() {return _queueing;}
     void inc_queueing(unsigned queueing) {_queueing += queueing;}
@@ -158,6 +155,8 @@ class Packet {
 
     virtual inline NdpSink* get_ndpsink(){return NULL;}
     virtual inline NdpSrc* get_ndpsrc(){return NULL;}
+    virtual inline TcpSrc* get_tcpsrc(){return NULL;}
+    virtual inline TcpSink* get_tcpsink(){return NULL;}
 
     // stuff used for RLB:
     void set_dst(int dst) {_dst = dst;} // the current sending host
@@ -168,9 +167,6 @@ class Packet {
 
     void set_real_dst(int real_dst) {_real_dst = real_dst;}
     int get_real_dst() {return _real_dst;}
-
-    void set_longflow(bool longflow) {_longflow = longflow;}
-    bool get_longflow() {return _longflow;}
 
     bool is_dummy() {return _is_dummy;}
     void set_dummy(bool is_dummy) {_is_dummy = is_dummy;}
@@ -193,9 +189,9 @@ class Packet {
     static int _data_packet_size; // default size of a TCP or NDP data packet,
 				  // measured in bytes
     static bool _packet_size_fixed; //prevent foot-shooting
-
+    
     packet_type _type;
-
+    
     uint16_t _size;
     bool _is_header;
     bool _bounced; // packet has hit a full queue, and is being bounced back to the sender
@@ -227,13 +223,9 @@ class Packet {
     bool _lasthop;
     int _maxhops;
     int _crtport;
-    int _crtslice;
 
     packetid_t _id;
     PacketFlow* _flow;
-
-    bool _longflow; // Whether the flow is a long flow, false by default
-                    // Can use the same transport protocol as short flows, but have lower priority
 };
 
 // do we even need the PacketSink class anymore?
@@ -246,10 +238,6 @@ class PacketSink {
         receivePacket(pkt);
     };
     virtual const string& nodename()=0;
-    void set_longflow(bool longflow) {_longflow = longflow;}
-    bool get_longflow() {return _longflow;}
- protected:
-   bool _longflow;
 };
 
 // For speed, it may be useful to keep a database of all packets that
@@ -260,34 +248,22 @@ class PacketSink {
 template<class P>
 class PacketDB {
  public:
-    //static int tot_pkts;
     P* allocPacket() {
-    //cout << "Totpkts: " << ++tot_pkts << " " << typeid(P).name() <<  endl;
 	if (_freelist.empty()) {
-        //static int newpkt_n;
-        //cout << "Allocated " << ++newpkt_n << " " << typeid(P).name() << endl;
 	    return new P();
 	} else {
-        //static int recpkt_n;
-        //cout << "Recycled " << ++recpkt_n << " " << typeid(P).name() << endl;
 	    P* p = _freelist.back();
 	    _freelist.pop_back();
 	    return p;
 	}
     };
     void freePacket(P* pkt) {
-    //static int freepkt_n;
-    //cout << "Freed: " << ++freepkt_n << " " << typeid(P).name() << endl;
-    //tot_pkts--;
 	_freelist.push_back(pkt);
     };
 
  protected:
     vector<P*> _freelist; // Irek says it's faster with vector than with list
 };
-
-//template<class P>
-//int PacketDB<P>::tot_pkts;
 
 
 #endif

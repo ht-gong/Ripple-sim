@@ -19,15 +19,33 @@
 //#define MODEL_RECEIVE_WINDOW 1
 
 #define timeInf 0
+//#define TDTCP
 
-//#define PACKET_SCATTER 1
 //#define RANDOM_PATH 1
 
 //#define MAX_SENT 10000
 
 class TcpSink;
-//class MultipathTcpSrc;
-//class MultipathTcpSink;
+
+class TcpSACK {
+ public:
+    TcpSACK();
+    void update(uint64_t hiack, list<pair<uint64_t, uint64_t>> sacks, simtime_picosec ts);
+    uint64_t setPipe();
+    bool isLost(uint64_t seqno);
+    bool isSacked(uint64_t seqno);
+    uint64_t nextSeg();
+
+    void updateHiRtx(uint64_t hirtx) {_hirtx = hirtx;}
+    void updateHiData(uint64_t hidata) {_hidata = hidata;}
+ private:
+    uint64_t _hiack, _hidata, _hirtx;
+    uint32_t _pipe;
+    uint16_t _mss;
+    unsigned _dupthresh;
+    simtime_picosec _latest;
+    list<pair<uint64_t, uint64_t>> _scoreboard;
+};
 
 class TcpSrc : public PacketSink, public EventSource {
     friend class TcpSink;
@@ -51,7 +69,14 @@ class TcpSrc : public PacketSink, public EventSource {
             _pkt_size = _mss;
     }
 
+#ifdef TDTCP
+    void set_ssthresh(uint64_t s){
+        for(int i = 0; i < _ssthresh.size(); i++)
+            _ssthresh[i] = s;
+    }
+#else
     void set_ssthresh(uint64_t s){_ssthresh = s;}
+#endif
 
     uint32_t effective_window();
     virtual void rtx_timer_hook(simtime_picosec now,simtime_picosec period);
@@ -69,15 +94,22 @@ class TcpSrc : public PacketSink, public EventSource {
     uint64_t _highest_sent;  //seqno is in bytes
     uint64_t _packets_sent;
     uint64_t _flow_size;
-    uint32_t _cwnd;
+
     uint32_t _maxcwnd;
-    uint64_t _last_acked;
-    uint32_t _ssthresh;
     uint16_t _dupacks;
-#ifdef PACKET_SCATTER
-    uint16_t DUPACK_TH;
-    uint16_t _crt_path;
+    uint64_t _last_acked;
+    //track which tdtcp state had a packet retransmitted
+    map<uint64_t, int> _rtx_to_slice;
+    //variables that are split between states in TDTCP
+#ifdef TDTCP
+    vector<uint32_t> _cwnd;
+    vector<uint32_t> _ssthresh;
+#else
+    uint32_t _cwnd;
+    uint32_t _ssthresh;
 #endif
+    uint32_t _old_cwnd;
+    uint32_t _old_ssthresh;
 
     int32_t _app_limited;
     DynExpTopology *_top;
@@ -99,6 +131,8 @@ class TcpSrc : public PacketSink, public EventSource {
     uint64_t _recoverq;
     uint16_t _pkt_size; // packet size. Equal to _flow_size when _flow_size < _mss. Else equal to _mss
     bool _in_fast_recovery;
+    int _fast_recovery_slice; //for TDTCP: network slice that last triggered fast recovery
+    simtime_picosec _fast_recovery_start;
 
     bool _established;
 
@@ -113,27 +147,25 @@ class TcpSrc : public PacketSink, public EventSource {
 
     //const Route* _route;
     simtime_picosec _last_ping;
-#ifdef PACKET_SCATTER
-    vector<const Route*>* _paths;
-
-    void set_paths(vector<const Route*>* rt);
-#endif
     void send_packets();
 
 	
-#ifdef MODEL_RECEIVE_WINDOW
-    SentPackets _sent_packets;
-    uint64_t _highest_data_seq;
-#endif
     int _subflow_id;
 
+#ifdef TDTCP
+    virtual void inflate_window(int slice);
+    virtual void deflate_window(int slice);
+#else
     virtual void inflate_window();
     virtual void deflate_window();
+#endif
 
  private:
     //const Route* _old_route;
     uint64_t _last_packet_with_old_route;
     vector<uint64_t> _dropped_at_queue;
+    vector<pair<TcpAck::seq_t, TcpAck::seq_t>> _sacks;
+    TcpSACK _sack_handler;
 
     // Housekeeping
     TcpLogger* _logger;
@@ -150,6 +182,7 @@ class TcpSrc : public PacketSink, public EventSource {
     void clear_timer(uint64_t start,uint64_t end);
 
     void retransmit_packet();
+    int get_crtslice();
     //simtime_picosec _last_sent_time;
 
     //void clearWhen(TcpAck::seq_t from, TcpAck::seq_t to);
@@ -186,8 +219,6 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
  private:
     // Connectivity
     uint16_t _crt_path;
-
-    //FD info tracking
     simtime_picosec last_ts = 0;
     unsigned last_hops = 0;
     unsigned last_queueing = 0;
@@ -195,6 +226,7 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
 
     bool waiting_for_seq = false;
     unsigned out_of_seq_n = 0;
+    unsigned cons_out_of_seq_n = 0;
     simtime_picosec out_of_seq_fts = 0;
     simtime_picosec out_of_seq_rxts = 0;
 
@@ -217,5 +249,6 @@ class TcpRtxTimerScanner : public EventSource {
     typedef list<TcpSrc*> tcps_t;
     tcps_t _tcps;
 };
+
 
 #endif

@@ -1,18 +1,18 @@
-// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #include "pipe.h"
 #include <iostream>
 #include <sstream>
 
-#include "network.h"
 #include "queue.h"
-#include "tcppacket.h"
 #include "tcp.h"
 #include "ndp.h"
+//#include "rlb.h"
+#include "rlbmodule.h"
 #include "ndppacket.h"
+#include "rlbpacket.h" // added for debugging
 
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
-: EventSource(eventlist,"pipe"), _delay(delay),
-  _hoho_routing(HohoRouting())
+: EventSource(eventlist,"pipe"), _delay(delay)
 {
     //stringstream ss;
     //ss << "pipe(" << delay/1000000 << "us)";
@@ -24,17 +24,8 @@ Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
 
 void Pipe::receivePacket(Packet& pkt)
 {
-    // debug:
-    // cout << "   Pipe received a packet." << endl;
-    // cout << "long flow? " << pkt.get_longflow() << endl;
-    unsigned seqno = 0;
-    if(pkt.type() == TCP) {
-        seqno = ((TcpPacket*)&pkt)->seqno();
-    } else if (pkt.type() == TCPACK) {
-        seqno = ((TcpAck*)&pkt)->ackno();
-    }
-    //cout << "Pipe receivePacket at " << eventlist().now() << " seqno " << seqno << " delay " << _delay << endl;
-
+    //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_ARRIVE);
+    //cout << "Pipe: Packet received at " << timeAsUs(eventlist().now()) << " us" << endl;
     if (_inflight.empty()){
         /* no packets currently inflight; need to notify the eventlist
             we've an event pending */
@@ -44,11 +35,16 @@ void Pipe::receivePacket(Packet& pkt)
 }
 
 void Pipe::doNextEvent() {
-    if (_inflight.size() == 0)
+    if (_inflight.size() == 0) 
         return;
 
     Packet *pkt = _inflight.back().second;
     _inflight.pop_back();
+    //pkt->flow().logTraffic(*pkt, *this,TrafficLogger::PKT_DEPART);
+
+    // tell the packet to move itself on to the next hop
+    //pkt->sendOn();
+    //pkt->sendFromPipe();
     sendFromPipe(pkt);
 
     if (!_inflight.empty()) {
@@ -65,21 +61,38 @@ uint64_t Pipe::reportBytes() {
     return temp;
 }
 
-// YX: TODO: this is routing for short flows, need to change for long flows
 void Pipe::sendFromPipe(Packet *pkt) {
-    unsigned seqno = 0;
-    if(pkt->type() == TCP) {
-        seqno = ((TcpPacket*)&pkt)->seqno();
-    } else if (pkt->type() == TCPACK) {
-        seqno = ((TcpAck*)&pkt)->ackno();
-    }
-    //cout << "Pipe sendFromPipe at " << eventlist().now() << " seqno " << seqno << endl;
+    //cout << "sendFromPipe" << endl;
     if (pkt->is_lasthop()) {
+        //cout << "LAST HOP\n";
         // we'll be delivering to an NdpSink or NdpSrc based on packet type
+        // ! OR an RlbModule
         switch (pkt->type()) {
+            case RLB:
+                {
+                    // check if it's really the last hop for this packet
+                    // otherwise, it's getting indirected, and doesn't count.
+                    if (pkt->get_dst() == pkt->get_real_dst()) {
+
+                        _bytes_delivered = _bytes_delivered + pkt->size(); // increment packet delivered
+
+                        // debug:
+                        //cout << "!!! incremented packets delivered !!!" << endl;
+
+                    }
+
+                    DynExpTopology* top = pkt->get_topology();
+                    RlbModule * mod = top->get_rlb_module(pkt->get_dst());
+                    assert(mod);
+                    mod->receivePacket(*pkt, 0);
+                    break;
+                }
             case NDP:
                 {
                     if (pkt->bounced() == false) {
+
+                        //NdpPacket* ndp_pkt = dynamic_cast<NdpPacket*>(pkt);
+                        //if (!ndp_pkt->retransmitted())
                         if (pkt->size() > 64) // not a header
                             _bytes_delivered = _bytes_delivered + pkt->size(); // increment packet delivered
 
@@ -96,6 +109,22 @@ void Pipe::sendFromPipe(Packet *pkt) {
 
                     break;
                 }
+            case TCP:
+                {
+                    // send it to the sink
+                    _bytes_delivered += pkt->size();
+                    TcpSink *sink = pkt->get_tcpsink();
+                    assert(sink);
+                    sink->receivePacket(*pkt);
+                    break;
+                }
+            case TCPACK:
+                {
+                    TcpSrc* src = pkt->get_tcpsrc();
+                    assert(src);
+                    src->receivePacket(*pkt);
+                    break;
+                }
             case NDPACK:
             case NDPNACK:
             case NDPPULL:
@@ -105,108 +134,94 @@ void Pipe::sendFromPipe(Packet *pkt) {
                     src->receivePacket(*pkt);
                     break;
                 }
-            case TCP:
-                {
-                    //cout << "Getting from pipe to dst!\n";
-                    TcpSink* dst = ((TcpPacket*)pkt)->get_tcpsink();
-                    assert(dst);
-                    //cout << "Pipe last hop for " << ((TcpPacket*)pkt)->seqno() << " is " << pkt->get_crtToR() << endl;
-                    dst->receivePacket(*pkt);
-                    break;
-                }
-            case TCPACK:
-                {
-                    //cout << "Getting from pipe to src!\n";
-                    TcpSrc* src = ((TcpAck*)pkt)->get_tcpsrc();
-                    assert(src);
-                    //cout << "Pipe last hop for " << ((TcpAck*)pkt)->ackno() << " is " << pkt->get_crtToR() << endl;
-                    src->receivePacket(*pkt);
-                    break;
-                }
         }
     } else {
+        // we'll be delivering to a ToR queue
         DynExpTopology* top = pkt->get_topology();
-        int slice = top->time_to_slice(eventlist().now());
-        unsigned seqno;
-        if (pkt->type() == TCP) {
-            seqno = ((TcpPacket*)pkt)->seqno();
-        } else if (pkt->type() == TCPACK) {
-            seqno = ((TcpAck*)pkt)->ackno();
-        }
-        if (pkt->get_crtToR() < 0){
+
+        if (pkt->get_crtToR() < 0)
             pkt->set_crtToR(pkt->get_src_ToR());
-            //cout << "Pipe first hop for " << seqno << " is " << pkt->get_crtToR() << endl;
-        } else {
+
+        else {
+            // this was assuming the topology didn't change:
+            //pkt->set_crtToR(top->get_nextToR(pkt->get_slice_sent(), pkt->get_crtToR(), pkt->get_crtport()));
+
+            // under a changing topology, we have to use the current slice:
+            // we compute the current slice at the end of the packet transmission
+            // !!! as a future optimization, we could have the "wrong" host NACK any packets
+            // that go through at the wrong time
+            int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
+                top->get_nsuperslice();
+            // next, get the relative time from the beginning of that superslice
+            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
+                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
+                (top->get_nsuperslice()*top->get_slicetime(3));
+            int slice; // the current slice
+            if (reltime < top->get_slicetime(0))
+                slice = 0 + superslice*3;
+            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
+                slice = 1 + superslice*3;
+            else
+                slice = 2 + superslice*3;
+
             int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
             if (nextToR >= 0) {// the rotor switch is up
                 pkt->set_crtToR(nextToR);
-                //cout << "Pipe next hop for " << seqno << "," << pkt->get_src() << "," << pkt->get_dst() << " is " << pkt->get_crtToR() << endl;
 
             } else { // the rotor switch is down, "drop" the packet
 
                 switch (pkt->type()) {
+                    case RLB:
+                        {
+                            // for now, let's just return the packet rather than implementing the RLB NACK mechanism
+                            RlbPacket *p = (RlbPacket*)(pkt);
+                            RlbModule* module = top->get_rlb_module(p->get_src()); // returns pointer to Rlb module that sent the packet
+                            module->receivePacket(*p, 1); // 1 means to put it at the front of the queue
+                            break;
+                        }
                     case NDP:
-                        cout << "!!! NDP packet clipped in pipe (rotor switch down)" << 
-                            "    time = " << timeAsUs(eventlist().now()) << " us"
-                            "    current slice = " << slice << 
-                            "    slice sent = " << pkt->get_slice_sent() << 
-                            "    slice scheduled = " << pkt->get_crtslice() << 
-                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() <<
-                            " seq " << ((TcpPacket*)pkt)->seqno() << " long? " << pkt->get_longflow() << endl;
+                        cout << "!!! NDP packet clipped in pipe (rotor switch down)" << endl;
+                        cout << "    time = " << timeAsUs(eventlist().now()) << " us";
+                        cout << "    current slice = " << slice << endl;
+                        cout << "    slice sent = " << pkt->get_slice_sent() << endl;
+                        cout << "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
                         pkt->free();
                         break;
                     case NDPACK:
-                        cout << "!!! NDP packet clipped in pipe (rotor switch down)" << 
-                            "    time = " << timeAsUs(eventlist().now()) << " us"
-                            "    current slice = " << slice << 
-                            "    slice sent = " << pkt->get_slice_sent() << 
-                            "    slice scheduled = " << pkt->get_crtslice() << 
-                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
+                        cout << "!!! NDP ACK clipped in pipe (rotor switch down)" << endl;
+                        cout << "    time = " << timeAsUs(eventlist().now()) << " us";
+                        cout << "    current slice = " << slice << endl;
+                        cout << "    slice sent = " << pkt->get_slice_sent() << endl;
+                        cout << "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
                         pkt->free();
                         break;
                     case NDPNACK:
-                        cout << "!!! NDPNACK packet clipped in pipe (rotor switch down)" << 
-                            "    time = " << timeAsUs(eventlist().now()) << " us"
-                            "    current slice = " << slice << 
-                            "    slice sent = " << pkt->get_slice_sent() << 
-                            "    slice scheduled = " << pkt->get_crtslice() << 
-                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
+                        cout << "!!! NDP NACK clipped in pipe (rotor switch down)" << endl;
+                        cout << "    time = " << timeAsUs(eventlist().now()) << " us";
+                        cout << "    current slice = " << slice << endl;
+                        cout << "    slice sent = " << pkt->get_slice_sent() << endl;
+                        cout << "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
                         pkt->free();
                         break;
                     case NDPPULL:
-                        cout << "!!! NDPPULL packet clipped in pipe (rotor switch down)" << 
-                            "    time = " << timeAsUs(eventlist().now()) << " us"
-                            "    current slice = " << slice << 
-                            "    slice sent = " << pkt->get_slice_sent() << 
-                            "    slice scheduled = " << pkt->get_crtslice() << 
-                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
-                        pkt->free();
-                        break;
-                    case TCPACK:
-                        cout << "!!! TCPACK packet clipped in pipe (rotor switch down)" << 
-                            "    time = " << timeAsUs(eventlist().now()) << " us"
-                            "    current slice = " << slice << 
-                            "    slice sent = " << pkt->get_slice_sent() << 
-                            "    slice scheduled = " << pkt->get_crtslice() << 
-                            "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << 
-                            " seq " << ((TcpAck*)pkt)->ackno() << endl;
+                        cout << "!!! NDP PULL clipped in pipe (rotor switch down)" << endl;
+                        cout << "    time = " << timeAsUs(eventlist().now()) << " us";
+                        cout << "    current slice = " << slice << endl;
+                        cout << "    slice sent = " << pkt->get_slice_sent() << endl;
+                        cout << "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
                         pkt->free();
                         break;
                     case TCP:
-                        cout << "!!! TCP packet clipped in pipe (rotor switch down)" << 
-                            "time = " << timeAsUs(eventlist().now()) << " us"
-                            " current slice = " << slice << 
-                            " slice sent = " << pkt->get_slice_sent() << 
-                            " slice scheduled = " << pkt->get_crtslice() << 
-                            " src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << 
-                            " seq " << ((TcpPacket*)pkt)->seqno() << endl;
+                        cout << "!!! TCP packet clipped in pipe (rotor switch down)" << endl;
+                        cout << "    time = " << timeAsUs(eventlist().now()) << " us";
+                        cout << "    current slice = " << slice << endl;
+                        cout << "    slice sent = " << pkt->get_slice_sent() << endl;
+                        cout << "    src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
                         TcpPacket *tcppkt = (TcpPacket*)pkt;
                         tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
-                        //cout << "    FAILED " << pkt->get_ndpsrc()->get_flowsize() << " bytes" << endl; 
                         pkt->free();
                         break;
                 }
-		assert(0);
                 return;
             }
         }
@@ -214,16 +229,15 @@ void Pipe::sendFromPipe(Packet *pkt) {
 
         // get the port:
         if (pkt->get_crthop() == pkt->get_maxhops()) { // no more hops defined, need to set downlink port
-            assert(0);
             pkt->set_crtport(top->get_lastport(pkt->get_dst()));
-            //cout << "   Upcoming (last) port = " << pkt->get_crtport() << endl;
 
         } else {
-            // YX: TODO: The slice to be sent is not used right now,
-            // should be used for adding the packet to the calendar queue
-            _hoho_routing.routing(pkt, eventlist().now());
+            pkt->set_crtport(top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
+                        pkt->get_slice_sent(), pkt->get_path_index(), pkt->get_crthop()));
         }
+
         Queue* nextqueue = top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
+        assert(nextqueue);
         nextqueue->receivePacket(*pkt);
     }
 }
@@ -265,8 +279,6 @@ void UtilMonitor::doNextEvent() {
     printAggUtil();
 }
 
-extern int max_used_queues;
-#define OCC_SAMPLE 100
 void UtilMonitor::printAggUtil() {
 
     uint64_t B_sum = 0;
@@ -284,31 +296,15 @@ void UtilMonitor::printAggUtil() {
 
     double util = (double)B_sum / (double)_max_B_in_period;
 
-    cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << " MaxPkts: " << _top->_max_total_packets << endl;
+    cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
-    cout << "Used max: " << max_used_queues << endl;
-
-    //Calendarqueue occupancy debugging
-    /*
-    if((int)timeAsMs(eventlist().now()) % OCC_SAMPLE == 0){
-        cout << "Occupancy " <<  timeAsMs(eventlist().now());
-        for (int tor = 0; tor < _N; tor++) {
-            cout  << " ToR:" << tor;
-            for (int uplink = _hpr; uplink < _hpr*2; uplink++) {
-                Queue* q = _top->get_queue_tor(tor, uplink);
-                CompositeQueue *cq = dynamic_cast<CompositeQueue*>(q);
-                //'Port:port:size'
-                cout  << " Port:" << uplink << ":" << cq->_max_tot_qsize;
-                for(int slice = 0; slice < _top->get_nsuperslice() * 2; slice++){
-                    //'Slicequeue:slice:size'
-                    cout << " Slicequeue:" << slice << ":" << cq->_max_slice_qsize[slice];
-                }
-            }
-        }
-        cout << endl;
-    }
-    */
-    
+    // cout << "QueueReport" << endl;
+    // for (int tor = 0; tor < _top->no_of_tors(); tor++) {
+    //     for (int uplink = _top->no_of_hpr()+1; uplink < _top->no_of_hpr()*2; uplink++) {
+    //         Queue* q = _top->get_queue_tor(tor, uplink);
+    //         q->reportMaxqueuesize();
+    //     }
+    // }
 
     if (eventlist().now() + _period < eventlist().getEndtime())
         eventlist().sourceIsPendingRel(*this, _period);

@@ -275,7 +275,12 @@ void PriorityQueue::beginService() {
     /* schedule the next dequeue event */
     for (int prio = Q_HI; prio >= Q_RLB; --prio) {
         if (_queuesize[prio] > 0) {
-            eventlist().sourceIsPendingRel(*this, drainTime(_queue[prio].back()));
+            int slice = _top->time_to_absolute_slice(eventlist().now());
+            if(slice % 3 != 0) {
+                eventlist().sourceIsPendingRel(*this, _top->get_slice_start_time(slice + (3 - slice % 3)) - eventlist().now() + drainTime(_queue[prio].back()));
+            } else {
+                eventlist().sourceIsPendingRel(*this, drainTime(_queue[prio].back()));
+            }
             //cout << "PrioQueue (node " << _node << ") sending a packet at " << timeAsUs(eventlist().now()) << " us" << endl;
             //cout << "   will be drained in " << timeAsUs(drainTime(_queue[prio].back())) << " us" << endl;
 

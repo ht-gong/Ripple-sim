@@ -1,4 +1,4 @@
-// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-    
 #include "network.h"
 
 #define DEFAULTDATASIZE 1500
@@ -109,10 +109,10 @@ PacketSink* Packet::sendOn() {
 */
 
 // AKA, return to sender
-void Packet::bounce() {
-    assert(!_bounced);
+void Packet::bounce() { 
+    assert(!_bounced); 
     //assert(_route); // we only implement return-to-sender on regular routes
-    _bounced = true;
+    _bounced = true; 
     _is_header = true;
     _been_bounced = true; // for debuggin only (as of 9/4/18)
     //_nexthop = _route->size() - _nexthop;
@@ -123,15 +123,15 @@ void Packet::bounce() {
     // allocate routes on a per packet basis.
 }
 
-void Packet::unbounce(uint16_t pktsize) {
-    assert(_bounced);
+void Packet::unbounce(uint16_t pktsize) { 
+    assert(_bounced); 
     //assert(_route); // we only implement return-to-sender on regular
     // routes, not route graphs. If we go back to using
     // route graphs at some, we'll need to fix this, but
     // for now we're not using them.
 
     // clear the packet for retransmission
-    _bounced = false;
+    _bounced = false; 
     _is_header = false;
     _size = pktsize;
     //_nexthop = 0;
@@ -182,6 +182,9 @@ string Packet::str() const {
     case ETH_PAUSE:
 	s = "ETHPAUSE";
 	break;
+    case RLB:
+    s = "RLB";
+    break;
     }
     return s;
 }

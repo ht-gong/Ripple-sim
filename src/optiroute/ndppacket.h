@@ -10,7 +10,7 @@ class NdpSrc;
 
 // NdpPacket and NdpAck are subclasses of Packet.
 // They incorporate a packet database, to reuse packet objects that are no longer needed.
-// Note: you never construct a new NdpPacket or NdpAck directly;
+// Note: you never construct a new NdpPacket or NdpAck directly; 
 // rather you use the static method newpkt() which knows to reuse old packets from the database.
 
 #define ACKSIZE 64
@@ -23,27 +23,26 @@ class NdpPacket : public Packet {
 
     //
     inline static NdpPacket* newpkt(DynExpTopology* top, PacketFlow &flow, int src, int dst, NdpSrc* ndpsrc,
-        NdpSink* ndpsink, seq_t seqno, seq_t pacerno, int size, bool retransmitted, bool last_packet, bool longflow = false) {
-    	NdpPacket* p = _packetdb.allocPacket();
-    	p->set_attrs(flow, size+ACKSIZE, seqno+size-1, src, dst); // The NDP sequence number is the first byte of the packet; I will ID the packet by its last byte.
-    	p->set_topology(top);
-      p->set_longflow(longflow);
-      p->_type = NDP;
-    	p->_is_header = false;
-    	p->_bounced = false;
-    	p->_seqno = seqno;
-    	p->_pacerno = pacerno;
-    	p->_retransmitted = retransmitted;
-    	p->_last_packet = last_packet;
-      p->_ndpsrc = ndpsrc;
-      p->_ndpsink = ndpsink;
-    	return p;
+        NdpSink* ndpsink, seq_t seqno, seq_t pacerno, int size, bool retransmitted, bool last_packet) {
+	NdpPacket* p = _packetdb.allocPacket();
+	p->set_attrs(flow, size+ACKSIZE, seqno+size-1, src, dst); // The NDP sequence number is the first byte of the packet; I will ID the packet by its last byte.
+	p->set_topology(top);
+    p->_type = NDP;
+	p->_is_header = false;
+	p->_bounced = false;
+	p->_seqno = seqno;
+	p->_pacerno = pacerno;
+	p->_retransmitted = retransmitted;
+	p->_last_packet = last_packet;
+    p->_ndpsrc = ndpsrc;
+    p->_ndpsink = ndpsink;
+	return p;
     }
-
+  
     virtual inline void  strip_payload() {
-	     Packet::strip_payload(); _size = ACKSIZE;
+	Packet::strip_payload(); _size = ACKSIZE;
     };
-
+	
     void free() {_packetdb.freePacket(this);}
     virtual ~NdpPacket(){}
     inline seq_t seqno() const {return _seqno;}
@@ -67,6 +66,7 @@ class NdpPacket : public Packet {
     seq_t _seqno;
     seq_t _pacerno;  // the pacer sequence number from the pull, seq space is common to all flows on that pacer
     simtime_picosec _ts;
+    int _slice;
     bool _retransmitted;
     int32_t _no_of_paths;  // how many paths are in the sender's
 			    // list.  A real implementation would not
@@ -80,26 +80,25 @@ class NdpPacket : public Packet {
 class NdpAck : public Packet {
  public:
     typedef NdpPacket::seq_t seq_t;
-
+  
     inline static NdpAck* newpkt(DynExpTopology* top, PacketFlow &flow, int src, int dst,
-        NdpSrc* ndpsrc, seq_t pacerno, seq_t ackno, seq_t cumulative_ack, seq_t pullno, bool longflow = false) {
-    	NdpAck* p = _packetdb.allocPacket();
-    	p->set_attrs(flow, ACKSIZE, ackno, src, dst);
-      p->set_topology(top);
-      p->set_longflow(longflow);
-    	p->_type = NDPACK;
-    	p->_is_header = true;
-    	p->_bounced = false;
-    	p->_pacerno = pacerno;
-    	p->_ackno = ackno;
-    	p->_cumulative_ack = cumulative_ack;
-    	p->_pull = true;
-    	p->_pullno = pullno;
-      p->_ndpsrc = ndpsrc;
-    	//p->_path_id = path_id; // don't need this anymore
-    	return p;
+        NdpSrc* ndpsrc, seq_t pacerno, seq_t ackno, seq_t cumulative_ack, seq_t pullno) {
+	NdpAck* p = _packetdb.allocPacket();
+	p->set_attrs(flow, ACKSIZE, ackno, src, dst);
+    p->set_topology(top);
+	p->_type = NDPACK;
+	p->_is_header = true;
+	p->_bounced = false;
+	p->_pacerno = pacerno;
+	p->_ackno = ackno;
+	p->_cumulative_ack = cumulative_ack;
+	p->_pull = true;
+	p->_pullno = pullno;
+    p->_ndpsrc = ndpsrc;
+	//p->_path_id = path_id; // don't need this anymore
+	return p;
     }
-
+  
     void free() {_packetdb.freePacket(this);}
     inline seq_t pacerno() const {return _pacerno;}
     inline void set_pacerno(seq_t pacerno) {_pacerno = pacerno;}
@@ -111,7 +110,7 @@ class NdpAck : public Packet {
     inline seq_t pullno() const {return _pullno;}
     //int32_t  path_id() const {return _path_id;}
     inline void dont_pull() {_pull = false; _pullno = 0;}
-
+  
     virtual inline NdpSrc* get_ndpsrc(){return _ndpsrc;}
 
     virtual ~NdpAck(){}
@@ -134,28 +133,27 @@ class NdpAck : public Packet {
 class NdpNack : public Packet {
  public:
     typedef NdpPacket::seq_t seq_t;
-
+  
     inline static NdpNack* newpkt(DynExpTopology* top, PacketFlow &flow, int src, int dst,
-        NdpSrc* ndpsrc, seq_t pacerno, seq_t ackno, seq_t cumulative_ack, seq_t pullno, bool longflow = false) {
-    	NdpNack* p = _packetdb.allocPacket();
-    	p->set_attrs(flow, ACKSIZE, ackno, src, dst);
-      p->set_topology(top);
-      p->set_longflow(longflow);
-    	p->_type = NDPNACK;
-    	p->_is_header = true;
-    	p->_bounced = false;
-    	p->_pacerno = pacerno;
-    	p->_ackno = ackno;
-    	p->_cumulative_ack = cumulative_ack;
-    	p->_pull = true;
-    	p->_pullno = pullno;
-      p->_ndpsrc = ndpsrc;
-    	//p->_path_id = path_id; // used to indicate which path the data
-    	                       // packet was trimmed on
-                                // don't need this anymore...
-    	return p;
+        NdpSrc* ndpsrc, seq_t pacerno, seq_t ackno, seq_t cumulative_ack, seq_t pullno) {
+	NdpNack* p = _packetdb.allocPacket();
+	p->set_attrs(flow, ACKSIZE, ackno, src, dst);
+    p->set_topology(top);
+	p->_type = NDPNACK;
+	p->_is_header = true;
+	p->_bounced = false;
+	p->_pacerno = pacerno;
+	p->_ackno = ackno;
+	p->_cumulative_ack = cumulative_ack;
+	p->_pull = true;
+	p->_pullno = pullno;
+    p->_ndpsrc = ndpsrc;
+	//p->_path_id = path_id; // used to indicate which path the data
+	                       // packet was trimmed on
+                            // don't need this anymore...
+	return p;
     }
-
+  
     void free() {_packetdb.freePacket(this);}
     inline seq_t pacerno() const {return _pacerno;}
     inline void set_pacerno(seq_t pacerno) {_pacerno = pacerno;}
@@ -194,7 +192,6 @@ class NdpPull : public Packet {
         NdpPull* p = _packetdb.allocPacket();
         p->set_attrs(ack->flow(), ACKSIZE, ack->ackno(), ack->get_src(), ack->get_dst());
         p->set_topology(ack->get_topology());
-        p->set_longflow(ack->get_longflow());
         p->_type = NDPPULL;
         p->_is_header = true;
         p->_bounced = false;
@@ -204,12 +201,11 @@ class NdpPull : public Packet {
         p->_ndpsrc = ack->get_ndpsrc();
         return p;
     }
-
+  
     inline static NdpPull* newpkt(NdpNack* nack) {
         NdpPull* p = _packetdb.allocPacket();
         p->set_attrs(nack->flow(), ACKSIZE, nack->ackno(), nack->get_src(), nack->get_dst());
         p->set_topology(nack->get_topology());
-        p->set_longflow(nack->get_longflow());
         p->_type = NDPPULL;
         p->_is_header = true;
         p->_bounced = false;
@@ -219,7 +215,7 @@ class NdpPull : public Packet {
         p->_ndpsrc = nack->get_ndpsrc();
         return p;
     }
-
+  
     void free() {_packetdb.freePacket(this);}
     inline seq_t pacerno() const {return _pacerno;}
     inline void set_pacerno(seq_t pacerno) {_pacerno = pacerno;}
@@ -227,7 +223,7 @@ class NdpPull : public Packet {
     inline seq_t cumulative_ack() const {return _cumulative_ack;}
     inline seq_t pullno() const {return _pullno;}
     //int32_t path_id() const {return _path_id;}
-
+  
     virtual ~NdpPull(){}
 
     virtual inline NdpSrc* get_ndpsrc(){return _ndpsrc;}

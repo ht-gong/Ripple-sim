@@ -1,4 +1,4 @@
-// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 
 
 #ifndef NDP_H
@@ -29,6 +29,7 @@
 // *** don't change this default - override it by calling NdpSrc::setMinRTO()
 #define DEFAULT_RTO_MIN 5000
 
+
 class NdpSink;
 
 class Queue;
@@ -47,18 +48,10 @@ class ReceiptEvent {
 };
 */
 
-struct NdpSrc_Trace {
-    uint32_t pkt_id;
-    uint16_t pkt_size; 
-    int hop;
-    int tor;
-    uint64_t q_delay;
-};
-
 class NdpSrc : public PacketSink, public EventSource {
     friend class NdpSink;
  public:
-    NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, int flow_src, int flow_dst, bool longflow = false);
+    NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, int flow_src, int flow_dst);
     uint32_t get_id(){ return id;}
     virtual void connect(NdpSink& sink, simtime_picosec startTime);
     void set_traffic_logger(TrafficLogger* pktlogger);
@@ -83,7 +76,7 @@ class NdpSrc : public PacketSink, public EventSource {
 
     virtual void rtx_timer_hook(simtime_picosec now, simtime_picosec period);
 
-    Queue* sendToNIC(NdpPacket* pkt);
+    Queue* sendToNIC(Packet* pkt);
 
     // should really be private, but loggers want to see:
     uint64_t _highest_sent;  //seqno is in bytes
@@ -99,7 +92,7 @@ class NdpSrc : public PacketSink, public EventSource {
     uint64_t _last_acked;
     uint32_t _flight_size;
     uint32_t _acked_packets;
-    uint32_t _max_hops_per_trip;
+    uint32_t _found_reorder = 0;
 
     // the following are used with SCATTER_PERMUTE, SCATTER_RANDOM and PULL_BASED route strategies
 
@@ -123,11 +116,11 @@ class NdpSrc : public PacketSink, public EventSource {
 
     uint16_t _mss; // maximum segment size
     uint16_t _pkt_size; // packet size. Equal to _flow_size when _flow_size < _mss. Else equal to _mss
-
+ 
     uint32_t _drops;
 
     NdpSink* _sink;
-
+ 
     simtime_picosec _rtx_timeout;
     bool _rtx_timeout_pending;
 
@@ -140,7 +133,7 @@ class NdpSrc : public PacketSink, public EventSource {
 
     virtual const string& nodename() { return _nodename; }
     inline uint32_t flow_id() const { return _flow.flow_id();}
-
+ 
     //debugging hack
     void log_me();
     bool _log_me;
@@ -156,10 +149,6 @@ class NdpSrc : public PacketSink, public EventSource {
     int _flow_dst; // the receiver (sink) for this flow
 
     DynExpTopology* _top;
-
-    void append_trace(uint32_t id, uint16_t size, int hop, int tor, uint64_t delay);
-    void print_trace();
-    list<NdpSrc_Trace> _flow_trace;
 
  private:
     // Housekeeping
@@ -192,8 +181,8 @@ class NdpSink : public PacketSink, public DataReceiver, public Logged {
     friend class NdpSrc;
  public:
     //NdpSink(EventList& ev, double pull_rate_modifier); // not used...
-    NdpSink(DynExpTopology* top, NdpPullPacer* pacer, int flow_src, int flow_dst, bool longflow = false);
-
+    NdpSink(DynExpTopology* top, NdpPullPacer* pacer, int flow_src, int flow_dst);
+ 
 
     uint32_t get_id(){ return id;}
     void receivePacket(Packet& pkt);
@@ -203,11 +192,11 @@ class NdpSink : public PacketSink, public DataReceiver, public Logged {
     uint64_t total_received() const { return _total_received;}
     uint32_t drops(){ return _src->_drops;}
     virtual const string& nodename() { return _nodename; }
-    void increase_window() {_pull_no++;}
+    void increase_window() {_pull_no++;} 
     static void setRouteStrategy(RouteStrategy strat) {_route_strategy = strat;}
 
     list<NdpAck::seq_t> _received; // list of packets above a hole, that we've received
-
+ 
     NdpSrc* _src;
 
     //debugging hack
@@ -222,7 +211,7 @@ class NdpSink : public PacketSink, public DataReceiver, public Logged {
     DynExpTopology* _top;
 
  private:
-
+ 
     // Connectivity
     //void connect(NdpSrc& src, Route& route);
     void connect(NdpSrc& src);
@@ -235,13 +224,17 @@ class NdpSink : public PacketSink, public DataReceiver, public Logged {
     // and PULL_BASED route strategies
 
     string _nodename;
-
+ 
     NdpPullPacer* _pacer;
     NdpPull::seq_t _pull_no; // pull sequence number (local to connection)
     NdpPacket::seq_t _last_packet_seqno; //sequence number of the last
                                          //packet in the connection (or 0 if not known)
     uint64_t _total_received;
 
+    simtime_picosec last_ts = 0;
+    unsigned last_hops = 0;
+    unsigned last_queueing = 0;
+ 
     // Mechanism
     void send_ack(simtime_picosec ts, NdpPacket::seq_t ackno, NdpPacket::seq_t pacer_no);
     void send_nack(simtime_picosec ts, NdpPacket::seq_t ackno, NdpPacket::seq_t pacer_no);
@@ -249,8 +242,8 @@ class NdpSink : public PacketSink, public DataReceiver, public Logged {
 
 class NdpPullPacer : public EventSource {
  public:
-    NdpPullPacer(EventList& ev, double pull_rate_modifier);
-    NdpPullPacer(EventList& ev, char* fn);
+    NdpPullPacer(EventList& ev, double pull_rate_modifier);  
+    NdpPullPacer(EventList& ev, char* fn);  
     // pull_rate_modifier is the multiplier of link speed used when
     // determining pull rate.  Generally 1 for FatTree, probable 2 for BCube
     // as there are two distinct paths between each node pair.
@@ -303,3 +296,4 @@ class NdpRtxTimerScanner : public EventSource {
 };
 
 #endif
+

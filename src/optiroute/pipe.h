@@ -1,4 +1,4 @@
-// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
+// -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #ifndef PIPE_H
 #define PIPE_H
 
@@ -12,8 +12,6 @@
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
-#include "queue.h"
-#include "hoho_utils.h"
 
 
 class Pipe : public EventSource, public PacketSink {
@@ -35,8 +33,6 @@ class Pipe : public EventSource, public PacketSink {
     typedef pair<simtime_picosec,Packet*> pktrecord_t;
     list<pktrecord_t> _inflight; // the packets in flight (or being serialized)
     string _nodename;
-
-    HohoRouting _hoho_routing;
 };
 
 class UtilMonitor : public EventSource {
