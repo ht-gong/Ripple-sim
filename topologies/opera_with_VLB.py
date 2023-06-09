@@ -31,43 +31,46 @@ for slice in range(supslice_count):
                 src_dst_connection[(tor, dst)] = np.zeros(0, dtype=int)
             src_dst_connection[(tor, dst)] = \
                 np.concatenate((src_dst_connection[(tor, dst)], list(range(slice, supslice_count * n_cycles, supslice_count))))
-RTT = np.zeros((tor_count, tor_count, supslice_count * 2))        
-for src in range(tor_count):
-    for dst in range(tor_count):
-        for n in range(supslice_count * 2):
-            if src == dst:
-                continue
-            curtime = n
-            inter_tor_1 = top[src, port_connection[src, dst], curtime]
-            if inter_tor_1 != dst:
-                conn = src_dst_connection[(inter_tor_1, dst)]
-                curtime = np.min(conn[conn >= curtime])
+print(top[0, :, 0])
+print(top[6, :, 0])
+
+# RTT = np.zeros((tor_count, tor_count, supslice_count * 2))        
+# for src in range(tor_count):
+#     for dst in range(tor_count):
+#         for n in range(supslice_count * 2):
+#             if src == dst:
+#                 continue
+#             curtime = n
+#             inter_tor_1 = top[src, port_connection[src, dst], curtime]
+#             if inter_tor_1 != dst:
+#                 conn = src_dst_connection[(inter_tor_1, dst)]
+#                 curtime = np.min(conn[conn >= curtime])
             
-            inter_tor_2 = top[dst, port_connection[dst, src], curtime]
-            if inter_tor_2 != src:
-                conn = src_dst_connection[(inter_tor_2, src)]
-                curtime = np.min(conn[conn >= curtime])
-            RTT[src, dst, n] = curtime - n
+#             inter_tor_2 = top[dst, port_connection[dst, src], curtime]
+#             if inter_tor_2 != src:
+#                 conn = src_dst_connection[(inter_tor_2, src)]
+#                 curtime = np.min(conn[conn >= curtime])
+#             RTT[src, dst, n] = curtime - n
 
 
-for (src, dst) in [(0, 46), (23, 103), (26, 95)]:
+# for (src, dst) in [(0, 46), (23, 103), (26, 95)]:
 
-    plt.plot(list(range(0, supslice_count * 2)), RTT[src, dst, :])
-    plt.axvline(x=107, color='black')
-    plt.ylabel("RTT (timeslices)")
-    plt.xlabel("Index of sending timeslice")
-    plt.title(f"RTT SrcTor = {src}, DstTor = {dst}")
-    plt.show()
-    plt.savefig(f"./tmp/RTT_per_timeslice_src{src}dst_{dst}.png")  
-    plt.clf()
+#     plt.plot(list(range(0, supslice_count * 2)), RTT[src, dst, :])
+#     plt.axvline(x=107, color='black')
+#     plt.ylabel("RTT (timeslices)")
+#     plt.xlabel("Index of sending timeslice")
+#     plt.title(f"RTT SrcTor = {src}, DstTor = {dst}")
+#     plt.show()
+#     plt.savefig(f"./tmp/RTT_per_timeslice_src{src}dst_{dst}.png")  
+#     plt.clf()
 
-    shifted = np.concatenate((np.zeros(1), RTT[src, dst, :]))
+#     shifted = np.concatenate((np.zeros(1), RTT[src, dst, :]))
 
-    plt.plot(list(range(0, supslice_count * 2)), RTT[src, dst, :] - shifted[:-1])
-    plt.axvline(x=107, color='black')
-    plt.ylabel("Change in RTT (timeslices)")
-    plt.xlabel("Index of sending timeslice")
-    plt.title(f"Delta RTT SrcTor = {src}, DstTor = {dst}")
-    plt.show()
-    plt.savefig(f"./tmp/RTT_delta_per_timeslice_src{src}dst_{dst}.png") 
-    plt.clf() 
+#     plt.plot(list(range(0, supslice_count * 2)), RTT[src, dst, :] - shifted[:-1])
+#     plt.axvline(x=107, color='black')
+#     plt.ylabel("Change in RTT (timeslices)")
+#     plt.xlabel("Index of sending timeslice")
+#     plt.title(f"Delta RTT SrcTor = {src}, DstTor = {dst}")
+#     plt.show()
+#     plt.savefig(f"./tmp/RTT_delta_per_timeslice_src{src}dst_{dst}.png") 
+#     plt.clf() 

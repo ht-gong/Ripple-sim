@@ -19,9 +19,10 @@ raw_top = df.to_numpy()
 top = np.zeros((tor_count, uplink_count, cycle_count), dtype=int)
 for tor in range(tor_count):
     for cycle in range(cycle_count):
-        top[tor, :, cycle] = raw_top[tor][uplink_count * cycle : uplink_count * (cycle + 1)]
+        top[tor, :, cycle] = raw_top[tor, cycle::cycle_count]
 
 f = open('ksp.txt', 'w')
+f2 = open('ksp_org.txt', 'w')
 
 bucket_shortest = np.zeros(10)
 bucket_topk = np.zeros(10)
@@ -47,8 +48,8 @@ for cycle in range(cycle_count):
             bucket_shortest[len(paths[0]) - 1] += 1
             for path in paths:
                 bucket_topk[len(path) - 1] += 1
-
-    f.write(str(cycle) + '\n')
+    
+    f.write(str(cycle * 3) + '\n')
     for src in range(tor_count):
         for dst in range(tor_count):
             if src == dst:
@@ -61,6 +62,22 @@ for cycle in range(cycle_count):
                     mapped_uplink.append(uplink)
                 mapped_uplink = [src, dst] + mapped_uplink
                 f.write(' '.join(str(i) for i in mapped_uplink) + '\n')
+    
+    for src in range(tor_count):
+        for dst in range(tor_count):
+            if src == dst:
+                continue
+            paths = path_dict[(src, dst)]
+            for path in paths:
+                mapped_uplink = []
+                for i in range(len(path) - 1):
+                    uplink = paths[i]
+                    mapped_uplink.append(uplink)
+                mapped_uplink = [src, dst] + mapped_uplink
+                f2.write(' '.join(str(i) for i in mapped_uplink) + '\n')
+                
+    f.write(str(cycle * 3 + 1) + '\n')
+    f.write(str(cycle * 3 + 2) + '\n')
 
 bucket_shortest = bucket_shortest[1:max(np.flatnonzero(bucket_shortest)) + 1]
 ind = np.arange(1, len(bucket_shortest) + 1, dtype=int)
@@ -79,6 +96,7 @@ plt.bar(ind, bucket_topk / np.sum(bucket_topk), color='g')
 plt.savefig(f"./tmp/top{K}_paths_hist.png")  
 
 f.close()
+f2.close()
 
 
     

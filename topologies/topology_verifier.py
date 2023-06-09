@@ -19,7 +19,7 @@ for tor in range(tor_count):
         col = df.iloc[:, tor * uplink_count + uplink].unique()
         col = col[col != -1]
         assert col.size == cycle_count, "cycle count mismatch"
-        top[tor][uplink][:] = col
+        top[tor,uplink,:] = col
         connected = np.concatenate((connected, col))
     assert np.logical_and(connected >= 0, connected < tor_count).all(), "range error"
     assert len(np.unique(connected)) == tor_count, f"not all connected for tor {tor}"
@@ -27,7 +27,7 @@ for tor in range(tor_count):
 for tor in range(tor_count):
     for uplink in range(uplink_count):
         for cycle in range(cycle_count):
-            connected = top[tor][uplink][cycle]
+            connected = top[tor, uplink, cycle]
             assert tor in top[connected, :, cycle], f"connection not bidirectional for tor {tor} and tor {connected}"
 
 
@@ -36,6 +36,6 @@ with open('topology_matrix.txt', 'w') as f:
     for tor in range(tor_count):
         row = np.zeros((0), dtype=int)
         for uplink in range(uplink_count):
-            row = np.concatenate((row, top[tor][uplink][:]))
+            row = np.concatenate((row, top[tor,uplink, :]))
         writer.writerow(row)
         
