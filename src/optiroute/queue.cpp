@@ -65,12 +65,12 @@ void Queue::sendFromQueue(Packet* pkt) {
     Pipe* nextpipe; // the next packet sink will be a pipe
     DynExpTopology* top = pkt->get_topology();
     if (pkt->get_crthop() < 0) {
-        //cout << "sendFromQueue (from NIC) " << _tor << " " << _port << endl; 
+        cout << "sendFromQueue (from NIC) " << _tor << " " << _port << endl; 
         // we're sending out of the NIC
         nextpipe = top->get_pipe_serv_tor(pkt->get_src());
         nextpipe->receivePacket(*pkt);
     } else {
-        //cout << "sendFromQueue (from ToR) " << _tor << " " << _port << endl; 
+        cout << "sendFromQueue (from ToR) " << _tor << " " << _port << endl; 
         // we're sending out of a ToR queue
         if (top->is_last_hop(pkt->get_crtport())) {
             pkt->set_lasthop(true);
@@ -325,8 +325,8 @@ void PriorityQueue::beginService() {
             // } else {
                 eventlist().sourceIsPendingRel(*this, drainTime(_queue[prio].back()));
             // }
-            cout << "PrioQueue (node " << _node << ") sending a packet at " << timeAsUs(eventlist().now()) << " us" << endl;
-            cout << "   will be drained in " << timeAsUs(drainTime(_queue[prio].back())) << " us" << endl;
+            // cout << "PrioQueue (node " << _nodename << ") sending a packet at " << timeAsUs(eventlist().now()) << " us" << endl;
+            // cout << "   will be drained in " << timeAsUs(drainTime(_queue[prio].back())) << " us" << endl;
 
             _servicing = (queue_priority_t)prio;
 
@@ -423,7 +423,8 @@ void PriorityQueue::completeService() {
 
 	            // randomly choose a path for the packet
 	            // !!! todo: add other options like permutation, etc...
-	            int path_index = random() % npaths;
+	            // int path_index = random() % npaths;
+                int path_index = 0;
 
 	            pkt->set_slice_sent(slice); // "timestamp" the packet
                 pkt->set_fabricts(eventlist().now());

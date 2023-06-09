@@ -48,7 +48,8 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
 #else
     _ssthresh = 0xffffffff;
 #endif
-
+    _max_hops_per_trip = 0;
+    _last_hop_per_trip = 0;
     _last_acked = 0;
     _last_ping = timeInf;
     _dupacks = 0;
@@ -166,6 +167,9 @@ TcpSrc::receivePacket(Packet& pkt)
     int slice = _top->time_to_slice(eventlist().now());
     //cout << "TcpSrc receive packet ackno:" << seqno << endl;
 
+    _last_hop_per_trip = pkt.get_crthop();
+    if(pkt.get_crthop() > _max_hops_per_trip)
+        _max_hops_per_trip = pkt.get_crthop();
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
 
     ts = p->ts();
@@ -217,6 +221,7 @@ TcpSrc::receivePacket(Packet& pkt)
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << endl;
+        cout << _max_hops_per_trip << " " << _last_hop_per_trip << '\n';
         //if (_found_reorder == 0) assert(_found_retransmit == 0);
         /*
         if (get_flow_src() == 355 && get_flow_dst() == 429) {
@@ -777,6 +782,9 @@ TcpSink::receivePacket(Packet& pkt) {
     cout << "PKT " << fts << " " << seqno << "AT " << _src->eventlist().now() << endl;
     }
     */
+    pkt.get_tcpsrc()->_last_hop_per_trip = pkt.get_crthop();
+    if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
+        pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
 
     bool marked = p->flags()&ECN_CE;
     

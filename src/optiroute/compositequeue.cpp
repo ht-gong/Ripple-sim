@@ -223,7 +223,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 
 	// debug:
 	//cout << "_maxsize = " << _maxsize << endl;
-
+	cout << "CompositeQueue (node " << _nodename << ") sending a packet at " << timeAsUs(eventlist().now()) << " us" << endl;
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_ARRIVE);
 
     // debug:

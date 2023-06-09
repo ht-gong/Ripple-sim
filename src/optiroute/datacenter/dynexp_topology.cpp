@@ -207,7 +207,13 @@ void DynExpTopology::init_network() {
         logfile->addLogger(*queueLogger);
         queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k);
         ostringstream oss;
-        oss << "CompositeQueue" << j << ":" << k;
+        if (qt==COMPOSITE)
+          oss << "CompositeQueue";
+        else if (qt==DEFAULT)
+          oss << "DefaultQueue";
+        else if (qt==ECN)
+          oss << "ECNQueue";
+        oss << j << ":" << k;
         queues_tor[j][k]->setName(oss.str());
         //queues_tor[j][k]->setName("Queue-TOR" + ntoa(j) + "->DST" + ntoa(k + j*_ndl));
         //logfile->writeName(*(queues_tor[j][k]));

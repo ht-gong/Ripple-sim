@@ -24,31 +24,31 @@ ECNQueue::receivePacket(Packet & pkt)
 {
     //is this a PAUSE packet?
     if (pkt.type()==ETH_PAUSE){
-	EthPausePacket* p = (EthPausePacket*)&pkt;
-	
-	if (p->sleepTime()>0){
-	    //remote end is telling us to shut up.
-	    //assert(_state_send == LosslessQueue::READY);
-	    if (queuesize()>0)
-		//we have a packet in flight
-		_state_send = LosslessQueue::PAUSE_RECEIVED;
-	    else
-		_state_send = LosslessQueue::PAUSED;
-	    
-	    //cout << timeAsMs(eventlist().now()) << " " << _name << " PAUSED "<<endl;
-	}
-	else {
-	    //we are allowed to send!
-	    _state_send = LosslessQueue::READY;
-	    //cout << timeAsMs(eventlist().now()) << " " << _name << " GO "<<endl;
-	    
-	    //start transmission if we have packets to send!
-	    if(queuesize()>0)
-		beginService();
-	}
-	
-	pkt.free();
-	return;
+        EthPausePacket* p = (EthPausePacket*)&pkt;
+        
+        if (p->sleepTime()>0){
+            //remote end is telling us to shut up.
+            //assert(_state_send == LosslessQueue::READY);
+            if (queuesize()>0)
+            //we have a packet in flight
+            _state_send = LosslessQueue::PAUSE_RECEIVED;
+            else
+            _state_send = LosslessQueue::PAUSED;
+            
+            //cout << timeAsMs(eventlist().now()) << " " << _name << " PAUSED "<<endl;
+        }
+        else {
+            //we are allowed to send!
+            _state_send = LosslessQueue::READY;
+            //cout << timeAsMs(eventlist().now()) << " " << _name << " GO "<<endl;
+            
+            //start transmission if we have packets to send!
+            if(queuesize()>0)
+            beginService();
+        }
+        
+        pkt.free();
+        return;
     }
 
 
