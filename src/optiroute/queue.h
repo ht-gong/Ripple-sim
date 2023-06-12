@@ -12,7 +12,10 @@
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
+#include "routing.h"
 
+class QueueAlarm;
+class Routing;
 
 class Queue : public EventSource, public PacketSink {
  public:
@@ -40,6 +43,8 @@ class Queue : public EventSource, public PacketSink {
         return (mem_b)(timeAsSec(t) * (double)_bitrate); 
     }
     virtual mem_b queuesize();
+    virtual mem_b slice_queuesize(int slice);
+    simtime_picosec get_queueing_delay(int slice);
     simtime_picosec serviceTime();
     int num_drops() const {return _num_drops;}
     void reset_drops() {_num_drops = 0;}
@@ -58,6 +63,9 @@ class Queue : public EventSource, public PacketSink {
         _logger = logger;
     }
     virtual const string& nodename() { return _nodename; }
+
+    friend class QueueAlarm;
+    friend class HohoRouting;
 
  protected:
     // Housekeeping
@@ -78,6 +86,10 @@ class Queue : public EventSource, public PacketSink {
     list<Packet*> _enqueued;
     int _num_drops;
     string _nodename;
+    Routing* _routing;
+    QueueAlarm* _queue_alarm;
+    Packet* _sending_pkt = NULL;
+    int _crt_tx_slice = 0;
 };
 
 /* implement a 4-level priority queue */

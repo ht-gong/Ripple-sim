@@ -7,6 +7,7 @@
 #include "ndppacket.h"
 #include "rlbpacket.h" // added
 #include "queue_lossless.h"
+#include "routing.h"
 
 #include "pipe.h"
 
@@ -33,6 +34,8 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
     stringstream ss;
     _max_recorded_size.resize(_top->get_nslices());
+    _routing = new Routing();
+    _queue_alarm = new QueueAlarm(eventlist, port, this, top);
     //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
     //_nodename = ss.str();
 }
@@ -42,6 +45,7 @@ void Queue::beginService() {
     /* schedule the next dequeue event */
     assert(!_enqueued.empty());
     eventlist().sourceIsPendingRel(*this, drainTime(_enqueued.back()));
+    _sending_pkt = _enqueued.back();
 }
 
 void Queue::completeService() {
@@ -51,6 +55,7 @@ void Queue::completeService() {
     _enqueued.pop_back();
     _queuesize -= pkt->size();
 
+    _sending_pkt = NULL;
     /* tell the packet to move on to the next pipe */
     //pkt->sendFromQueue();
     sendFromQueue(pkt);
@@ -395,50 +400,10 @@ void PriorityQueue::completeService() {
 	        }
 	        _bytes_sent = new_bytes_sent;
 
-
-
 	        // set the routing info
-
             pkt->set_src_ToR(_top->get_firstToR(pkt->get_src())); // set the sending ToR. This is used for subsequent routing
 
-	        if (pkt->get_src_ToR() == _top->get_firstToR(pkt->get_dst())) {
-	            // the packet is being sent within the same rack
-	            pkt->set_lasthop(false);
-	            pkt->set_crthop(-1);
-	            pkt->set_crtToR(-1);
-	            pkt->set_maxhops(0); // want to select a downlink port immediately
-	        } else {
-	            // the packet is being sent between racks
-
-	            // we will choose the path based on the current slice
-                int slice = _top->time_to_slice(eventlist().now());
-	            // get the number of available paths for this packet during this slice
-	            int npaths = _top->get_no_paths(pkt->get_src_ToR(),
-	                _top->get_firstToR(pkt->get_dst()), slice);
-
-	            if (npaths == 0)
-	                cout << "Error: there were no paths for slice " << slice  << " src " << pkt->get_src_ToR() <<
-                        " dst " << _top->get_firstToR(pkt->get_dst()) << endl;
-	            assert(npaths > 0);
-
-	            // randomly choose a path for the packet
-	            // !!! todo: add other options like permutation, etc...
-	            // int path_index = random() % npaths;
-                int path_index = 0;
-
-	            pkt->set_slice_sent(slice); // "timestamp" the packet
-                pkt->set_fabricts(eventlist().now());
-	            pkt->set_path_index(path_index); // set which path the packet will take
-
-	            // set some initial packet parameters used for label switching
-	            // *this could also be done in NDP before the packet is sent to the NIC
-	            pkt->set_lasthop(false);
-	            pkt->set_crthop(-1);
-	            pkt->set_crtToR(-1);
-	            pkt->set_maxhops(_top->get_no_hops(pkt->get_src_ToR(),
-	                _top->get_firstToR(pkt->get_dst()), slice, path_index));
-	        }
-
+            _routing->routingFromPQ(pkt, eventlist().now());
 	        /* tell the packet to move on to the next pipe */
 	        sendFromQueue(pkt);
 
@@ -459,4 +424,13 @@ void PriorityQueue::completeService() {
 
 mem_b PriorityQueue::queuesize() {
     return _queuesize[Q_RLB] + _queuesize[Q_LO] + _queuesize[Q_MID] + _queuesize[Q_HI];
+}
+
+simtime_picosec Queue::get_queueing_delay(int slice){
+    return slice_queuesize(slice)*_ps_per_byte;
+}
+
+mem_b Queue::slice_queuesize(int slice){
+    assert(slice <= _top->get_nsuperslice()*2);
+    return _queuesize;
 }

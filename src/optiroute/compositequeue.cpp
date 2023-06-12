@@ -113,21 +113,8 @@ void CompositeQueue::completeService() {
 		if (_port >= ul) { // it's a ToR uplink
 
 			// check if we're still connected to the right rack:
-
-			// get the current slice:
-			int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
-                top->get_nsuperslice();
-            // next, get the relative time from the beginning of that superslice
-            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
-                (top->get_nsuperslice()*top->get_slicetime(3));
-            int slice; // the current slice
-            if (reltime < top->get_slicetime(0))
-                slice = 0 + superslice*3;
-            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
-                slice = 1 + superslice*3;
-            else
-                slice = 2 + superslice*3;
+			
+			int slice = top->time_to_slice(eventlist().now());
 
             bool pktfound = false;
 
@@ -356,21 +343,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 					            } else {
 					            	booted_pkt->set_src_ToR(new_src_ToR);
 
-					            	// get paths
-					            	// get the current slice:
-									int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
-						                top->get_nsuperslice();
-						            // next, get the relative time from the beginning of that superslice
-						            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-						                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
-						                (top->get_nsuperslice()*top->get_slicetime(3));
-						            int slice; // the current slice
-						            if (reltime < top->get_slicetime(0))
-						                slice = 0 + superslice*3;
-						            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
-						                slice = 1 + superslice*3;
-						            else
-						                slice = 2 + superslice*3;
+					            	int slice = top->time_to_slice(eventlist().now());
 
 						            booted_pkt->set_slice_sent(slice); // "timestamp" the packet
 						            // get the number of available paths for this packet during this slice
@@ -495,21 +468,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 	            } else {
 	            	pkt.set_src_ToR(new_src_ToR);
 
-	            	// get paths
-	            	// get the current slice:
-					int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
-		                top->get_nsuperslice();
-		            // next, get the relative time from the beginning of that superslice
-		            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-		                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
-		                (top->get_nsuperslice()*top->get_slicetime(3));
-		            int slice; // the current slice
-		            if (reltime < top->get_slicetime(0))
-		                slice = 0 + superslice*3;
-		            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
-		                slice = 1 + superslice*3;
-		            else
-		                slice = 2 + superslice*3;
+	            	int slice = top->time_to_slice(eventlist().now());
 
 		            pkt.set_slice_sent(slice); // "timestamp" the packet
 		            // get the number of available paths for this packet during this slice

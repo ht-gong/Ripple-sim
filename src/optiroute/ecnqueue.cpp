@@ -16,8 +16,14 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
       _K(K)
 {
     _state_send = LosslessQueue::READY;
+    _top = top;
+    // TODO: change
+    int slices = top->get_nsuperslice()*2;
+    _dl_queue = slices;
+    _enqueued.resize(slices + 1);
+    _queuesize.resize(slices + 1);
+    std::fill(_queuesize.begin(), _queuesize.end(), 0);
 }
-
 
 void
 ECNQueue::receivePacket(Packet & pkt)
@@ -51,8 +57,10 @@ ECNQueue::receivePacket(Packet & pkt)
         return;
     }
 
+    int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
+    cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
 
-    if (_queuesize+pkt.size() > _maxsize) {
+    if (queuesize() + pkt.size() > _maxsize) {
         /* if the packet doesn't fit in the queue, drop it */
         /*
            if (_logger) 
@@ -75,48 +83,91 @@ ECNQueue::receivePacket(Packet & pkt)
     //  pkt.set_flags(pkt.flags() | ECN_CE);
 
     /* enqueue the packet */
-    bool queueWasEmpty = _enqueued.empty();
-    _enqueued.push_front(&pkt);
-    _queuesize += pkt.size();
-    pkt.inc_queueing(_queuesize);
+    bool queueWasEmpty = _enqueued[_crt_tx_slice].empty(); //is the current queue empty?
+    _enqueued[pkt_slice].push_front(&pkt);
+    _queuesize[pkt_slice] += pkt.size();
+    pkt.inc_queueing(queuesize());
+    dump_queuesize();
 
-    //record queuesize per slice
-    int slice = _top->time_to_slice(eventlist().now());
-    if (queuesize() > _max_recorded_size[slice]) {
-        _max_recorded_size[slice] = queuesize();
-    }
-
-    if (queueWasEmpty && _state_send==LosslessQueue::READY) {
+    if (queueWasEmpty && !_sending_pkt && pkt_slice == _crt_tx_slice) {
 	/* schedule the dequeue event */
-	assert(_enqueued.size() == 1);
-	beginService();
-    }
+	    assert(_enqueued[_crt_tx_slice].size() == 1);
+	    beginService();
+    } 
     
 }
+
+void ECNQueue::beginService() {
+    /* schedule the next dequeue event */
+    assert(!_enqueued[_crt_tx_slice].empty());
+    assert(drainTime(_enqueued[_crt_tx_slice].back()) != 0);
+    eventlist().sourceIsPendingRel(*this, drainTime(_enqueued[_crt_tx_slice].back()));
+    _sending_pkt = _enqueued[_crt_tx_slice].back();
+    _enqueued[_crt_tx_slice].pop_back();
+
+    //mark on dequeue
+    if (queuesize() > _K)
+	  _sending_pkt->set_flags(_sending_pkt->flags() | ECN_CE);
+
+    //_queuesize[_crt_tx_slice] -= _sending_pkt->size();
+    Packet *pkt = _sending_pkt;
+    unsigned seqno = 0;
+    if(pkt->type() == TCP) {
+        seqno = ((TcpPacket*)pkt)->seqno();
+    } else if (pkt->type() == TCPACK) {
+        seqno = ((TcpAck*)pkt)->ackno();
+    }
+    /*
+    cout << "Queue " << _tor << "," << _port << " beginService seq " << seqno << 
+        " pktslice" << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << endl;
+    */
+}
+
 
 void
 ECNQueue::completeService()
 {
     /* dequeue the packet */
-    assert(!_enqueued.empty());
-    Packet* pkt = _enqueued.back();
-    _enqueued.pop_back();
+    assert(_sending_pkt);
 
-    if (_state_send==LosslessQueue::PAUSE_RECEIVED)
-	_state_send = LosslessQueue::PAUSED;
-    
-    //mark on deque
-    if (_queuesize > _K)
-	  pkt->set_flags(pkt->flags() | ECN_CE);
-
-    _queuesize -= pkt->size();
-    //pkt->flow().logTraffic(*pkt, *this, TrafficLogger::PKT_DEPART);
-    //if (_logger) _logger->logQueue(*this, QueueLogger::PKT_SERVICE, *pkt);
-
-    sendFromQueue(pkt);
-
-    if (!_enqueued.empty() && _state_send==LosslessQueue::READY) {
-	/* schedule the next dequeue event */
-	beginService();
+    Packet *pkt = _sending_pkt;
+    unsigned seqno = 0;
+    if(pkt->type() == TCP) {
+        seqno = ((TcpPacket*)pkt)->seqno();
+    } else if (pkt->type() == TCPACK) {
+        seqno = ((TcpAck*)pkt)->ackno();
     }
+    _queuesize[_crt_tx_slice] -= _sending_pkt->size();
+    int pkt_slice = pkt->get_crtslice();
+
+    // cout << "Queue " << _tor << "," << _port << " completeService seq " << seqno << 
+    //     " pktslice" << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
+	// " src,dst " << pkt->get_src() << "," << pkt->get_dst() << endl;
+    // dump_queuesize();
+
+    sendFromQueue(_sending_pkt);
+    _sending_pkt = NULL;
+    
+    if (!_enqueued[_crt_tx_slice].empty() && _state_send==LosslessQueue::READY) {
+        /* schedule the next dequeue event */
+        beginService();
+    }
+}
+
+mem_b ECNQueue::queuesize() {
+    if(_top->is_downlink(_port))
+        return _queuesize[0];
+    int sum = 0;
+    for(int i = 0; i < _dl_queue; i++){
+        sum += _queuesize[i];
+    }
+    return sum;
+}
+
+void ECNQueue::dump_queuesize() {
+    cout<<nodename()<<":  ";
+    for(int i = 0; i < _dl_queue; i++){
+        cout<<i<<":"<<_queuesize[i]<<" ";
+    }
+    cout<<"\n";
 }

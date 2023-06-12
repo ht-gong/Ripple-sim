@@ -45,11 +45,13 @@ class DynExpTopology: public Topology{
 
   int64_t get_nsuperslice() {return _nsuperslice;}
   simtime_picosec get_slicetime(int ind) {return _slicetime[ind];} // picoseconds spent in each slice
+  simtime_picosec get_relative_time(simtime_picosec t);
   int time_to_slice(simtime_picosec t);
   int time_to_absolute_slice(simtime_picosec t);
   simtime_picosec get_slice_start_time(int slice); 
   int get_firstToR(int node) {return node / _ndl;}
   int get_lastport(int dst) {return dst % _ndl;}
+  bool is_downlink(int port) {return port < _ndl;}
 
   // defined in source file
   int get_nextToR(int slice, int crtToR, int crtport);

@@ -146,6 +146,8 @@ class Packet {
     void set_queueing(unsigned queueing) {_queueing = queueing;}
     unsigned get_queueing() {return _queueing;}
     void inc_queueing(unsigned queueing) {_queueing += queueing;}
+    void set_crtslice(int slice) {_crtslice = slice;}
+    int get_crtslice() {return _crtslice;}
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -223,6 +225,7 @@ class Packet {
     bool _lasthop;
     int _maxhops;
     int _crtport;
+    int _crtslice;
 
     packetid_t _id;
     PacketFlow* _flow;

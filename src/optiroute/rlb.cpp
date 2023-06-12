@@ -67,19 +67,7 @@ void RlbSrc::doNextEvent() {
 
     /*
     // first, get the current "superslice"
-    int64_t superslice = (eventlist().now() / _top->get_slicetime(3)) %
-         _top->get_nsuperslice();
-    // next, get the relative time from the beginning of that superslice
-    int64_t reltime = eventlist().now() - superslice*_top->get_slicetime(3) -
-        (eventlist().now() / (_top->get_nsuperslice()*_top->get_slicetime(3))) * 
-        (_top->get_nsuperslice()*_top->get_slicetime(3));
-    int slice; // the current slice
-    if (reltime < _top->get_slicetime(0))
-        slice = 0 + superslice*3;
-    else if (reltime < _top->get_slicetime(0) + _top->get_slicetime(1))
-        slice = 1 + superslice*3;
-    else
-        slice = 2 + superslice*3;
+    int slice = top->time_to_slice(eventlist().now());
     */
 
     // debug:

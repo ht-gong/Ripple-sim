@@ -57,14 +57,13 @@ void DynExpTopology::read_params(string topfile) {
     stream << line;
     stream >> _nslice;
     // get picoseconds in each topology slice type
-    _slicetime.resize(4);
+    _slicetime.resize(3);
     stream >> _slicetime[0]; // time spent in "epsilon" slice
-    stream >> _slicetime[1]; // time spent in "delta" slice
-    stream >> _slicetime[2]; // time spent in "r" slice
+    stream >> _slicetime[1]; // time spent in "r" slice
     // total time in the "superslice"
-    _slicetime[3] = _slicetime[0] + _slicetime[1] + _slicetime[2];
+    _slicetime[2] = _slicetime[0] + _slicetime[1];
 
-    _nsuperslice = _nslice / 3;
+    _nsuperslice = _nslice / 2;
 
     // get topology
     // format:
@@ -227,7 +226,13 @@ void DynExpTopology::init_network() {
         logfile->addLogger(*queueLogger);
         queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k);
         ostringstream oss;
-        oss << "CompositeQueue" << j << ":" << k;
+        if (qt==COMPOSITE)
+          oss << "CompositeQueue";
+        else if (qt==DEFAULT)
+          oss << "DefaultQueue";
+        else if (qt==ECN)
+          oss << "ECNQueue";
+        oss << j << ":" << k;
         queues_tor[j][k]->setName(oss.str());
         //queues_tor[j][k]->setName("Queue-TOR" + ntoa(j) + "->uplink" + ntoa(k - _ndl));
         //logfile->writeName(*(queues_tor[j][k]));
@@ -281,44 +286,41 @@ int DynExpTopology::get_no_hops(int srcToR, int dstToR, int slice, int path_ind)
   return sz;
 }
 
+// Gets relative time from the start of one cycle
+simtime_picosec DynExpTopology::get_relative_time(simtime_picosec t) {
+  int64_t superslice = (t / get_slicetime(2)) % get_nsuperslice();
+  int64_t reltime = t - superslice*get_slicetime(2) -
+      (t / (get_nsuperslice()*get_slicetime(2))) *
+      (get_nsuperslice()*get_slicetime(2));
+  return reltime;
+}
+
+// Gets relative slice from the start of one cycle
 int DynExpTopology::time_to_slice(simtime_picosec t){
-    int64_t superslice = (t / get_slicetime(3)) %
-        get_nsuperslice();
-    // next, get the relative time from the beginning of that superslice
-    int64_t reltime = t - superslice*get_slicetime(3) -
-        (t / (get_nsuperslice()*get_slicetime(3))) * 
-        (get_nsuperslice()*get_slicetime(3));
-    int slice; // the current slice
-    if (reltime < get_slicetime(0))
-        slice = 0 + superslice*3;
-    else if (reltime < get_slicetime(0) + get_slicetime(1))
-        slice = 1 + superslice*3;
-    else
-        slice = 2 + superslice*3;
-    return slice;
+  int64_t superslice = (t / get_slicetime(2)) % get_nsuperslice();
+  int64_t reltime = get_relative_time(t);
+  if (reltime < get_slicetime(0))
+      return superslice * 2;
+  return (1 + superslice * 2);
 }
 
+// Gets absolute slice from start of the simulation
 int DynExpTopology::time_to_absolute_slice(simtime_picosec t) {
-  uint64_t absolute_superslice = t / get_slicetime(3);
-  simtime_picosec remain_time = t - absolute_superslice * get_slicetime(3);
+  int64_t absolute_superslice = t / get_slicetime(2);
+  simtime_picosec remain_time = t - absolute_superslice * get_slicetime(2);
   if (remain_time < get_slicetime(0)) {
-    return absolute_superslice * 3;
+    return absolute_superslice * 2;
   }
-  if (remain_time < get_slicetime(0) + get_slicetime(1)) {
-    return (1 + absolute_superslice * 3);
-  }
-  return (2 + absolute_superslice * 3);
+  return (1 + absolute_superslice * 2);
 }
 
+// Gets the starting (absolute) time of a slice 
 simtime_picosec DynExpTopology::get_slice_start_time(int slice) {
-  int superslice = slice / 3;
-  if (slice % 3 == 0) {
-    return superslice * get_slicetime(3);
+  int superslice = slice / 2;
+  if (slice % 2 == 0) {
+    return superslice * get_slicetime(2);
   }
-  if (slice % 3 == 1) {
-    return superslice * get_slicetime(3) + get_slicetime(0);
-  }
-  return superslice * get_slicetime(3) + get_slicetime(0) + get_slicetime(1);
+  return superslice * get_slicetime(2) + get_slicetime(0);
 }
 
 void DynExpTopology::count_queue(Queue* queue){

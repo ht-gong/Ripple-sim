@@ -14,6 +14,7 @@ class Routing {
  public:
    Routing() {}
    simtime_picosec routing(Packet* pkt, simtime_picosec t);
+   simtime_picosec routingFromPQ(Packet* pkt, simtime_picosec t);
 };
 
 // Set events to activate next calendar queue

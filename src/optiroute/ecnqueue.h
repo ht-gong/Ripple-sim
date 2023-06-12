@@ -18,10 +18,18 @@ class ECNQueue : public Queue {
     ECNQueue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
 		QueueLogger* logger, mem_b drop, int tor, int port, DynExpTopology *top);
     void receivePacket(Packet & pkt);
+    void beginService();
     void completeService();
+    mem_b queuesize(); 
+
  private:
     mem_b _K;
     int _state_send;
+    vector<mem_b> _queuesize;
+    vector<list<Packet*>> _enqueued;
+    int _dl_queue;
+    DynExpTopology *_top;
+    void dump_queuesize();
 };
 
 #endif

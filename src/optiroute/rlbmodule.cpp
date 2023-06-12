@@ -28,7 +28,7 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
     _mss = 1436; // packet payload length (bytes)
     _hdr = 64; // header length (bytes)
     _link_rate = 10000000000 / 8;
-    _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slicetime(3) + _top->get_slicetime(0)); // seconds (was 0.000281;)
+    _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slicetime(2) + _top->get_slicetime(0)); // seconds (was 0.000281;)
     // ^^^ note: we try to send RLB traffic right up to the reconfiguration point (one pkt serialization & propagation before reconfig.)
     // in general, we have two options:
     // 1. design everything conservatively so we never have to retransmit an RLB packet
@@ -36,7 +36,7 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
 
     // debug:
     //cout << " slot time = " << _slot_time << " seconds" << endl;
-    //cout << "   ( = " << (_Ncommit_queues - 1) << " * " << timeAsSec(_top->get_slicetime(3)) << " + " << timeAsSec(_top->get_slicetime(0)) << endl;
+    //cout << "   ( = " << (_Ncommit_queues - 1) << " * " << timeAsSec(_top->get_slicetime(2)) << " + " << timeAsSec(_top->get_slicetime(0)) << endl;
 
     _good_rate = _link_rate * _mss / (_mss + _hdr); // goodput rate, Bytes / second
     _good_rate = _good_rate / _mss; // goodput rate, Packets / seconds
@@ -648,19 +648,7 @@ void RlbMaster::newMatching() {
 
     // get the current slice:
     // first, get the current "superslice"
-    int64_t superslice = (eventlist().now() / _top->get_slicetime(3)) %
-    _top->get_nsuperslice();
-    // next, get the relative time from the beginning of that superslice
-    int64_t reltime = eventlist().now() - superslice*_top->get_slicetime(3) -
-        (eventlist().now() / (_top->get_nsuperslice()*_top->get_slicetime(3))) * 
-        (_top->get_nsuperslice()*_top->get_slicetime(3));
-    int slice; // the current slice
-    if (reltime < _top->get_slicetime(0))
-        slice = 0 + superslice*3;
-    else if (reltime < _top->get_slicetime(0) + _top->get_slicetime(1))
-        slice = 1 + superslice*3;
-    else
-        slice = 2 + superslice*3;
+    int slice = _top->time_to_slice(eventlist().now());
 
 
     // debug:
