@@ -43,12 +43,13 @@ class DynExpTopology: public Topology{
 
   RlbModule* get_rlb_module(int host) {return rlb_modules[host];}
 
-  int64_t get_nsuperslice() {return _nsuperslice;}
-  simtime_picosec get_slicetime(int ind) {return _slicetime[ind];} // picoseconds spent in each slice
+  int64_t get_nslice() {return _nslice;}
+  simtime_picosec get_slice_time() {return _tot_time;} // picoseconds spent in total
   simtime_picosec get_relative_time(simtime_picosec t);
   int time_to_slice(simtime_picosec t);
   int time_to_absolute_slice(simtime_picosec t);
   simtime_picosec get_slice_start_time(int slice); 
+  bool is_reconfig(simtime_picosec t);
   int get_firstToR(int node) {return node / _ndl;}
   int get_lastport(int dst) {return dst % _ndl;}
   bool is_downlink(int port) {return port < _ndl;}
@@ -102,8 +103,10 @@ class DynExpTopology: public Topology{
   vector<vector<vector<vector<vector<int>>>>> _lbls;
   int _ndl, _nul, _ntor, _no_of_nodes; // number down links, number uplinks, number ToRs, number servers
   int _nslice; // number of topologies
+  simtime_picosec _connected_time; // duration of one connected topology
+  simtime_picosec _reconfig_time;  // time it takes to reconfigure entire topology
+  simtime_picosec _tot_time;  // slice time + reconfiguration time
   int64_t _nsuperslice; // number of "superslices" (periodicity of topology)
-  vector<simtime_picosec> _slicetime; // picoseconds spent in each topology slice type (3 types)
   mem_b _queuesize; // queue sizes
 };
 

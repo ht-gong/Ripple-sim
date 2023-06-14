@@ -21,6 +21,7 @@ class ECNQueue : public Queue {
     void beginService();
     void completeService();
     mem_b queuesize(); 
+    mem_b slice_queuesize(int slice);
 
  private:
     mem_b _K;

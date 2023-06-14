@@ -16,12 +16,14 @@
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 
+// Routing out of Host into Tor
 simtime_picosec Routing::routingFromPQ(Packet* pkt, simtime_picosec t) {
     DynExpTopology* top = pkt->get_topology();
     if (pkt->get_src_ToR() == top->get_firstToR(pkt->get_dst())) {
         // the packet is being sent within the same rack
         pkt->set_lasthop(false);
         pkt->set_crthop(-1);
+        pkt->set_hop_index(-1);
         pkt->set_crtToR(-1);
         pkt->set_maxhops(0); // want to select a downlink port immediately
     } else {
@@ -52,6 +54,7 @@ simtime_picosec Routing::routingFromPQ(Packet* pkt, simtime_picosec t) {
         // *this could also be done in NDP before the packet is sent to the NIC
         pkt->set_lasthop(false);
         pkt->set_crthop(-1);
+        pkt->set_hop_index(-1);
         pkt->set_crtToR(-1);
         pkt->set_maxhops(top->get_no_hops(pkt->get_src_ToR(),
             top->get_firstToR(pkt->get_dst()), slice, path_index));
@@ -70,9 +73,10 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
 	DynExpTopology* top = pkt->get_topology();
 	int slice = top->time_to_slice(t);
 
+    // next port assuming topology does not change
 	int nextPort = top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
-                        pkt->get_slice_sent(), pkt->get_path_index(), pkt->get_crthop());
-    //cout << "Routing crtToR: " << pkt->get_crtToR() << " firstToR: " << top->get_firstToR(pkt->get_dst()) << endl;
+                        slice, pkt->get_path_index(), pkt->get_hop_index());
+    // cout << "Routing crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << slice << endl;
 
     /*
     //track max distance from current queue, short flows only
@@ -95,10 +99,14 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
     }
 
     Queue* q = top->get_queue_tor(pkt->get_crtToR(), nextPort);
-
+    
+    simtime_picosec finish_time = t + q->get_queueing_delay(slice) +
+            q->drainTime(pkt) /*229760*/ + timeFromNs(delay_ToR2ToR);
     //calculate delay considering the queue occupancy
-    int finish_slice = top->time_to_slice(t + q->get_queueing_delay(slice) +
-            q->drainTime(pkt) /*229760*/ + timeFromNs(delay_ToR2ToR)); // plus the link delay
+    int finish_slice = top->time_to_slice(finish_time); // plus the link delay
+    if(top->is_reconfig(finish_time)) {
+        finish_slice++;
+    }
 
     if (finish_slice == slice) {
         /*
@@ -120,10 +128,19 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
             << q->drainTime(pkt) << " slice " << slice << " sent_slice: " << sent_slice << " seqno: " << seqno << endl;
         }
         */
-        int next_absolute_slice = top->time_to_absolute_slice(t) + 1;
-        simtime_picosec next_time = top->get_slice_start_time(next_absolute_slice);
-        return routing(pkt, next_time);
+        return reroute(pkt, t);
     }
+}
+
+simtime_picosec Routing::reroute(Packet* pkt, simtime_picosec t) {
+    DynExpTopology * top = pkt->get_topology();
+    int next_absolute_slice = top->time_to_absolute_slice(t) + 1;
+    simtime_picosec next_time = top->get_slice_start_time(next_absolute_slice);
+    pkt->set_src_ToR(pkt->get_crtToR());
+    pkt->set_hop_index(0);
+    pkt->set_maxhops(top->get_no_hops(pkt->get_src_ToR(),
+            top->get_firstToR(pkt->get_dst()), top->time_to_slice(next_time), pkt->get_path_index()));
+    return routing(pkt, next_time);
 }
 
 QueueAlarm::QueueAlarm(EventList &eventlist, int port, Queue* q, DynExpTopology* top)
@@ -154,12 +171,12 @@ void QueueAlarm::doNextEvent(){
         cout << "Packets " << _queue->slice_queuesize(_queue->_crt_tx_slice)/1436 << 
             " stuck in queue tor " << _queue->_tor << " port " << _queue->_port << " slice " << _queue->_crt_tx_slice << endl;
     }
-
+    
     assert(_queue->_crt_tx_slice != crt);
     _queue->_crt_tx_slice = crt;
-    //cout << "SETTING TO " << crt << endl;
+    // cout << "SETTING TO " << crt << endl;
     if(_queue->_sending_pkt == NULL && _queue->slice_queuesize(crt) > 0){
-        cout << "queue slice " << crt << " alarm beginService" << endl;
+        // cout << "queue slice " << crt << " alarm beginService" << endl;
         _queue->beginService();
     }
     int next_absolute_slice = _top->time_to_absolute_slice(t) + 1;

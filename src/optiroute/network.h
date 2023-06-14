@@ -130,8 +130,11 @@ class Packet {
     int get_slice_sent() {return _slice_sent;}
     void set_path_index(int path_index) {_path_index = path_index;}
     int get_path_index() {return _path_index;}
-    
+
     // these are used as the packet traverses the network
+    void set_hop_index(int hop_index) {_hop_index = hop_index;}
+    int get_hop_index() {return _hop_index;}
+    void inc_hop_index() {_hop_index++;}
     void set_crtToR(int crtToR) {_crtToR = crtToR;}
     int get_crtToR() {return _crtToR;}
     void set_crthop(int crthop) {_crthop = crthop;}
@@ -214,14 +217,15 @@ class Packet {
     // this is used for label switching
     // it also allows us to drop/misroute packets if they're sent at the wrong time
 
-    int _src_ToR; // we use this for routing since RTS packets can have a src node and "src ToR" that don't match
+    int _src_ToR; // we use this for routing since RTS packets can have a src node and "src ToR" that don't match, also may change during re-routes
 
     int _src; // sending host, used to index labels
     int _dst; // destination host, used to index labels
     int _slice_sent; // the topology slice during which the packet was sent, used to index labels
     int _path_index; // along which of multiple paths the packet was sent, used to index labels
     int _crtToR; // current ToR (used to compute next ToR before packet sent out on pipe)
-    int _crthop; // current hop, used to index lables
+    int _crthop; // current hop count, used for statistics
+    int _hop_index; // may reset during re-route, used to index labels
     bool _lasthop;
     int _maxhops;
     int _crtport;

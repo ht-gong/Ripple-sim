@@ -41,6 +41,7 @@ class CompositeQueue : public Queue {
     int num_nacks() const { return _num_nacks;}
     int num_pulls() const { return _num_pulls;}
     virtual mem_b queuesize();
+    mem_b slice_queuesize(int slice);
     virtual void setName(const string& name) {
 	Logged::setName(name); 
 	_nodename += name;

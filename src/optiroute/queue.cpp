@@ -70,12 +70,12 @@ void Queue::sendFromQueue(Packet* pkt) {
     Pipe* nextpipe; // the next packet sink will be a pipe
     DynExpTopology* top = pkt->get_topology();
     if (pkt->get_crthop() < 0) {
-        cout << "sendFromQueue (from NIC) " << _tor << " " << _port << endl; 
+        // cout << "sendFromQueue (from NIC) " << _tor << " " << _port << endl; 
         // we're sending out of the NIC
         nextpipe = top->get_pipe_serv_tor(pkt->get_src());
         nextpipe->receivePacket(*pkt);
     } else {
-        cout << "sendFromQueue (from ToR) " << _tor << " " << _port << endl; 
+        // cout << "sendFromQueue (from ToR) " << _tor << " " << _port << endl; 
         // we're sending out of a ToR queue
         if (top->is_last_hop(pkt->get_crtport())) {
             pkt->set_lasthop(true);
@@ -175,6 +175,10 @@ void Queue::reportMaxqueuesize(){
         _max_recorded_size[i] = 0;
     }
     cout << endl;
+}
+
+simtime_picosec Queue::get_queueing_delay(int slice){
+    return slice_queuesize(slice)*_ps_per_byte;
 }
 
 //////////////////////////////////////////////////
@@ -426,11 +430,11 @@ mem_b PriorityQueue::queuesize() {
     return _queuesize[Q_RLB] + _queuesize[Q_LO] + _queuesize[Q_MID] + _queuesize[Q_HI];
 }
 
-simtime_picosec Queue::get_queueing_delay(int slice){
-    return slice_queuesize(slice)*_ps_per_byte;
+
+
+mem_b PriorityQueue::slice_queuesize(int slice){
+	//unimplemented 
+    assert(0);
+    return 0;
 }
 
-mem_b Queue::slice_queuesize(int slice){
-    assert(slice <= _top->get_nsuperslice()*2);
-    return _queuesize;
-}

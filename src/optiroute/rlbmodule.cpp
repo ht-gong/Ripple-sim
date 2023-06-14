@@ -28,7 +28,7 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
     _mss = 1436; // packet payload length (bytes)
     _hdr = 64; // header length (bytes)
     _link_rate = 10000000000 / 8;
-    _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slicetime(2) + _top->get_slicetime(0)); // seconds (was 0.000281;)
+    _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slice_time()); // seconds (was 0.000281;)
     // ^^^ note: we try to send RLB traffic right up to the reconfiguration point (one pkt serialization & propagation before reconfig.)
     // in general, we have two options:
     // 1. design everything conservatively so we never have to retransmit an RLB packet
@@ -831,7 +831,7 @@ void RlbMaster::newMatching() {
     _current_commit_queue = _current_commit_queue % _hpr;
 
     // set up the next reconfiguration event:
-    eventlist().sourceIsPendingRel(*this, _top->get_slicetime(3));
+    eventlist().sourceIsPendingRel(*this, _top->get_slice_time());
 }
 
 

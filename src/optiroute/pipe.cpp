@@ -153,11 +153,10 @@ void Pipe::sendFromPipe(Packet *pkt) {
             int slice = top->time_to_slice(eventlist().now());
 
             int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
-            if (nextToR >= 0) {// the rotor switch is up
+            if (nextToR >= 0 && !top->is_reconfig(eventlist().now())) {// the rotor switch is up
                 pkt->set_crtToR(nextToR);
 
             } else { // the rotor switch is down, "drop" the packet
-
                 switch (pkt->type()) {
                     case RLB:
                         {
@@ -213,17 +212,11 @@ void Pipe::sendFromPipe(Packet *pkt) {
                 return;
             }
         }
+
         pkt->inc_crthop(); // increment the hop
-
-        // get the port:
-        if (pkt->get_crthop() == pkt->get_maxhops()) { // no more hops defined, need to set downlink port
-            //assert(0);
-            pkt->set_crtport(top->get_lastport(pkt->get_dst()));
-            //cout << "   Upcoming (last) port = " << pkt->get_crtport() << endl;
-
-        } else {
-            _routing.routing(pkt, eventlist().now());
-        }
+        pkt->inc_hop_index(); // increment hop index as well
+        
+        _routing.routing(pkt, eventlist().now());
 
         Queue* nextqueue = top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
         assert(nextqueue);

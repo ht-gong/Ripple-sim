@@ -18,7 +18,7 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
     _state_send = LosslessQueue::READY;
     _top = top;
     // TODO: change
-    int slices = top->get_nsuperslice()*2;
+    int slices = top->get_nslice()*2;
     _dl_queue = slices;
     _enqueued.resize(slices + 1);
     _queuesize.resize(slices + 1);
@@ -58,7 +58,8 @@ ECNQueue::receivePacket(Packet & pkt)
     }
 
     int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
-    cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
+    // cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
+    // dump_queuesize();
 
     if (queuesize() + pkt.size() > _maxsize) {
         /* if the packet doesn't fit in the queue, drop it */
@@ -70,7 +71,9 @@ ECNQueue::receivePacket(Packet & pkt)
         if(pkt.type() == TCP){
             TcpPacket *tcppkt = (TcpPacket*)&pkt;
             tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
+            cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
             cout << "DROPPED\n";
+            dump_queuesize();
         }
         pkt.free();
         _num_drops++;
@@ -87,7 +90,7 @@ ECNQueue::receivePacket(Packet & pkt)
     _enqueued[pkt_slice].push_front(&pkt);
     _queuesize[pkt_slice] += pkt.size();
     pkt.inc_queueing(queuesize());
-    dump_queuesize();
+    //dump_queuesize();
 
     if (queueWasEmpty && !_sending_pkt && pkt_slice == _crt_tx_slice) {
 	/* schedule the dequeue event */
@@ -117,10 +120,10 @@ void ECNQueue::beginService() {
     } else if (pkt->type() == TCPACK) {
         seqno = ((TcpAck*)pkt)->ackno();
     }
-    /*
-    cout << "Queue " << _tor << "," << _port << " beginService seq " << seqno << 
-        " pktslice" << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << endl;
-    */
+    
+    // cout << "Queue " << _tor << "," << _port << " beginService seq " << seqno << 
+    //  " pktslice" << pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << endl;
+    
 }
 
 
@@ -152,6 +155,11 @@ ECNQueue::completeService()
         /* schedule the next dequeue event */
         beginService();
     }
+}
+
+mem_b ECNQueue::slice_queuesize(int slice){
+    assert(slice <= _dl_queue);
+    return _queuesize[slice];
 }
 
 mem_b ECNQueue::queuesize() {

@@ -402,6 +402,7 @@ TcpSrc::receivePacket(Packet& pkt)
     
     //only count drops in CA state
     _drops++;
+    cout<<"Dupack: " << _flow_src << " " << _flow_dst << '\n';
 #ifdef TDTCP
     //track sliced network that lost the packet for TDTCP
     _fast_recovery_slice = pktslice;
@@ -412,7 +413,7 @@ TcpSrc::receivePacket(Packet& pkt)
     if (!was_it_dropped(_last_acked+1, true)) {
         cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size  << " " << seqno << endl;
         _found_retransmit++;
-#define ORACLE
+//#define ORACLE
 #ifdef ORACLE
         //we know this was not dropped, do not deflate window/retransmit
         return;

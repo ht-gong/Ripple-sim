@@ -127,7 +127,7 @@ void CompositeQueue::completeService() {
             	// get the currently-connected ToR:
             	int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
 
-            	if (dstToR == nextToR) {
+            	if (dstToR == nextToR && !top->is_reconfig(eventlist().now())) {
             		// this is a "fresh" RLB packet
             		_enqueued_rlb.pop_back();
 					_queuesize_rlb -= pkt->size();
@@ -349,7 +349,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 						            // get the number of available paths for this packet during this slice
 					            	int npaths = top->get_no_paths(booted_pkt->get_src_ToR(),
 					                	top->get_firstToR(booted_pkt->get_dst()), slice);
-						            if (npaths == 0)
+						            if (npaths == 0 || top->is_reconfig(eventlist().now()))
 						                cout << "Error: there were no paths!" << endl;
 						            assert(npaths > 0);
 
@@ -474,7 +474,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 		            // get the number of available paths for this packet during this slice
 	            	int npaths = top->get_no_paths(pkt.get_src_ToR(),
 	                	top->get_firstToR(pkt.get_dst()), slice);
-		            if (npaths == 0)
+		            if (npaths == 0 || top->is_reconfig(eventlist().now()))
 		                cout << "Error: there were no paths!" << endl;
 		            assert(npaths > 0);
 
@@ -492,7 +492,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 	            // debug:
 		        //cout << "   packet RTSed to node " << pkt.get_dst() << " at ToR = " << new_src_ToR << endl;
 
-	            pkt.set_crthop(0);
+	            pkt.set_hop_index(0);
 	            pkt.set_crtToR(new_src_ToR);
 
 	            Queue* nextqueue = top->get_queue_tor(pkt.get_crtToR(), pkt.get_crtport());
@@ -530,4 +530,10 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 
 mem_b CompositeQueue::queuesize() {
     return _queuesize_low + _queuesize_high;
+}
+
+mem_b CompositeQueue::slice_queuesize(int slice){
+	//unimplemented 
+    assert(0);
+    return 0;
 }

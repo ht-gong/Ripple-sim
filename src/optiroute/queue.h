@@ -43,7 +43,7 @@ class Queue : public EventSource, public PacketSink {
         return (mem_b)(timeAsSec(t) * (double)_bitrate); 
     }
     virtual mem_b queuesize();
-    virtual mem_b slice_queuesize(int slice);
+    virtual mem_b slice_queuesize(int slice) = 0;
     simtime_picosec get_queueing_delay(int slice);
     simtime_picosec serviceTime();
     int num_drops() const {return _num_drops;}
@@ -101,6 +101,7 @@ class PriorityQueue : public Queue {
 		  QueueLogger* logger, int node, DynExpTopology *top);
     virtual void receivePacket(Packet& pkt);
     virtual mem_b queuesize();
+    mem_b slice_queuesize(int slice);
     simtime_picosec serviceTime(Packet& pkt);
 
     void doorbell(bool rlbwaiting);
