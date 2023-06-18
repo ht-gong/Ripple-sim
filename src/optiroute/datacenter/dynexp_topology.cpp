@@ -283,11 +283,9 @@ int DynExpTopology::get_no_hops(int srcToR, int dstToR, int slice, int path_ind)
   return sz;
 }
 
-// Gets relative time from the start of one cycle
+// Gets relative time from the start of one slice
 simtime_picosec DynExpTopology::get_relative_time(simtime_picosec t) {
-  int64_t slices = t / get_slice_time();
-  int64_t reltime = t - slices * get_slice_time();
-  return reltime;
+  return t % get_slice_time();
 }
 
 // Gets relative slice from the start of one cycle
@@ -299,6 +297,12 @@ int DynExpTopology::time_to_slice(simtime_picosec t){
 int DynExpTopology::time_to_absolute_slice(simtime_picosec t) {
   return t / get_slice_time();
 }
+
+// Gets absolute slice from start of the simulation
+int DynExpTopology::absolute_slice_to_slice(int slice) {
+  return slice % get_nslice();
+}
+
 
 // Gets the starting (absolute) time of a slice 
 simtime_picosec DynExpTopology::get_slice_start_time(int slice) {

@@ -6,11 +6,11 @@ Hosts_p_rack=6;
 
 H=Nrack*Hosts_p_rack; % number of hosts
 
-loadfrac0=.40; % fraction of theoretically possible load
+loadfrac0=.2; % fraction of theoretically possible load
 
 % ----- define simulation length (time):
 
-totaltime=10.0001; % seconds, probably want a little extra here...
+totaltime=1.0001; % seconds, probably want a little extra here...
 
 
 %% prio traffic:
@@ -45,7 +45,7 @@ flowcdf=data(:,2).';
 % ----- define load:
 
 avg_flowsize=sum(flowsize(2:end).*diff(flowcdf)); % bytes / flow
-linkrate=1e10/8; % bytes / second
+linkrate=1e11/8; % bytes / second
 
 filename=sprintf('flows_%.0fpercLoad_%.0fsec_%dhosts_%dGbps',100*loadfrac0, totaltime, H, linkrate*8/1e9);
 

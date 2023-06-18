@@ -58,9 +58,8 @@ ECNQueue::receivePacket(Packet & pkt)
     }
 
     int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
-    // cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
+    //cout<< "Queue " << _tor << "," << _port << "Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "delay: " << get_queueing_delay(pkt.get_crtslice()) << endl;
     // dump_queuesize();
-
     if (queuesize() + pkt.size() > _maxsize) {
         /* if the packet doesn't fit in the queue, drop it */
         /*
@@ -72,7 +71,7 @@ ECNQueue::receivePacket(Packet & pkt)
             TcpPacket *tcppkt = (TcpPacket*)&pkt;
             tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
             cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
-            cout << "DROPPED\n";
+            cout << "DROPPED because calendarqueue full\n";
             dump_queuesize();
         }
         pkt.free();
@@ -122,7 +121,7 @@ void ECNQueue::beginService() {
     }
     
     // cout << "Queue " << _tor << "," << _port << " beginService seq " << seqno << 
-    //  " pktslice" << pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << endl;
+    //  " pktslice" << pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << "delay: " << get_queueing_delay(pkt->get_crtslice()) << endl;
     
 }
 

@@ -70,77 +70,81 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
     } else if (pkt->type() == NDP) {
         seqno = ((NdpPacket*)pkt)->seqno();
     }
+
 	DynExpTopology* top = pkt->get_topology();
-	int slice = top->time_to_slice(t);
-
-    // next port assuming topology does not change
-	int nextPort = top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
-                        slice, pkt->get_path_index(), pkt->get_hop_index());
-    // cout << "Routing crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << slice << endl;
-
-    /*
-    //track max distance from current queue, short flows only
-    if(!pkt->get_longflow() && (pkt->get_crtToR() != top->get_firstToR(pkt->get_dst()))){
-        int diff = (((sent_slice-slice) + top->get_nsuperslice()*2) % (top->get_nsuperslice()*2))+1;
-        //cout << slice << " " << sent_slice << " " << diff << endl;
-        max_used_queues = diff > max_used_queues ? diff : max_used_queues;
-    }
-    */
-
     // if this is the last ToR, need to get downlink port
     if(pkt->get_crtToR() == top->get_firstToR(pkt->get_dst())){
         pkt->set_crtport(top->get_lastport(pkt->get_dst()));
         pkt->set_crtslice(0);
         return 0;
     // calculate time from the start of sent_slice, not current slice
-    } else {
-        //FD uplink never seems to get changed so I just put this here
-	    pkt->set_crtport(nextPort);
     }
 
-    Queue* q = top->get_queue_tor(pkt->get_crtToR(), nextPort);
+	int cur_slice = top->time_to_slice(t);
+    // next port assuming topology does not change
+	int cur_slice_port = top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
+                                cur_slice, pkt->get_path_index(), pkt->get_hop_index());
     
-    simtime_picosec finish_time = t + q->get_queueing_delay(slice) +
-            q->drainTime(pkt) /*229760*/ + timeFromNs(delay_ToR2ToR);
-    //calculate delay considering the queue occupancy
-    int finish_slice = top->time_to_slice(finish_time); // plus the link delay
-    if(top->is_reconfig(finish_time)) {
-        finish_slice++;
+    // cout <<seqno << " Routing crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
+    //     << "hop: " << pkt->get_hop_index() << "port: "<<cur_slice_port<< endl;
+    if(!cur_slice_port) {
+        cout <<seqno << "Routing Failed crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
+        << "hop: " << pkt->get_hop_index() << "port: "<<cur_slice_port<< endl;
+        assert(0);
     }
 
-    if (finish_slice == slice) {
-        /*
-        if(pkt->get_src() == 489 && pkt->get_dst() == 0){
-        cout << "Routing finish_slice==slice slice=" << slice << " t=" << 
-            (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt)) + timeFromNs(delay_ToR2ToR) << endl;
-        cout << "qdelay: " << q->get_queueing_delay(sent_slice) << " draintime: " 
-            << q->drainTime(pkt) << " slice " << slice << " sent_slice: " <<  sent_slice << " seqno: " << seqno << endl;
-        }
-        */
-        pkt->set_crtslice(slice);
-        return (t + q->get_queueing_delay(slice) + q->drainTime(pkt));
-    } else {
-        /*
-        if(pkt->get_src() == 489 && pkt->get_dst() == 0){
-        cout << "Rerouting: " <<  (q->get_queueing_delay(sent_slice) + q->drainTime(pkt) + timeFromNs(delay_ToR2ToR)) <<
-            " delay t="  << (t + q->get_queueing_delay(sent_slice) + q->drainTime(pkt) + timeFromNs(delay_ToR2ToR)) << endl;
-        cout << "qdelay: " << q->get_queueing_delay(sent_slice) << " draintime: " 
-            << q->drainTime(pkt) << " slice " << slice << " sent_slice: " << sent_slice << " seqno: " << seqno << endl;
-        }
-        */
-        return reroute(pkt, t);
+    Queue* cur_q = top->get_queue_tor(pkt->get_crtToR(), cur_slice_port);
+    
+    simtime_picosec finish_push = t + cur_q->get_queueing_delay(cur_slice) +
+            cur_q->drainTime(pkt) /*229760*/;
+    int finish_push_slice = top->time_to_slice(finish_push); // plus the link delay
+
+    // simtime_picosec finish_push_nxt = t + nxt_q->get_queueing_delay(cur_slice) +
+    //         nxt_q->drainTime(pkt) /*229760*/;
+    // int finish_push_nxt_slice = top->time_to_slice(finish_push_nxt);
+
+    // //calculate delay considering the queue occupancy
+    simtime_picosec finish_time = t + cur_q->get_queueing_delay(cur_slice) +
+            cur_q->drainTime(pkt) /*229760*/ + timeFromNs(delay_ToR2ToR);
+    int finish_slice = top->time_to_slice(finish_time);
+
+    // simtime_picosec finish_time_nxt = t + nxt_q->get_queueing_delay(top->absolute_slice_to_slice(cur_slice)) +
+    //         nxt_q->drainTime(pkt) /*229760*/ + timeFromNs(delay_ToR2ToR);
+    // int finish_nxt_slice = top->time_to_slice(finish_time_nxt);
+
+    // cout <<seqno << "Routing crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
+    //         << "hop: " << pkt->get_hop_index() << "port: "<<cur_slice_port<< " " << t <<"Finish push:" << finish_push_slice << " " << finish_push << "Finish slice:"<<finish_slice<< " " << finish_time << endl;
+    if(top->is_reconfig(finish_push)) {
+        finish_push_slice = top->absolute_slice_to_slice(finish_push_slice + 1);
     }
+
+    if (finish_push_slice == cur_slice) {
+        pkt->set_crtslice(cur_slice);
+        pkt->set_crtport(cur_slice_port);
+        if(finish_slice != cur_slice && top->get_nextToR(cur_slice, pkt->get_crtToR(), pkt->get_crtport()) != top->get_firstToR(pkt->get_dst())) {
+            pkt->set_src_ToR(top->get_nextToR(cur_slice, pkt->get_crtToR(), pkt->get_crtport()));
+            pkt->set_hop_index(-1);
+            pkt->set_maxhops(top->get_no_hops(pkt->get_src_ToR(),
+                                top->get_firstToR(pkt->get_dst()), finish_slice, pkt->get_path_index()));
+        }
+        
+        return finish_time;
+    } 
+    
+    return reroute(pkt, t, finish_time);
 }
 
-simtime_picosec Routing::reroute(Packet* pkt, simtime_picosec t) {
+simtime_picosec Routing::reroute(Packet* pkt, simtime_picosec t, simtime_picosec finish_push) {
     DynExpTopology * top = pkt->get_topology();
-    int next_absolute_slice = top->time_to_absolute_slice(t) + 1;
-    simtime_picosec next_time = top->get_slice_start_time(next_absolute_slice);
+    int nxt_slice = top->time_to_absolute_slice(t) + 1;
     pkt->set_src_ToR(pkt->get_crtToR());
     pkt->set_hop_index(0);
     pkt->set_maxhops(top->get_no_hops(pkt->get_src_ToR(),
-            top->get_firstToR(pkt->get_dst()), top->time_to_slice(next_time), pkt->get_path_index()));
-    return routing(pkt, next_time);
+            top->get_firstToR(pkt->get_dst()), top->absolute_slice_to_slice(nxt_slice), pkt->get_path_index()));
+
+
+    // cout << "Reroute crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << pkt->get_crtslice()<< " at " <<t << "finishing at" << finish_push << endl;
+    return routing(pkt, top->get_slice_start_time(nxt_slice));
 }
 
 QueueAlarm::QueueAlarm(EventList &eventlist, int port, Queue* q, DynExpTopology* top)
@@ -176,7 +180,7 @@ void QueueAlarm::doNextEvent(){
     _queue->_crt_tx_slice = crt;
     // cout << "SETTING TO " << crt << endl;
     if(_queue->_sending_pkt == NULL && _queue->slice_queuesize(crt) > 0){
-        // cout << "queue slice " << crt << " alarm beginService" << endl;
+        // cout << "queue slice " << crt << " " << _queue->_tor << " alarm beginService quesize: " <<_queue->queuesize() << endl;
         _queue->beginService();
     }
     int next_absolute_slice = _top->time_to_absolute_slice(t) + 1;

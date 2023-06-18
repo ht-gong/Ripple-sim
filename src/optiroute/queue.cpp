@@ -81,7 +81,14 @@ void Queue::sendFromQueue(Packet* pkt) {
             pkt->set_lasthop(true);
             // if this port is not connected to _dst, then drop the packet
             if (!top->port_dst_match(pkt->get_crtport(), pkt->get_crtToR(), pkt->get_dst())) {
-
+                unsigned seqno = 0;
+                if(pkt->type() == TCP) {
+                    seqno = ((TcpPacket*)pkt)->seqno();
+                } else if (pkt->type() == TCPACK) {
+                    seqno = ((TcpAck*)pkt)->ackno();
+                } else if (pkt->type() == NDP) {
+                    seqno = ((NdpPacket*)pkt)->seqno();
+                }
                 switch (pkt->type()) {
                     case RLB:
                         cout << "!!! RLB";
@@ -104,7 +111,7 @@ void Queue::sendFromQueue(Packet* pkt) {
                         tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
                 }
                 cout << " packet dropped: port & dst didn't match! (queue.cpp)" << endl;
-                cout << "    ToR = " << pkt->get_crtToR() << ", port = " << pkt->get_crtport() <<
+                cout << seqno << "    ToR = " << pkt->get_crtToR() << ", port = " << pkt->get_crtport() <<
                     ", src = " << pkt->get_src() << ", dst = " << pkt->get_dst() << endl;
 
                 pkt->free(); // drop the packet
@@ -145,7 +152,6 @@ void Queue::receivePacket(Packet& pkt) {
     _num_drops++;
 	return;
     }
-
     /* enqueue the packet */
     bool queueWasEmpty = _enqueued.empty();
     _enqueued.push_front(&pkt);

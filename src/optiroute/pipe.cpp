@@ -150,14 +150,23 @@ void Pipe::sendFromPipe(Packet *pkt) {
             // we compute the current slice at the end of the packet transmission
             // !!! as a future optimization, we could have the "wrong" host NACK any packets
             // that go through at the wrong time
-            int slice = top->time_to_slice(eventlist().now());
+            int slice = top->time_to_slice(eventlist().now() - _delay);
 
             int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
-            if (nextToR >= 0 && !top->is_reconfig(eventlist().now())) {// the rotor switch is up
+            if (nextToR >= 0) {// the rotor switch is up
                 pkt->set_crtToR(nextToR);
-
             } else { // the rotor switch is down, "drop" the packet
+                unsigned seqno = 0;
+                if(pkt->type() == TCP) {
+                    seqno = ((TcpPacket*)pkt)->seqno();
+                } else if (pkt->type() == TCPACK) {
+                    seqno = ((TcpAck*)pkt)->ackno();
+                } else if (pkt->type() == NDP) {
+                    seqno = ((NdpPacket*)pkt)->seqno();
+                }
+                
                 switch (pkt->type()) {
+                    
                     case RLB:
                         {
                             // for now, let's just return the packet rather than implementing the RLB NACK mechanism

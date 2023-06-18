@@ -47,6 +47,7 @@ class DynExpTopology: public Topology{
   simtime_picosec get_slice_time() {return _tot_time;} // picoseconds spent in total
   simtime_picosec get_relative_time(simtime_picosec t);
   int time_to_slice(simtime_picosec t);
+  int absolute_slice_to_slice(int slice);
   int time_to_absolute_slice(simtime_picosec t);
   simtime_picosec get_slice_start_time(int slice); 
   bool is_reconfig(simtime_picosec t);
