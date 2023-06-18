@@ -15,11 +15,15 @@ class PacketFlow;
 class PacketSink;
 typedef uint32_t packetid_t;
 //void print_route(const Route& route);
+enum RouteStrategy {NOT_SET, SINGLE_PATH, SCATTER_PERMUTE, SCATTER_RANDOM, PULL_BASED};
 
 class NdpSink;
 class NdpSrc;
+class TcpSink;
+class TcpSrc;
 class RlbSink;
 class RlbSrc;
+class RTTSampler;
 
 
 class DataReceiver {
@@ -47,7 +51,7 @@ class PacketFlow : public Logged {
 };
 
 
-typedef enum {IP, TCP, TCPACK, TCPNACK, NDP, NDPACK, NDPNACK, NDPPULL, NDPLITE, NDPLITEACK, NDPLITEPULL, NDPLITERTS, ETH_PAUSE, RLB} packet_type;
+typedef enum {IP, TCP, TCPACK, TCPNACK, NDP, NDPACK, NDPNACK, NDPPULL, NDPLITE, NDPLITEACK, NDPLITEPULL, NDPLITERTS, ETH_PAUSE, RLB, SAMPLE} packet_type;
 
 class VirtualQueue {
  public:
@@ -100,7 +104,10 @@ class Packet {
     PacketFlow& flow() const {return *_flow;}
     virtual ~Packet() {};
     inline const packetid_t id() const {return _id;}
-    inline uint32_t flow_id() const {return _flow->flow_id();}
+    void set_packetid(packetid_t id) {_id = id;}
+    //inline uint64_t flow_id() const {return _flow->flow_id();}
+    inline uint64_t flow_id() const {return _flowid;}
+    inline void set_flow_id(uint64_t id) {_flowid = id;}
     // packets don't have routes anymore...
     //const Route* route() const {return _route;}
     //const Route* reverse_route() const {return _route->reverse();}
@@ -140,6 +147,13 @@ class Packet {
     int get_maxhops() {return _maxhops;}
     void set_crtport(int port) {_crtport = port;}
     int get_crtport() {return _crtport;}
+    void set_queueing(unsigned queueing) {_queueing = queueing;}
+    unsigned get_queueing() {return _queueing;}
+    void inc_queueing(unsigned queueing) {_queueing += queueing;}
+    void clear_path() {_tor_path.clear();}
+    vector<int> get_path() {return _tor_path;}
+    void add_hop(int tor) {_tor_path.push_back(tor);}
+    void set_path(vector<int> path) { _tor_path = path;}
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -149,6 +163,8 @@ class Packet {
 
     virtual inline NdpSink* get_ndpsink(){return NULL;}
     virtual inline NdpSrc* get_ndpsrc(){return NULL;}
+    virtual inline TcpSrc* get_tcpsrc(){return NULL;}
+    virtual inline TcpSink* get_tcpsink(){return NULL;}
 
     // stuff used for RLB:
     void set_dst(int dst) {_dst = dst;} // the current sending host
@@ -171,6 +187,8 @@ class Packet {
     void set_time_sent(uint64_t time) {_time_sent = time;}
     uint64_t get_time_sent() {return _time_sent;}
     uint64_t _time_sent;
+    void set_fabricts(simtime_picosec ts) {_fabricts = ts;}
+    simtime_picosec get_fabricts() {return _fabricts;}
 
 
  protected:
@@ -183,10 +201,13 @@ class Packet {
     packet_type _type;
     
     uint16_t _size;
+    uint64_t _flowid;
     bool _is_header;
     bool _bounced; // packet has hit a full queue, and is being bounced back to the sender
     bool _been_bounced; // packet has been bounced previously (for debugging only as of 9/4/18)
     uint32_t _flags; // used for ECN & friends
+    simtime_picosec _fabricts; //timestamp from nic sentout
+    unsigned _queueing; //amount of queueing packet goes through
 
     ///////// For RLB //////////
 
@@ -195,10 +216,12 @@ class Packet {
 
     ///////// For label-switched routing: /////////
 
-    DynExpTopology* _top;
     // rather than give the packet a route, we just give it access to the topology
     // this is used for label switching
     // it also allows us to drop/misroute packets if they're sent at the wrong time
+    DynExpTopology* _top;
+    //packet path tracking
+    vector<int> _tor_path;
 
     int _src_ToR; // we use this for routing since RTS packets can have a src node and "src ToR" that don't match
 
@@ -211,6 +234,7 @@ class Packet {
     bool _lasthop;
     int _maxhops;
     int _crtport;
+
 
     packetid_t _id;
     PacketFlow* _flow;

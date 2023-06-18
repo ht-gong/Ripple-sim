@@ -66,6 +66,7 @@ class NdpPacket : public Packet {
     seq_t _seqno;
     seq_t _pacerno;  // the pacer sequence number from the pull, seq space is common to all flows on that pacer
     simtime_picosec _ts;
+    int _slice;
     bool _retransmitted;
     int32_t _no_of_paths;  // how many paths are in the sender's
 			    // list.  A real implementation would not

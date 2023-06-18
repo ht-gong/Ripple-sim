@@ -14,7 +14,7 @@
 
 #ifndef QT
 #define QT
-typedef enum {COMPOSITE} queue_type;
+typedef enum {DEFAULT, COMPOSITE, ECN} queue_type;
 #endif
 
 class Queue;
@@ -45,8 +45,14 @@ class DynExpTopology: public Topology{
 
   int64_t get_nsuperslice() {return _nsuperslice;}
   simtime_picosec get_slicetime(int ind) {return _slicetime[ind];} // picoseconds spent in each slice
+  int time_to_superslice(simtime_picosec t);
+  int time_to_slice(simtime_picosec t); // Given a time, return the slice number (within a cycle)
+  int time_to_absolute_slice(simtime_picosec t); // Given a time, return the absolute slice number
+  simtime_picosec get_slice_start_time(int slice); // Get the start of a slice
   int get_firstToR(int node) {return node / _ndl;}
   int get_lastport(int dst) {return dst % _ndl;}
+  int uplink_to_tor(int uplink);
+  int uplink_to_port(int uplink);
 
   // defined in source file
   int get_nextToR(int slice, int crtToR, int crtport);
@@ -55,6 +61,11 @@ class DynExpTopology: public Topology{
   bool port_dst_match(int port, int crtToR, int dst);
   int get_no_paths(int srcToR, int dstToR, int slice);
   int get_no_hops(int srcToR, int dstToR, int slice, int path_ind);
+  int get_nslices() {return _nslice;} 
+  pair<int, int> get_direct_routing(int srcToR, int dstToR, int slice); // Direct routing between src and dst ToRs
+  unsigned get_host_buffer(int host);
+  void inc_host_buffer(int host);
+  void decr_host_buffer(int host);
 
 
   Logfile* logfile;
@@ -81,6 +92,8 @@ class DynExpTopology: public Topology{
 
  private:
   map<Queue*,int> _link_usage;
+  map<int, unsigned> _host_buffers;
+  map<int, unsigned> _max_host_buffers;
   void read_params(string topfile);
   void set_params();
   // Tor-to-Tor connections across time
@@ -89,6 +102,9 @@ class DynExpTopology: public Topology{
   // label switched paths
   // indexing: [src][dst][slice][path_ind][sequence of switch ports (queues)]
   vector<vector<vector<vector<vector<int>>>>> _lbls;
+  // Connected time slices
+  // indexing: [src][dst] -> <time_slice, port> where the src-dst ToRs are connected
+  vector<vector<vector<pair<int, int>>>> _connected_slices;
   int _ndl, _nul, _ntor, _no_of_nodes; // number down links, number uplinks, number ToRs, number servers
   int _nslice; // number of topologies
   int64_t _nsuperslice; // number of "superslices" (periodicity of topology)

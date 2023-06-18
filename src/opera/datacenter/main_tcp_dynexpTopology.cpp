@@ -13,7 +13,7 @@
 #include "logfile.h"
 #include "loggers.h"
 #include "clock.h"
-#include "ndp.h"
+#include "tcp.h"
 #include "compositequeue.h"
 #include "topology.h"
 #include <list>
@@ -33,14 +33,14 @@ uint32_t delay_ToR2ToR = 500; // tor-to-tor link delay in nanoseconds
 
 #define DEFAULT_PACKET_SIZE 1500 // MAXIMUM FULL packet size (includes header + payload), Bytes
 #define DEFAULT_HEADER_SIZE 64 // header size, Bytes
-    // note: there is another parameter defined in `ndppacket.h`: "ACKSIZE". This should be set to the same size.
-// set the NDP queue size in units of packets (of length DEFAULT_PACKET_SIZE Bytes)
-#define DEFAULT_QUEUE_SIZE 8
+
+#define DEFAULT_QUEUE_SIZE 300
 
 string ntoa(double n); // convert a double to a string
 string itoa(uint64_t n); // convert an int to a string
 
 EventList eventlist;
+uint64_t flow_id_gen;
 
 Logfile* lg;
 
@@ -82,6 +82,7 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-q")){
 	       queuesize = atoi(argv[i+1]) * DEFAULT_PACKET_SIZE;
 	       i++;
+        /*
         } else if (!strcmp(argv[i],"-strat")){
             if (!strcmp(argv[i+1], "perm")) {
                 route_strategy = SCATTER_PERMUTE;
@@ -93,6 +94,7 @@ int main(int argc, char **argv) {
                 route_strategy = SINGLE_PATH;
             }
             i++;
+        */
         } else if (!strcmp(argv[i],"-cutoff")) {
             cutoff = atof(argv[i+1]);
             i++;
@@ -105,9 +107,11 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-topfile")) {
             topfile = argv[i+1];
             i++;
+        /*
         } else if (!strcmp(argv[i],"-pullrate")) {
             pull_rate = atof(argv[i+1]);
             i++;
+        */
         } else if (!strcmp(argv[i],"-simtime")) {
             simtime = atof(argv[i+1]);
             i++;
@@ -125,12 +129,14 @@ int main(int argc, char **argv) {
     eventlist.setEndtime(timeFromSec(simtime)); // in seconds
     Clock c(timeFromSec(5 / 100.), eventlist);
 
+    /*
     route_strategy = SCATTER_RANDOM; // only one routing strategy for now...
       
     if (route_strategy == NOT_SET) {
 	   fprintf(stderr, "Route Strategy not set.  Use the -strat param.  \nValid values are perm, rand, pull, rg and single\n");
 	   exit(1);
     }
+    */
 
     //cout << "cwnd " << cwnd << endl;
     //cout << "Logging to " << filename.str() << endl;
@@ -144,27 +150,28 @@ int main(int argc, char **argv) {
 
     // NdpSinkLoggerSampling object will iterate through all NdpSinks and log their rate every
     // X microseconds. This is used to get throughput measurements after the experiment ends.
-    NdpSinkLoggerSampling sinkLogger = NdpSinkLoggerSampling(timeFromUs(50.), eventlist);
+    TcpSinkLoggerSampling sinkLogger = TcpSinkLoggerSampling(timeFromUs(50.), eventlist);
 
     logfile.addLogger(sinkLogger);
-    NdpTrafficLogger traffic_logger = NdpTrafficLogger();
+    TcpTrafficLogger traffic_logger = TcpTrafficLogger();
     logfile.addLogger(traffic_logger);
-    NdpRtxTimerScanner ndpRtxScanner(timeFromMs(1), eventlist);
+    TcpRtxTimerScanner tcpRtxScanner(timeFromMs(1), eventlist);
 
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, COMPOSITE, topfile);
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, DEFAULT, topfile);
 #endif
 
 	// initialize all sources/sinks
-    NdpSrc::setMinRTO(1000); // microseconds
-    NdpSrc::setRouteStrategy(route_strategy);
-    NdpSink::setRouteStrategy(route_strategy);
+    //NdpSrc::setMinRTO(1000); // microseconds
+    //NdpSrc::setRouteStrategy(route_strategy);
+    //NdpSink::setRouteStrategy(route_strategy);
 
     // debug:
     cout << "Loading traffic..." << endl;
 
+    map<uint64_t, TcpSrc*> flow_map;
     //ifstream input("flows.txt");
     ifstream input(flowfile);
     if (input.is_open()){
@@ -175,7 +182,6 @@ int main(int argc, char **argv) {
             vector<int64_t> vtemp;
             getline(input, line);
             stringstream stream(line);
-            if (line.length() <= 0) continue;
             while (stream >> temp)
                 vtemp.push_back(temp);
             //cout << "src = " << vtemp[0] << ", dest = " << vtemp[1] << ", bytes =  " << vtemp[2] << ", start_time[us] " << vtemp[3] << endl;
@@ -183,43 +189,26 @@ int main(int argc, char **argv) {
             // source and destination hosts for this flow
             int flow_src = vtemp[0];
             int flow_dst = vtemp[1];
+            int flow_size = vtemp[2];
 
-            if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
+            TcpSrc* flowSrc = new TcpSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, flow_size > cutoff);
+            //flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
+            flowSrc->set_flowsize(flow_size); // bytes
+            flowSrc->set_flowid(flow_id_gen++);
+            flow_map[flowSrc->get_flowid()] = flowSrc;
 
-                // generate an NDP source/sink:
-                NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
-                flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
-                flowSrc->set_flowsize(vtemp[2]); // bytes
+            // Set the pull rate to something reasonable.
+            // we can be more aggressive if the load is lower
+            //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); // 1 = pull at line rate
+            //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, .17);
 
-                // Set the pull rate to something reasonable.
-                // we can be more aggressive if the load is lower
-                NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); // 1 = pull at line rate
-                //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, .17);
+            TcpSink* flowSnk = new TcpSink();
+            tcpRtxScanner.registerTcp(*flowSrc);
 
-                NdpSink* flowSnk = new NdpSink(top, flowpacer, flow_src, flow_dst);
-                ndpRtxScanner.registerNdp(*flowSrc);
+            // set up the connection event
+            flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
 
-                // set up the connection event
-                flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
-
-                sinkLogger.monitorSink(flowSnk);
-
-            }  else { // background flow, send it over RLB
-                continue;
-
-                // generate an RLB source/sink:
-
-                RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
-                // debug:
-                //cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
-                flowSrc->set_flowsize(vtemp[2]); // bytes
-
-                RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
-
-                // set up the connection event
-                flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
-
-            }
+            sinkLogger.monitorSink(flowSnk);
         }
     }
 
@@ -229,10 +218,9 @@ int main(int argc, char **argv) {
     //master->start();
 
     // NOTE: UtilMonitor defined in "pipe"
-    //UtilMonitor* UM = new UtilMonitor(top, eventlist);
-    //UM->start(timeFromSec(utiltime)); // print utilization every X milliseconds.
+    UtilMonitor* UM = new UtilMonitor(top, eventlist, flow_map);
+    UM->start(timeFromSec(utiltime)); // print utilization every X milliseconds.
 
-    // debug:
     cout << "Starting... " << endl;
 
 

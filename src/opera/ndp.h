@@ -29,7 +29,6 @@
 // *** don't change this default - override it by calling NdpSrc::setMinRTO()
 #define DEFAULT_RTO_MIN 5000
 
-enum RouteStrategy {NOT_SET, SINGLE_PATH, SCATTER_PERMUTE, SCATTER_RANDOM, PULL_BASED};
 
 class NdpSink;
 
@@ -77,7 +76,7 @@ class NdpSrc : public PacketSink, public EventSource {
 
     virtual void rtx_timer_hook(simtime_picosec now, simtime_picosec period);
 
-    Queue* sendToNIC(NdpPacket* pkt);
+    Queue* sendToNIC(Packet* pkt);
 
     // should really be private, but loggers want to see:
     uint64_t _highest_sent;  //seqno is in bytes
@@ -93,6 +92,7 @@ class NdpSrc : public PacketSink, public EventSource {
     uint64_t _last_acked;
     uint32_t _flight_size;
     uint32_t _acked_packets;
+    uint32_t _found_reorder = 0;
 
     // the following are used with SCATTER_PERMUTE, SCATTER_RANDOM and PULL_BASED route strategies
 
@@ -230,6 +230,10 @@ class NdpSink : public PacketSink, public DataReceiver, public Logged {
     NdpPacket::seq_t _last_packet_seqno; //sequence number of the last
                                          //packet in the connection (or 0 if not known)
     uint64_t _total_received;
+
+    simtime_picosec last_ts = 0;
+    unsigned last_hops = 0;
+    unsigned last_queueing = 0;
  
     // Mechanism
     void send_ack(simtime_picosec ts, NdpPacket::seq_t ackno, NdpPacket::seq_t pacer_no);

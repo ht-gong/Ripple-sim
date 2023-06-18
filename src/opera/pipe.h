@@ -38,14 +38,16 @@ class Pipe : public EventSource, public PacketSink {
 class UtilMonitor : public EventSource {
  public:
 
-    UtilMonitor(DynExpTopology* top, EventList &eventlist);
+    UtilMonitor(DynExpTopology* top, EventList &eventlist, map<uint64_t, TcpSrc*> flow_map);
 
     void start(simtime_picosec period);
     void doNextEvent();
     void printAggUtil();
+    map<uint64_t, float> findIdealShare();
 
     DynExpTopology* _top;
     simtime_picosec _period; // picoseconds between utilization reports
+    map<uint64_t, TcpSrc*> _flow_map;
     uint64_t _max_agg_Bps; // delivered to endhosts, across the whole network
     uint64_t _max_B_in_period;
     int _H; // number of hosts
