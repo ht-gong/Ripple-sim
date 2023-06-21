@@ -197,8 +197,10 @@ TcpSrc::receivePacket(Packet& pkt)
     int slice = _top->time_to_superslice(eventlist().now());
     //cout << "TcpSrc receive packet ackno:" << seqno << endl;
 
+    _last_hop_per_trip = pkt.get_crthop();
+    if(pkt.get_crthop() > _max_hops_per_trip)
+        _max_hops_per_trip = pkt.get_crthop();
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
-
     ts = p->ts();
     packetid_t pktid = p->id();
     vector<int> rtt_path = p->get_path();
@@ -259,7 +261,8 @@ TcpSrc::receivePacket(Packet& pkt)
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << endl;
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << " " 
+            << _max_hops_per_trip << " " << _last_hop_per_trip << endl;
 	/*
         cout << "PATHS " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() << " ";
         for(vector<int> path : _sink->_used_paths) {
@@ -855,6 +858,10 @@ TcpSink::receivePacket(Packet& pkt) {
     simtime_picosec fts = p->get_fabricts();
     int pktslice = p->get_tcp_slice();
 
+    pkt.get_tcpsrc()->_last_hop_per_trip = pkt.get_crthop();
+    if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
+        pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
+
     //check paths
     vector<int> used_path = pkt.get_path();
     //new path, push back
@@ -1256,7 +1263,7 @@ void
 RTTSampler::srcRecv(Packet* p) {
     simtime_picosec ts = ((SamplePacket*)p)->ts();
     p->free();
-    cout << "RTT " << eventlist().now()-ts << " " << eventlist().now() << endl;
+    // cout << "RTT " << eventlist().now()-ts << " " << eventlist().now() << endl;
 }
 
 Queue*
