@@ -5,7 +5,7 @@ from itertools import islice
 
 # picoseconds
 connected_time = 100000000
-reconfig_time = 630000 
+reconfig_time = 10000
 
 node_count = 648
 tor_count = 108
@@ -18,31 +18,45 @@ cycle_count = tor_count // uplink_count
 # Odd slices are all connected, even slices are reconfig slices
 slice_count = cycle_count
 
-f = open(f'general_from_dynexp_N={tor_count}_topK={K}.txt', 'w')
-f.write(f'{node_count} {downlink_count} {uplink_count} {tor_count}\n')
-f.write(f'{slice_count} {connected_time - reconfig_time} {reconfig_time}\n')
+towrite = []
 
-df = pd.read_csv('topology_matrix.txt', delim_whitespace=True, header=None)
-raw_top = df.to_numpy()
+towrite.append(open(f'general_from_dynexp_N={tor_count}_topK={K}.txt', 'w'))
+towrite.append(open(f'ecmp_from_dynexp_N={tor_count}_topK={K}.txt', 'w'))
 
-top = np.zeros((tor_count, uplink_count, cycle_count), dtype=int)
-for tor in range(tor_count):
-    for cycle in range(cycle_count):
-        top[tor, :, cycle] = raw_top[tor, cycle::cycle_count]
+for f in towrite:
+    f.write(f'{node_count} {downlink_count} {uplink_count} {tor_count}\n')
+    f.write(f'{slice_count} {connected_time} {reconfig_time}\n')
 
-print(top[31, :, 9])
+    df = pd.read_csv('topology_matrix.txt', delim_whitespace=True, header=None)
+    raw_top = df.to_numpy()
 
-for cycle in range(cycle_count):
-    line = np.zeros((0), dtype=int)
+    top = np.zeros((tor_count, uplink_count, cycle_count), dtype=int)
     for tor in range(tor_count):
-        line = np.concatenate((line, top[tor, :, cycle]))
-    f.write(' '.join(str(i) for i in line) + '\n')
+        for cycle in range(cycle_count):
+            top[tor, :, cycle] = raw_top[tor, cycle::cycle_count]
 
-f2 = open('ksp.txt', 'r')
-f.write(f2.read())
+    for cycle in range(cycle_count):
+        line = np.zeros((0), dtype=int)
+        for tor in range(tor_count):
+            line = np.concatenate((line, top[tor, :, cycle]))
+        f.write(' '.join(str(i) for i in line) + '\n')
 
-f.close()
-f2.close()
+with open('ksp.txt', 'r') as f:
+    towrite[0].write(f.read())
+
+with open('ksp.txt', 'r') as f:
+    for cycle in range(cycle_count):
+        towrite[1].write(f.readline())
+        for _ in range(tor_count * (tor_count - 1)):
+            paths = []
+            paths.extend(f.readline() for i in range(K))
+            paths = list(filter(lambda x: len(x) == len(paths[0]), paths))
+            print(paths)
+            for path in paths:
+                towrite[1].write(path)
+
+for f in towrite:
+    f.close()
 
 
 

@@ -22,10 +22,12 @@ for tor in range(tor_count):
         top[tor, :, cycle] = raw_top[tor, cycle::cycle_count]
 
 f = open('ksp.txt', 'w')
-f2 = open('ksp_org.txt', 'w')
 
 bucket_shortest = np.zeros(10)
 bucket_topk = np.zeros(10)
+
+shortestsize = np.zeros(10)
+shortestsizecyc0 = np.zeros(10)
 
 for cycle in range(cycle_count):
     print(f"Calculating KSP for slice {cycle}")
@@ -68,8 +70,28 @@ for cycle in range(cycle_count):
             if src == dst:
                 continue
             paths = path_dict[(src, dst)]
-            f2.write(str([src, dst] + paths) + '\n')
-                
+            counter = 0
+            for path in paths:
+                if len(path) == len(paths[0]):
+                    counter += 1
+            shortestsize[counter] += 1
+            if cycle == 0:
+                shortestsizecyc0[counter] += 1
+
+print(shortestsize, np.sum(shortestsize))
+shortestsize = shortestsize[1:max(np.flatnonzero(shortestsize)) + 1]
+ind = np.arange(1, len(shortestsize) + 1, dtype=int)                
+plt.bar(ind, shortestsize / np.sum(shortestsize), color='g')
+plt.title("PDF of number of shortest paths")
+plt.savefig(f"./tmp/no_shortest_path_hist.png")  
+plt.clf()
+
+shortestsizecyc0 = shortestsizecyc0[1:max(np.flatnonzero(shortestsize)) + 1]
+ind = np.arange(1, len(shortestsizecyc0) + 1, dtype=int)                
+plt.bar(ind, shortestsizecyc0 / np.sum(shortestsizecyc0), color='g')
+plt.title("PDF of number of shortest paths in 0th slice")
+plt.savefig(f"./tmp/no_shortest_path_hist_0.png")  
+plt.clf()
 
 bucket_shortest = bucket_shortest[1:max(np.flatnonzero(bucket_shortest)) + 1]
 ind = np.arange(1, len(bucket_shortest) + 1, dtype=int)
@@ -88,7 +110,6 @@ plt.bar(ind, bucket_topk / np.sum(bucket_topk), color='g')
 plt.savefig(f"./tmp/top{K}_paths_hist.png")  
 
 f.close()
-f2.close()
 
 
     
