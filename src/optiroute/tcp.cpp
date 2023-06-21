@@ -220,8 +220,8 @@ TcpSrc::receivePacket(Packet& pkt)
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << endl;
-        cout << _max_hops_per_trip << " " << _last_hop_per_trip << '\n';
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change 
+            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << '\n';
         //if (_found_reorder == 0) assert(_found_retransmit == 0);
         /*
         if (get_flow_src() == 355 && get_flow_dst() == 429) {
@@ -827,8 +827,8 @@ TcpSink::receivePacket(Packet& pkt) {
     if (waiting_for_seq) {
 	if(_received.empty() || cons_out_of_seq_n < 3) {
             if(!(fts > out_of_seq_fts)) {
-            cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
-                << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
+            // cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
+            //     << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
             }
             waiting_for_seq = false;
             out_of_seq_n = 0;

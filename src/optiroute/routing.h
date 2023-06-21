@@ -3,19 +3,23 @@
 #define ROUTING_H
 
 #include <list>
-#include "queue.h"
 #include "config.h"
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
 
+class Queue;
 // A util class
 class Routing {
  public:
-   Routing() {}
+   Routing(RoutingAlgorithm routalg) {
+    _routing_algorithm = routalg;
+   };
    simtime_picosec routing(Packet* pkt, simtime_picosec t);
    simtime_picosec reroute(Packet* pkt, simtime_picosec t, simtime_picosec finish_push);
    simtime_picosec routingFromPQ(Packet* pkt, simtime_picosec t);
+ private:
+   RoutingAlgorithm _routing_algorithm;
 };
 
 // Set events to activate next calendar queue

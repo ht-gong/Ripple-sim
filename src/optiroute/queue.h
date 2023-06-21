@@ -8,7 +8,7 @@
 
 #include <list>
 #include "config.h"
-#include "datacenter/dynexp_topology.h"
+#include "dynexp_topology.h"
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
@@ -16,14 +16,14 @@
 
 class QueueAlarm;
 class Routing;
+class DynExpTopology;
 
 class Queue : public EventSource, public PacketSink {
  public:
-
     Queue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
-	  QueueLogger* logger);
+	  QueueLogger* logger, Routing* routing);
     Queue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
-	  QueueLogger* logger, int tor, int port, DynExpTopology *top);
+	  QueueLogger* logger, int tor, int port, DynExpTopology *top, Routing *routing);
     virtual void receivePacket(Packet& pkt);
     void doNextEvent();
 
@@ -65,7 +65,7 @@ class Queue : public EventSource, public PacketSink {
     virtual const string& nodename() { return _nodename; }
 
     friend class QueueAlarm;
-    friend class HohoRouting;
+    friend class Routing;
 
  protected:
     // Housekeeping
@@ -98,7 +98,7 @@ class PriorityQueue : public Queue {
  public:
     typedef enum {Q_RLB=0, Q_LO=1, Q_MID=2, Q_HI=3, Q_NONE=4} queue_priority_t;
     PriorityQueue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
-		  QueueLogger* logger, int node, DynExpTopology *top);
+		  QueueLogger* logger, int node, DynExpTopology *top, Routing* routing);
     virtual void receivePacket(Packet& pkt);
     virtual mem_b queuesize();
     mem_b slice_queuesize(int slice);

@@ -18,7 +18,7 @@
 class Pipe : public EventSource, public PacketSink {
  public:
 
-    Pipe(simtime_picosec delay, EventList& eventlist);
+    Pipe(simtime_picosec delay, EventList& eventlist, Routing* routing);
     void receivePacket(Packet& pkt); // inherited from PacketSink
     void doNextEvent(); // inherited from EventSource
 
@@ -34,7 +34,7 @@ class Pipe : public EventSource, public PacketSink {
     typedef pair<simtime_picosec,Packet*> pktrecord_t;
     list<pktrecord_t> _inflight; // the packets in flight (or being serialized)
     string _nodename;
-    Routing _routing;
+    Routing* _routing;
 };
 
 class UtilMonitor : public EventSource {

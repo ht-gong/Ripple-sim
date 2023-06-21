@@ -5,9 +5,9 @@
 //#include "pipe.h" // mod
 #include "config.h"
 #include "loggers.h" // mod
-//#include "network.h" // mod
 #include "topology.h"
 #include "logfile.h" // mod
+#include "routing_util.h"
 #include "eventlist.h"
 #include <ostream>
 #include <vector>
@@ -21,6 +21,7 @@ class Queue;
 class Pipe;
 class Logfile;
 class RlbModule;
+class Routing;
 
 class DynExpTopology: public Topology{
   public:
@@ -73,15 +74,15 @@ class DynExpTopology: public Topology{
   int failed_links;
   queue_type qt;
 
-  DynExpTopology(mem_b queuesize, Logfile* log, EventList* ev, queue_type q, string topfile);
+  DynExpTopology(mem_b queuesize, Logfile* log, EventList* ev, queue_type q, string topfile, RoutingAlgorithm routalg);
 
   void init_network();
 
   RlbModule* alloc_rlb_module(DynExpTopology* top, int node);
 
-  Queue* alloc_src_queue(DynExpTopology* top, QueueLogger* q, int node);
-  Queue* alloc_queue(QueueLogger* q, mem_b queuesize, int tor, int port);
-  Queue* alloc_queue(QueueLogger* q, uint64_t speed, mem_b queuesize, int tor, int port);
+  Queue* alloc_src_queue(DynExpTopology* top, QueueLogger* q, int node, Routing* routing);
+  Queue* alloc_queue(QueueLogger* q, mem_b queuesize, int tor, int port, Routing* routing);
+  Queue* alloc_queue(QueueLogger* q, uint64_t speed, mem_b queuesize, int tor, int port, Routing* routing);
 
   void count_queue(Queue*);
   //vector<int>* get_neighbours(int src) {return NULL;};
@@ -104,6 +105,7 @@ class DynExpTopology: public Topology{
   vector<vector<vector<vector<vector<int>>>>> _lbls;
   int _ndl, _nul, _ntor, _no_of_nodes; // number down links, number uplinks, number ToRs, number servers
   int _nslice; // number of topologies
+  RoutingAlgorithm _routalg;
   simtime_picosec _connected_time; // duration of one connected topology
   simtime_picosec _reconfig_time;  // time it takes to reconfigure entire topology
   simtime_picosec _tot_time;  // slice time + reconfiguration time

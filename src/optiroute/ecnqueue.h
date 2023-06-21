@@ -16,7 +16,7 @@
 class ECNQueue : public Queue {
  public:
     ECNQueue(linkspeed_bps bitrate, mem_b maxsize, EventList &eventlist, 
-		QueueLogger* logger, mem_b drop, int tor, int port, DynExpTopology *top);
+		QueueLogger* logger, mem_b drop, int tor, int port, DynExpTopology *top, Routing* routing);
     void receivePacket(Packet & pkt);
     void beginService();
     void completeService();

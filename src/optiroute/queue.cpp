@@ -15,9 +15,9 @@
 #include "tcp.h"
 #include "rlbmodule.h"
 
-Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger)
+Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger, Routing* routing)
   : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(0), _port(0), _top(NULL),
-    _logger(logger), _bitrate(bitrate), _num_drops(0)
+    _logger(logger), _bitrate(bitrate), _num_drops(0), _routing(routing)
 {
     _queuesize = 0;
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
@@ -26,15 +26,14 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
     //_nodename = ss.str();
 }
 
-Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger, int tor, int port, DynExpTopology *top)
+Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger, int tor, int port, DynExpTopology *top, Routing* routing)
   : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(tor), _port(port), _top(top),
-    _logger(logger), _bitrate(bitrate), _num_drops(0)
+    _logger(logger), _bitrate(bitrate), _num_drops(0), _routing(routing)
 {
     _queuesize = 0;
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
     stringstream ss;
     _max_recorded_size.resize(_top->get_nslices());
-    _routing = new Routing();
     _queue_alarm = new QueueAlarm(eventlist, port, this, top);
     //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
     //_nodename = ss.str();
@@ -192,8 +191,8 @@ simtime_picosec Queue::get_queueing_delay(int slice){
 //////////////////////////////////////////////////
 
 PriorityQueue::PriorityQueue(linkspeed_bps bitrate, mem_b maxsize, 
-			     EventList& eventlist, QueueLogger* logger, int node, DynExpTopology *top)
-    : Queue(bitrate, maxsize, eventlist, logger)
+			     EventList& eventlist, QueueLogger* logger, int node, DynExpTopology *top, Routing* routing)
+    : Queue(bitrate, maxsize, eventlist, logger, routing)
 {
     _node = node;
     _top = top;

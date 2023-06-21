@@ -4,8 +4,8 @@
 #include <iostream>
 
 RandomQueue::RandomQueue(linkspeed_bps bitrate, mem_b maxsize, 
-			 EventList& eventlist, QueueLogger* logger, mem_b drop)
-    : Queue(bitrate,maxsize,eventlist,logger), 
+			 EventList& eventlist, QueueLogger* logger, mem_b drop, Routing* routing)
+    : Queue(bitrate,maxsize,eventlist,logger,routing), 
       _drop(drop),
       _buffer_drops(0)
 {

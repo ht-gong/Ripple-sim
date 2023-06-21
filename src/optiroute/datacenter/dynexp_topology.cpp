@@ -22,11 +22,12 @@ extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 string ntoa(double n);
 string itoa(uint64_t n);
 
-DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, string topfile){
+DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, string topfile, RoutingAlgorithm routalg){
     _queuesize = queuesize;
     logfile = lg;
     eventlist = ev;
     qt = q;
+    _routalg = routalg;
 
     read_params(topfile);
  
@@ -139,27 +140,28 @@ RlbModule* DynExpTopology::alloc_rlb_module(DynExpTopology* top, int node) {
     return new RlbModule(top, *eventlist, node); // *** all the other params (e.g. link speed) are HARD CODED in RlbModule constructor
 }
 
-Queue* DynExpTopology::alloc_src_queue(DynExpTopology* top, QueueLogger* queueLogger, int node) {
-    return new PriorityQueue(speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node, this);
+Queue* DynExpTopology::alloc_src_queue(DynExpTopology* top, QueueLogger* queueLogger, int node, Routing* routing) {
+    return new PriorityQueue(speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node, this, routing);
 }
 
-Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, int tor, int port) {
-    return alloc_queue(queueLogger, HOST_NIC, queuesize, tor, port);
+Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, int tor, int port, Routing* routing) {
+    return alloc_queue(queueLogger, HOST_NIC, queuesize, tor, port, routing);
 }
 
-Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port) {
+Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port, Routing* routing) {
     if (qt==COMPOSITE)
-        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this);
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, routing);
     else if (qt==DEFAULT)
-        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this);
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, routing);
     else if (qt==ECN)
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port, this);
+        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port, this, routing);
     assert(0);
 }
 
 // initializes all the pipes and queues in the Topology
 void DynExpTopology::init_network() {
   QueueLoggerSampling* queueLogger;
+  Routing* routing = new Routing(_routalg);
 
   // initialize server to ToR pipes / queues
   for (int j = 0; j < _no_of_nodes; j++) { // sweep nodes
@@ -175,13 +177,13 @@ void DynExpTopology::init_network() {
 
     rlb_modules[j] = alloc_rlb_module(this, j);
 
-    queues_serv_tor[j] = alloc_src_queue(this, queueLogger, j);
+    queues_serv_tor[j] = alloc_src_queue(this, queueLogger, j , routing);
     ostringstream oss;
     oss << "NICQueue " << j;
     queues_serv_tor[j]->setName(oss.str());
     //queues_serv_tor[j][k]->setName("Queue-SRC" + ntoa(k + j*_ndl) + "->TOR" +ntoa(j));
     //logfile->writeName(*(queues_serv_tor[j][k]));
-    pipes_serv_tor[j] = new Pipe(timeFromNs(delay_host2ToR), *eventlist);
+    pipes_serv_tor[j] = new Pipe(timeFromNs(delay_host2ToR), *eventlist, routing);
     //pipes_serv_tor[j][k]->setName("Pipe-SRC" + ntoa(k + j*_ndl) + "->TOR" + ntoa(j));
     //logfile->writeName(*(pipes_serv_tor[j][k]));
   }
@@ -201,7 +203,7 @@ void DynExpTopology::init_network() {
         // it's a downlink to a server
         queueLogger = new QueueLoggerSampling(timeFromMs(1000), *eventlist);
         logfile->addLogger(*queueLogger);
-        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k);
+        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k, routing);
         ostringstream oss;
         if (qt==COMPOSITE)
           oss << "CompositeQueue";
@@ -213,7 +215,7 @@ void DynExpTopology::init_network() {
         queues_tor[j][k]->setName(oss.str());
         //queues_tor[j][k]->setName("Queue-TOR" + ntoa(j) + "->DST" + ntoa(k + j*_ndl));
         //logfile->writeName(*(queues_tor[j][k]));
-        pipes_tor[j][k] = new Pipe(timeFromNs(delay_host2ToR), *eventlist);
+        pipes_tor[j][k] = new Pipe(timeFromNs(delay_host2ToR), *eventlist, routing);
         //pipes_tor[j][k]->setName("Pipe-TOR" + ntoa(j)  + "->DST" + ntoa(k + j*_ndl));
         //logfile->writeName(*(pipes_tor[j][k]));
       }
@@ -221,7 +223,7 @@ void DynExpTopology::init_network() {
         // it's a link to another ToR
         queueLogger = new QueueLoggerSampling(timeFromMs(1000), *eventlist);
         logfile->addLogger(*queueLogger);
-        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k);
+        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k, routing);
         ostringstream oss;
         if (qt==COMPOSITE)
           oss << "CompositeQueue";
@@ -233,7 +235,7 @@ void DynExpTopology::init_network() {
         queues_tor[j][k]->setName(oss.str());
         //queues_tor[j][k]->setName("Queue-TOR" + ntoa(j) + "->uplink" + ntoa(k - _ndl));
         //logfile->writeName(*(queues_tor[j][k]));
-        pipes_tor[j][k] = new Pipe(timeFromNs(delay_ToR2ToR), *eventlist);
+        pipes_tor[j][k] = new Pipe(timeFromNs(delay_ToR2ToR), *eventlist, routing);
         //pipes_tor[j][k]->setName("Pipe-TOR" + ntoa(j)  + "->uplink" + ntoa(k - _ndl));
         //logfile->writeName(*(pipes_tor[j][k]));
       }
@@ -329,7 +331,7 @@ void DynExpTopology::inc_host_buffer(int host) {
     _host_buffers[host]++;
     if(_host_buffers[host] > _max_host_buffers[host]) {
         _max_host_buffers[host] = _host_buffers[host];
-        cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
+        // cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
     }
 }
 

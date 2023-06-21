@@ -16,7 +16,7 @@
 class CutPayloadQueue : public Queue {
  public:
     CutPayloadQueue(linkspeed_bps bitrate, mem_b maxsize, 
-		   EventList &eventlist, QueueLogger* logger);
+		   EventList &eventlist, QueueLogger* logger, Routing* routing);
     virtual void receivePacket(Packet& pkt);
     // should really be private, but loggers want to see
     mem_b _threshold;

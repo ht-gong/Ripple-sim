@@ -64,6 +64,8 @@ int main(int argc, char **argv) {
     double utiltime = .01; // seconds
     int64_t rlbflow = 0; // flow size of "flagged" RLB flows
     int64_t cutoff = 0; // cutoff between NDP and RLB flow sizes. flows < cutoff == NDP.
+   RoutingAlgorithm routing_alg = SINGLESHORTEST;
+    int64_t slice_time = 0;
 
     int i = 1;
     filename << "logout.dat";
@@ -100,6 +102,19 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-rlbflow")) {
             rlbflow = atof(argv[i+1]);
             i++;
+        } else if (!strcmp(argv[i],"-routing")) {
+            if(!strcmp(argv[i + 1], "SingleShortest")) {
+                routing_alg = SINGLESHORTEST;
+            } else if (!strcmp(argv[i + 1], "KShortest")) {
+                routing_alg = KSHORTEST;
+            } else if (!strcmp(argv[i + 1], "VLB")) {
+                routing_alg = VLB;
+            } else if (!strcmp(argv[i + 1], "ECMP")) {
+                routing_alg = ECMP;
+            } else {
+                exit_error(argv[0]);
+            }
+            i++;
         } else if (!strcmp(argv[i],"-flowfile")) {
 			flowfile = argv[i+1];
 			i++;
@@ -123,7 +138,7 @@ int main(int argc, char **argv) {
         
         i++;
     }
-    srand(13); // random seed
+    srand(13); // random seed 
 
     eventlist.setEndtime(timeFromSec(simtime)); // in seconds
     Clock c(timeFromSec(5 / 100.), eventlist);
@@ -159,7 +174,7 @@ int main(int argc, char **argv) {
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, DEFAULT, topfile);
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, DEFAULT, topfile, routing_alg);
 #endif
 
 	// initialize all sources/sinks

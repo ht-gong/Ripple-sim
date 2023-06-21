@@ -11,8 +11,8 @@
 #include "ndppacket.h"
 #include "rlbpacket.h" // added for debugging
 
-Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
-: EventSource(eventlist,"pipe"), _delay(delay), _routing(Routing())
+Pipe::Pipe(simtime_picosec delay, EventList& eventlist, Routing* routing)
+: EventSource(eventlist,"pipe"), _delay(delay), _routing(routing)
 {
     //stringstream ss;
     //ss << "pipe(" << delay/1000000 << "us)";
@@ -225,7 +225,7 @@ void Pipe::sendFromPipe(Packet *pkt) {
         pkt->inc_crthop(); // increment the hop
         pkt->inc_hop_index(); // increment hop index as well
         
-        _routing.routing(pkt, eventlist().now());
+        _routing->routing(pkt, eventlist().now());
 
         Queue* nextqueue = top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
         assert(nextqueue);

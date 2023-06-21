@@ -65,6 +65,8 @@ int main(int argc, char **argv) {
     double utiltime = .01; // seconds
     int64_t rlbflow = 0; // flow size of "flagged" RLB flows
     int64_t cutoff = 0; // cutoff between NDP and RLB flow sizes. flows < cutoff == NDP.
+    RoutingAlgorithm routing_alg = SINGLESHORTEST;
+    int64_t slice_time = 0;
 
     int i = 1;
     filename << "logout.dat";
@@ -82,6 +84,7 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-q")){
 	       queuesize = atoi(argv[i+1]) * DEFAULT_PACKET_SIZE;
 	       i++;
+        /*
         } else if (!strcmp(argv[i],"-strat")){
             if (!strcmp(argv[i+1], "perm")) {
                 route_strategy = SCATTER_PERMUTE;
@@ -93,11 +96,25 @@ int main(int argc, char **argv) {
                 route_strategy = SINGLE_PATH;
             }
             i++;
+        */
         } else if (!strcmp(argv[i],"-cutoff")) {
             cutoff = atof(argv[i+1]);
             i++;
         } else if (!strcmp(argv[i],"-rlbflow")) {
             rlbflow = atof(argv[i+1]);
+            i++;
+        } else if (!strcmp(argv[i],"-routing")) {
+            if(!strcmp(argv[i + 1], "SingleShortest")) {
+                routing_alg = SINGLESHORTEST;
+            } else if (!strcmp(argv[i + 1], "KShortest")) {
+                routing_alg = KSHORTEST;
+            } else if (!strcmp(argv[i + 1], "VLB")) {
+                routing_alg = VLB;
+            } else if (!strcmp(argv[i + 1], "ECMP")) {
+                routing_alg = ECMP;
+            } else {
+                exit_error(argv[0]);
+            }
             i++;
         } else if (!strcmp(argv[i],"-flowfile")) {
 			flowfile = argv[i+1];
@@ -105,9 +122,11 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-topfile")) {
             topfile = argv[i+1];
             i++;
+        /*
         } else if (!strcmp(argv[i],"-pullrate")) {
             pull_rate = atof(argv[i+1]);
             i++;
+        */
         } else if (!strcmp(argv[i],"-simtime")) {
             simtime = atof(argv[i+1]);
             i++;
@@ -154,7 +173,7 @@ int main(int argc, char **argv) {
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, COMPOSITE, topfile);
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, COMPOSITE, topfile, routing_alg);
 #endif
 
 	// initialize all sources/sinks

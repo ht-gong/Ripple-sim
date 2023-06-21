@@ -11,8 +11,8 @@
 
 ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize, 
 			 EventList& eventlist, QueueLogger* logger, mem_b  K,
-             int tor, int port, DynExpTopology *top)
-    : Queue(bitrate,maxsize,eventlist,logger,tor,port,top), 
+             int tor, int port, DynExpTopology *top, Routing* routing)
+    : Queue(bitrate,maxsize,eventlist,logger,tor,port,top,routing), 
       _K(K)
 {
     _state_send = LosslessQueue::READY;

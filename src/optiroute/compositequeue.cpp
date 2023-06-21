@@ -15,8 +15,8 @@
 // !!! NOTE: this has been modified to also include a lower priority RLB queue
 
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, 
-			       QueueLogger* logger, int tor, int port, DynExpTopology *top)
-  : Queue(bitrate, maxsize, eventlist, logger, tor, port, top)
+			       QueueLogger* logger, int tor, int port, DynExpTopology *top, Routing* routing)
+  : Queue(bitrate, maxsize, eventlist, logger, tor, port, top, routing)
 {
   _tor = tor;
   _port = port;

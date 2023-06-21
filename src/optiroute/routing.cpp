@@ -31,20 +31,20 @@ simtime_picosec Routing::routingFromPQ(Packet* pkt, simtime_picosec t) {
 
         // we will choose the path based on the current slice
         int slice = top->time_to_slice(t);
+        int path_index;
         // get the number of available paths for this packet during this slice
-        int npaths = top->get_no_paths(pkt->get_src_ToR(),
-            top->get_firstToR(pkt->get_dst()), slice);
-
-        if (npaths == 0)
-            cout << "Error: there were no paths for slice " << slice  << " src " << pkt->get_src_ToR() <<
-                " dst " << top->get_firstToR(pkt->get_dst()) << endl;
-        assert(npaths > 0);
-
-        // randomly choose a path for the packet
-        // !!! todo: add other options like permutation, etc...
-        // int path_index = random() % npaths;
-        int path_index = 0;
-
+        if(_routing_algorithm == SINGLESHORTEST) {
+            path_index = 0;
+        } else if(_routing_algorithm == KSHORTEST || _routing_algorithm == ECMP) {
+            int npaths = top->get_no_paths(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), slice);
+            if (npaths == 0) {
+                cout << "Error: there were no paths for slice " << slice  << " src " << pkt->get_src_ToR() <<
+                    " dst " << top->get_firstToR(pkt->get_dst()) << endl;
+                assert(0);
+            }
+            path_index = random() % npaths;
+        } 
+        
         pkt->set_slice_sent(slice); // "timestamp" the packet
         pkt->set_fabricts(t);
         pkt->set_path_index(path_index); // set which path the packet will take
@@ -79,6 +79,7 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
         return 0;
     // calculate time from the start of sent_slice, not current slice
     }
+
 
 	int cur_slice = top->time_to_slice(t);
     // next port assuming topology does not change
