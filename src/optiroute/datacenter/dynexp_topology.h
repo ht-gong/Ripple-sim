@@ -62,6 +62,7 @@ class DynExpTopology: public Topology{
   bool is_last_hop(int port);
   bool port_dst_match(int port, int crtToR, int dst);
   int get_no_paths(int srcToR, int dstToR, int slice);
+  int get_path_indices(int srcHost, int dstHost, int slice);
   int get_no_hops(int srcToR, int dstToR, int slice, int path_ind);
   int get_nslices() {return _nslice;} 
   unsigned get_host_buffer(int host);
@@ -100,6 +101,10 @@ class DynExpTopology: public Topology{
   // Tor-to-Tor connections across time
   // indexing: [slice][uplink (indexed from 0 to _ntor*_nul-1)]
   vector<vector<int>> _adjacency;
+  // Randomly generated path indices to follow for each (src, dst) host pair: 
+  // used in ECMP, VLB, KShortest routing algorithms
+  // indexing: [srchost][dsthost][slice]
+  vector<vector<vector<int>>> _rpath_indices;
   // label switched paths
   // indexing: [src][dst][slice][path_ind][sequence of switch ports (queues)]
   vector<vector<vector<vector<vector<int>>>>> _lbls;

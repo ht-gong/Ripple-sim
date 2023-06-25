@@ -17,9 +17,11 @@ class Routing {
    };
    simtime_picosec routing(Packet* pkt, simtime_picosec t);
    simtime_picosec reroute(Packet* pkt, simtime_picosec t, simtime_picosec finish_push);
-   simtime_picosec routingFromPQ(Packet* pkt, simtime_picosec t);
+   simtime_picosec routing_from_PQ(Packet* pkt, simtime_picosec t);
+   simtime_picosec routing_from_ToR_VLB(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
  private:
    RoutingAlgorithm _routing_algorithm;
+   int get_path_index(Packet* pkt, int slice);
 };
 
 // Set events to activate next calendar queue

@@ -412,7 +412,7 @@ void PriorityQueue::completeService() {
 	        // set the routing info
             pkt->set_src_ToR(_top->get_firstToR(pkt->get_src())); // set the sending ToR. This is used for subsequent routing
 
-            _routing->routingFromPQ(pkt, eventlist().now());
+            _routing->routing_from_PQ(pkt, eventlist().now());
 	        /* tell the packet to move on to the next pipe */
 	        sendFromQueue(pkt);
 

@@ -81,6 +81,13 @@ void DynExpTopology::read_params(string topfile) {
       }
     }
 
+    _rpath_indices.resize(_no_of_nodes);
+    for (int i = 0; i < _no_of_nodes; i++) {
+      _rpath_indices[i].resize(_no_of_nodes);
+      for (int j = 0; j < _no_of_nodes; j++) {
+        _rpath_indices[i][j].resize(_nslice);
+      }
+    }
 
     // get label switched paths (rest of file)
     _lbls.resize(_ntor);
@@ -163,6 +170,28 @@ void DynExpTopology::init_network() {
   QueueLoggerSampling* queueLogger;
   Routing* routing = new Routing(_routalg);
 
+  // pre-samples the path indices for each flow, used for routing
+  for (int i = 0; i < _no_of_nodes; i++) {
+    for (int j = 0; j < _no_of_nodes; j++) {
+      if(get_firstToR(i) == get_firstToR(j)) {
+        continue;
+      }
+      for (int k = 0; k < _nslice; k++) {
+         if(_routalg == ECMP || _routalg == KSHORTEST) {
+          int npaths = get_no_paths(get_firstToR(i), get_firstToR(j), k);
+          if (npaths == 0) {
+                cout << "Error: there were no paths for slice " << k  << " src " << i <<
+                    " dst " << j << endl;
+                assert(0);
+            }
+          _rpath_indices[i][j][k] = rand() % npaths;
+        } else if(_routalg == VLB) {
+          _rpath_indices[i][j][k] = rand() % _nul;
+        }
+      }
+    }
+  }
+
   // initialize server to ToR pipes / queues
   for (int j = 0; j < _no_of_nodes; j++) { // sweep nodes
     rlb_modules[j] = NULL;
@@ -198,7 +227,6 @@ void DynExpTopology::init_network() {
   // create ToR outgoing pipes / queues
   for (int j = 0; j < _ntor; j++) { // sweep ToR switches
     for (int k = 0; k < _nul+_ndl; k++) { // sweep ports
-      
       if (k < _ndl) {
         // it's a downlink to a server
         queueLogger = new QueueLoggerSampling(timeFromMs(1000), *eventlist);
@@ -241,6 +269,10 @@ void DynExpTopology::init_network() {
       }
     }
   }
+}
+
+int DynExpTopology::get_path_indices(int srcHost, int dstHost, int slice) {
+  return _rpath_indices[srcHost][dstHost][slice];
 }
 
 

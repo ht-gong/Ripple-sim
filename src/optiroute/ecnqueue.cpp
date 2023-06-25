@@ -8,6 +8,7 @@
 #include "queue_lossless.h"
 #include "tcppacket.h"
 #include <iostream>
+//#define DEBUG
 
 ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize, 
 			 EventList& eventlist, QueueLogger* logger, mem_b  K,
@@ -58,7 +59,10 @@ ECNQueue::receivePacket(Packet & pkt)
     }
 
     int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
-    //cout<< "Queue " << _tor << "," << _port << "Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "delay: " << get_queueing_delay(pkt.get_crtslice()) << endl;
+    #ifdef DEBUG
+    cout<< "Queue " << _tor << "," << _port << "Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "delay: " << get_queueing_delay(pkt.get_crtslice()) << endl;
+    dump_queuesize();
+    #endif
     // dump_queuesize();
     if (queuesize() + pkt.size() > _maxsize) {
         /* if the packet doesn't fit in the queue, drop it */
@@ -89,7 +93,7 @@ ECNQueue::receivePacket(Packet & pkt)
     _enqueued[pkt_slice].push_front(&pkt);
     _queuesize[pkt_slice] += pkt.size();
     pkt.inc_queueing(queuesize());
-    //dump_queuesize();
+    // dump_queuesize();
 
     if (queueWasEmpty && !_sending_pkt && pkt_slice == _crt_tx_slice) {
 	/* schedule the dequeue event */
@@ -103,6 +107,22 @@ void ECNQueue::beginService() {
     /* schedule the next dequeue event */
     assert(!_enqueued[_crt_tx_slice].empty());
     assert(drainTime(_enqueued[_crt_tx_slice].back()) != 0);
+
+    Packet* to_be_sent = _enqueued[_crt_tx_slice].back();
+    DynExpTopology* top = to_be_sent->get_topology();
+    
+    simtime_picosec finish_push = eventlist().now() + drainTime(to_be_sent) /*229760*/;
+
+    int finish_push_slice = top->time_to_slice(finish_push); // plus the link delay
+    if(top->is_reconfig(finish_push)) {
+        finish_push_slice = top->absolute_slice_to_slice(finish_push_slice + 1);
+    }
+
+    if(!top->is_downlink(_port) && finish_push_slice != _crt_tx_slice) {
+        // Uplink port attempting to serve pkt across configurations
+        return;
+    }
+
     eventlist().sourceIsPendingRel(*this, drainTime(_enqueued[_crt_tx_slice].back()));
     _sending_pkt = _enqueued[_crt_tx_slice].back();
     _enqueued[_crt_tx_slice].pop_back();
@@ -112,16 +132,19 @@ void ECNQueue::beginService() {
 	  _sending_pkt->set_flags(_sending_pkt->flags() | ECN_CE);
 
     //_queuesize[_crt_tx_slice] -= _sending_pkt->size();
-    Packet *pkt = _sending_pkt;
-    unsigned seqno = 0;
-    if(pkt->type() == TCP) {
-        seqno = ((TcpPacket*)pkt)->seqno();
-    } else if (pkt->type() == TCPACK) {
-        seqno = ((TcpAck*)pkt)->ackno();
-    }
     
-    // cout << "Queue " << _tor << "," << _port << " beginService seq " << seqno << 
-    //  " pktslice" << pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << "delay: " << get_queueing_delay(pkt->get_crtslice()) << endl;
+    #ifdef DEBUG
+    unsigned seqno = 0;
+    if(_sending_pkt->type() == TCP) {
+        seqno = ((TcpPacket*)_sending_pkt)->seqno();
+    } else if (_sending_pkt->type() == TCPACK) {
+        seqno = ((TcpAck*)_sending_pkt)->ackno();
+    }
+    cout << "Queue " << _tor << "," << _port << " beginService seq " << seqno << 
+     " pktslice" << _sending_pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << "delay: " << get_queueing_delay(_sending_pkt->get_crtslice()) << endl;
+     dump_queuesize();
+    #endif
+    
     
 }
 
@@ -131,21 +154,23 @@ ECNQueue::completeService()
 {
     /* dequeue the packet */
     assert(_sending_pkt);
+    assert(_crt_tx_slice == _sending_pkt->get_crtslice());
 
-    Packet *pkt = _sending_pkt;
     unsigned seqno = 0;
-    if(pkt->type() == TCP) {
-        seqno = ((TcpPacket*)pkt)->seqno();
-    } else if (pkt->type() == TCPACK) {
-        seqno = ((TcpAck*)pkt)->ackno();
+    if(_sending_pkt->type() == TCP) {
+        seqno = ((TcpPacket*)_sending_pkt)->seqno();
+    } else if (_sending_pkt->type() == TCPACK) {
+        seqno = ((TcpAck*)_sending_pkt)->ackno();
     }
-    _queuesize[_crt_tx_slice] -= _sending_pkt->size();
-    int pkt_slice = pkt->get_crtslice();
 
-    // cout << "Queue " << _tor << "," << _port << " completeService seq " << seqno << 
-    //     " pktslice" << pkt_slice << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
-	// " src,dst " << pkt->get_src() << "," << pkt->get_dst() << endl;
-    // dump_queuesize();
+    #ifdef DEBUG
+    cout << "Queue " << _tor << "," << _port << " completeService seq " << seqno << 
+        " pktslice" << _sending_pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
+	" src,dst " << _sending_pkt->get_src() << "," << _sending_pkt->get_dst() << endl;
+    dump_queuesize();
+    #endif
+
+    _queuesize[_crt_tx_slice] -= _sending_pkt->size();
 
     sendFromQueue(_sending_pkt);
     _sending_pkt = NULL;
