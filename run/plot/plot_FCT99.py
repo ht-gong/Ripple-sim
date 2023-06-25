@@ -12,9 +12,11 @@ zoom_thresh = 1E4
 
 flows = defaultdict(list)
 expander_settings = ["10us_1path", "100us_1path", "1000us_1path", "static_1path", "static_5path", "static_ECMP"]
-opera_settings = ["regular_1path", "static_1path"]
-all_settings = [expander_settings, opera_settings]
-prefix = ["Expander", "Opera"]
+opera_settings = ["regular_1path", "static_1path", "static_slice60", "static_slice120", "static_slice240"]
+#all_settings = [expander_settings, opera_settings]
+all_settings = [opera_settings]
+#prefix = ["Expander", "Opera"]
+prefix = ["Opera"]
 graph_settings = ["zoomed", "full"]
 
 for gs in graph_settings:
@@ -61,6 +63,6 @@ for gs in graph_settings:
         #plt.xlabel("Flow size (bytes)")
         ax1.legend(handles = forlegend, bbox_to_anchor=(1.3, 1.0), loc = 'upper right')
         fig.tight_layout()
-        plt.savefig(f"./{dir}/FCT_Comparison_{load}_{gs}.png", bbox_inches='tight')
+        plt.savefig(f"./{dir}/Opera_FCT_Comparison_{load}_{gs}.png", bbox_inches='tight')
         plt.show()
         plt.close()

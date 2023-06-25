@@ -22,6 +22,7 @@ towrite = []
 
 towrite.append(open(f'general_from_dynexp_N={tor_count}_topK={K}.txt', 'w'))
 towrite.append(open(f'ecmp_from_dynexp_N={tor_count}_topK={K}.txt', 'w'))
+towrite.append(open(f'vlb_from_dynexp_N={tor_count}_topK={K}.txt', 'w'))
 
 for f in towrite:
     f.write(f'{node_count} {downlink_count} {uplink_count} {tor_count}\n')
@@ -50,10 +51,20 @@ with open('ksp.txt', 'r') as f:
         for _ in range(tor_count * (tor_count - 1)):
             paths = []
             paths.extend(f.readline() for i in range(K))
-            paths = list(filter(lambda x: len(x) == len(paths[0]), paths))
-            print(paths)
+            paths = list(filter(lambda x: len(x.split()) == len(paths[0].split()), paths))
             for path in paths:
                 towrite[1].write(path)
+
+with open('ksp.txt', 'r') as f:
+    for cycle in range(cycle_count):
+        towrite[2].write(f.readline())
+        for _ in range(tor_count * (tor_count - 1)):
+            paths = []
+            paths.extend(f.readline() for i in range(K))
+            paths = list(filter(lambda x: len(x.split()) == 3, paths))
+            print(paths)
+            if len(paths) >= 1:
+                towrite[2].write(paths[0])
 
 for f in towrite:
     f.close()
