@@ -12,6 +12,7 @@
 #include "network.h"
 #include "tcppacket.h"
 #include "ndp.h"
+// #define DEBUG
 
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
@@ -49,7 +50,7 @@ simtime_picosec Routing::routing_from_PQ(Packet* pkt, simtime_picosec t) {
 
 }
 
-simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
+simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t, simtime_picosec init_time) {
     unsigned seqno = 0;
     if(pkt->type() == TCP) {
         seqno = ((TcpPacket*)pkt)->seqno();
@@ -58,7 +59,6 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
     } else if (pkt->type() == NDP) {
         seqno = ((NdpPacket*)pkt)->seqno();
     }
-
 
 	DynExpTopology* top = pkt->get_topology();
     // if this is the last ToR, need to get downlink port
@@ -86,18 +86,25 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
 
     Queue* cur_q = top->get_queue_tor(pkt->get_crtToR(), cur_slice_port);
     
-    simtime_picosec finish_push = t + cur_q->get_queueing_delay(cur_slice) +
-            cur_q->drainTime(pkt) /*229760*/;
+    simtime_picosec finish_push;
+    // to get accurate queueing delay, need to add from when the queue began servicing
+    if(cur_q->get_is_servicing() && top->time_to_slice(init_time) == cur_slice) { // only needed when init_slice == cur_slice
+        finish_push = cur_q->get_last_service_time() + cur_q->get_queueing_delay(cur_slice) +
+            cur_q->drainTime(pkt);
+    } else {
+        finish_push = t + cur_q->get_queueing_delay(cur_slice) +
+            cur_q->drainTime(pkt);
+    }
+
     int finish_push_slice = top->time_to_slice(finish_push); // plus the link delay
 
-    // //calculate delay considering the queue occupancy
-    simtime_picosec finish_time = t + cur_q->get_queueing_delay(cur_slice) +
-            cur_q->drainTime(pkt) /*229760*/ + timeFromNs(delay_ToR2ToR);
+    // calculate delay considering the queue occupancy
+    simtime_picosec finish_time = finish_push + timeFromNs(delay_ToR2ToR);
     int finish_slice = top->time_to_slice(finish_time);
 
     #ifdef DEBUG
     cout <<seqno << "Routing crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
-            << "hop: " << pkt->get_hop_index() << "port: "<<cur_slice_port<< " " << t <<"Finish push:" << finish_push_slice << " " << finish_push << "Finish slice:"<<finish_slice<< " " << finish_time << endl;
+            << " hop: " << pkt->get_hop_index() << " port: "<<cur_slice_port<< " Now: " << t << " Last comp: "<< cur_q->get_last_service_time() << " Finish push:" << finish_push_slice << " " << finish_push << " Finish slice:"<<finish_slice<< " " << finish_time << endl;
     #endif
     if(top->is_reconfig(finish_push)) {
         finish_push_slice = top->absolute_slice_to_slice(finish_push_slice + 1);
@@ -117,10 +124,10 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t) {
         return finish_time;
     } 
     
-    return reroute(pkt, t, finish_time);
+    return reroute(pkt, t, init_time);
 }
 
-simtime_picosec Routing::reroute(Packet* pkt, simtime_picosec t, simtime_picosec finish_push) {
+simtime_picosec Routing::reroute(Packet* pkt, simtime_picosec t, simtime_picosec init_time) {
     DynExpTopology * top = pkt->get_topology();
     int nxt_slice = top->time_to_absolute_slice(t) + 1;
     pkt->set_src_ToR(pkt->get_crtToR());
@@ -132,7 +139,7 @@ simtime_picosec Routing::reroute(Packet* pkt, simtime_picosec t, simtime_picosec
     #ifdef DEBUG
     cout << "Reroute crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << pkt->get_crtslice()<< " at " <<t << "finishing at" << finish_push << endl;
     #endif
-    return routing(pkt, top->get_slice_start_time(nxt_slice));
+    return routing(pkt, top->get_slice_start_time(nxt_slice), init_time);
 }
 
 int Routing::get_path_index(Packet* pkt, int slice) {

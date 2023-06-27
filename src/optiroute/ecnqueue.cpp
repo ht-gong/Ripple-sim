@@ -8,7 +8,7 @@
 #include "queue_lossless.h"
 #include "tcppacket.h"
 #include <iostream>
-//#define DEBUG
+// #define DEBUG
 
 ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize, 
 			 EventList& eventlist, QueueLogger* logger, mem_b  K,
@@ -95,6 +95,15 @@ ECNQueue::receivePacket(Packet & pkt)
     pkt.inc_queueing(queuesize());
     // dump_queuesize();
 
+    //record queuesize per slice
+    int slice = _top->time_to_slice(eventlist().now());
+    if (queuesize() > _max_recorded_size_slice[slice]) {
+        _max_recorded_size_slice[slice] = queuesize();
+    }
+    if (queuesize() > _max_recorded_size) {
+        _max_recorded_size = queuesize();
+    }
+    
     if (queueWasEmpty && !_sending_pkt && pkt_slice == _crt_tx_slice) {
 	/* schedule the dequeue event */
 	    assert(_enqueued[_crt_tx_slice].size() == 1);
@@ -120,10 +129,15 @@ void ECNQueue::beginService() {
 
     if(!top->is_downlink(_port) && finish_push_slice != _crt_tx_slice) {
         // Uplink port attempting to serve pkt across configurations
+        #ifdef DEBUG
+        cout<<"Uplink port attempting to serve pkt across configurations\n";
+        #endif
         return;
     }
 
     eventlist().sourceIsPendingRel(*this, drainTime(_enqueued[_crt_tx_slice].back()));
+    _is_servicing = true;
+    _last_service_begin = eventlist().now();
     _sending_pkt = _enqueued[_crt_tx_slice].back();
     _enqueued[_crt_tx_slice].pop_back();
 
@@ -141,8 +155,9 @@ void ECNQueue::beginService() {
         seqno = ((TcpAck*)_sending_pkt)->ackno();
     }
     cout << "Queue " << _tor << "," << _port << " beginService seq " << seqno << 
-     " pktslice" << _sending_pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() << "delay: " << get_queueing_delay(_sending_pkt->get_crtslice()) << endl;
-     dump_queuesize();
+        " pktslice" << _sending_pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
+    " src,dst " << _sending_pkt->get_src() << "," << _sending_pkt->get_dst() << endl;
+    dump_queuesize();
     #endif
     
     
@@ -166,14 +181,15 @@ ECNQueue::completeService()
     #ifdef DEBUG
     cout << "Queue " << _tor << "," << _port << " completeService seq " << seqno << 
         " pktslice" << _sending_pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
-	" src,dst " << _sending_pkt->get_src() << "," << _sending_pkt->get_dst() << endl;
+    " src,dst " << _sending_pkt->get_src() << "," << _sending_pkt->get_dst() << endl;
     dump_queuesize();
     #endif
-
+    
     _queuesize[_crt_tx_slice] -= _sending_pkt->size();
 
     sendFromQueue(_sending_pkt);
     _sending_pkt = NULL;
+    _is_servicing = false;
     
     if (!_enqueued[_crt_tx_slice].empty() && _state_send==LosslessQueue::READY) {
         /* schedule the next dequeue event */

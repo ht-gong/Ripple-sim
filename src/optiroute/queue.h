@@ -31,7 +31,8 @@ class Queue : public EventSource, public PacketSink {
 
     // should really be private, but loggers want to see
     mem_b _maxsize; 
-    vector <mem_b> _max_recorded_size;
+    mem_b _max_recorded_size;
+    vector<mem_b> _max_recorded_size_slice;
     int _tor; // the ToR switch this queue belongs to
     int _port; // the port this queue belongs to
     DynExpTopology* _top; //network topology
@@ -45,15 +46,19 @@ class Queue : public EventSource, public PacketSink {
     virtual mem_b queuesize();
     virtual mem_b slice_queuesize(int slice) = 0;
     simtime_picosec get_queueing_delay(int slice);
+    simtime_picosec get_is_servicing() {return _is_servicing;}
+    simtime_picosec get_last_service_time() {return _last_service_begin;}
     simtime_picosec serviceTime();
     int num_drops() const {return _num_drops;}
     void reset_drops() {_num_drops = 0;}
 
+    void reportMaxqueuesize_perslice();
+    void reportMaxqueuesize();
+    void reportQueuesize();
+
     virtual void setRemoteEndpoint(Queue* q) {_remoteEndpoint = q;};
     virtual void setRemoteEndpoint2(Queue* q) {_remoteEndpoint = q;q->setRemoteEndpoint(this);};
     Queue* getRemoteEndpoint() {return _remoteEndpoint;}
-    
-    void reportMaxqueuesize();
 
     virtual void setName(const string& name) {
         Logged::setName(name);
@@ -89,7 +94,10 @@ class Queue : public EventSource, public PacketSink {
     Routing* _routing;
     QueueAlarm* _queue_alarm;
     Packet* _sending_pkt = NULL;
+    simtime_picosec _last_service_begin = 0;
+    bool _is_servicing = false;
     int _crt_tx_slice = 0;
+    
 };
 
 /* implement a 4-level priority queue */

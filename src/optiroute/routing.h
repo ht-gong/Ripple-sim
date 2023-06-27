@@ -15,7 +15,7 @@ class Routing {
    Routing(RoutingAlgorithm routalg) {
     _routing_algorithm = routalg;
    };
-   simtime_picosec routing(Packet* pkt, simtime_picosec t);
+   simtime_picosec routing(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
    simtime_picosec reroute(Packet* pkt, simtime_picosec t, simtime_picosec finish_push);
    simtime_picosec routing_from_PQ(Packet* pkt, simtime_picosec t);
    simtime_picosec routing_from_ToR_VLB(Packet* pkt, simtime_picosec t, simtime_picosec init_time);

@@ -33,7 +33,8 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
     _queuesize = 0;
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
     stringstream ss;
-    _max_recorded_size.resize(_top->get_nslices());
+    _max_recorded_size_slice.resize(_top->get_nslice());
+    _max_recorded_size = 0;
     _queue_alarm = new QueueAlarm(eventlist, port, this, top);
     //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
     //_nodename = ss.str();
@@ -172,12 +173,21 @@ simtime_picosec Queue::serviceTime() {
     return _queuesize * _ps_per_byte;
 }
 
-//format "tor,port,slice0max,slice1max,slice2max...,slicenmax"
+void Queue::reportQueuesize() {
+    cout << "Queuesize " << _tor << "," << _port << "," << queuesize() << endl;
+}
+
 void Queue::reportMaxqueuesize(){
+    cout << "Queue " << _tor << " " << _port << " " << _max_recorded_size << endl;
+    _max_recorded_size = 0;
+}
+
+//format "tor,port,slice0max,slice1max,slice2max...,slicenmax"
+void Queue::reportMaxqueuesize_perslice(){
     cout << _tor << "," << _port << ",";
-    for(int i = 0; i < _max_recorded_size.size(); i++) {
-        cout << _max_recorded_size[i] << ",";
-        _max_recorded_size[i] = 0;
+    for(int i = 0; i < _max_recorded_size_slice.size(); i++) {
+        cout << _max_recorded_size_slice[i] << ",";
+        _max_recorded_size_slice[i] = 0;
     }
     cout << endl;
 }

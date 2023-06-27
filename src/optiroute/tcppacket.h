@@ -31,6 +31,7 @@ public:
 	    p->_data_seqno=dataseqno;
 	    p->_syn = false;
         p->_size = size;
+		p->_flags = 0;
 	    return p;
 	}
 
@@ -85,7 +86,7 @@ public:
 	    p->_ackno = ackno;
 	    p->_data_ackno = dackno;
         p->_size = 40;
-
+		p->_flags = 0;
 	    return p;
 	}
 

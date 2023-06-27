@@ -792,10 +792,10 @@ TcpSink::receivePacket(Packet& pkt) {
     int size = p->size();
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
     if (last_ts > fts){
-        cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
-            << _src->get_flowsize() << " " << 
-            "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " << last_seqno << " " 
-            "LATE " << fts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
+        // cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
+        //     << _src->get_flowsize() << " " << 
+        //     "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " << last_seqno << " " 
+        //     "LATE " << fts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
         _src->_found_reorder++;
     }
     last_ts = fts;
@@ -825,18 +825,12 @@ TcpSink::receivePacket(Packet& pkt) {
     }
     //outofseq is solved once all the missing holes have been filled
     if (waiting_for_seq) {
-	if(_received.empty() || cons_out_of_seq_n < 3) {
-            if(!(fts > out_of_seq_fts)) {
+        if(!(fts > out_of_seq_fts)) {
             // cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
             //     << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
-            }
-            waiting_for_seq = false;
-            out_of_seq_n = 0;
-	    cons_out_of_seq_n = 0;
-	} else {
-	    //cout << "NOTYETSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " ack " << seqno << " next " << _received.front() << endl;
-            out_of_seq_n++;
         }
+        waiting_for_seq = false;
+        out_of_seq_n = 0;
     }
     } else if (seqno < _cumulative_ack+1) {
     } else { // it's not the next expected sequence number

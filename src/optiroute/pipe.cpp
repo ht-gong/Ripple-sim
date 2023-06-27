@@ -225,7 +225,7 @@ void Pipe::sendFromPipe(Packet *pkt) {
         pkt->inc_crthop(); // increment the hop
         pkt->inc_hop_index(); // increment hop index as well
         
-        _routing->routing(pkt, eventlist().now());
+        _routing->routing(pkt, eventlist().now(), eventlist().now());
 
         Queue* nextqueue = top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
         assert(nextqueue);
@@ -289,6 +289,12 @@ void UtilMonitor::printAggUtil() {
 
     cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
+    for (int tor = 0; tor < _top->no_of_tors(); tor++) {
+        for (int uplink = 0; uplink < _top->no_of_hpr(); uplink++) {
+            Queue* q = _top->get_queue_tor(tor, _top->no_of_hpr() + uplink);
+            q->reportMaxqueuesize();
+        }
+    }
     // cout << "QueueReport" << endl;
     // for (int tor = 0; tor < _top->no_of_tors(); tor++) {
     //     for (int uplink = _top->no_of_hpr()+1; uplink < _top->no_of_hpr()*2; uplink++) {
