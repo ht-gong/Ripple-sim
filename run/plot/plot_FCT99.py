@@ -10,14 +10,17 @@ dir = date.today().strftime("%Y-%m-%d")
 os.makedirs(dir, exist_ok=True)
 zoom_thresh = 1E4
 
-flows = defaultdict(list)
-expander_settings = ["10us_1path", "100us_1path", "1000us_1path", "static_1path", "static_5path", "static_ECMP"]
-opera_settings = ["regular_1path", "static_1path", "static_slice60", "static_slice120", "static_slice240"]
-#all_settings = [expander_settings, opera_settings]
-all_settings = [opera_settings]
-#prefix = ["Expander", "Opera"]
-prefix = ["Opera"]
-graph_settings = ["zoomed", "full"]
+vlb_settings = ["1us", "10us"]
+# vlb_settings = ["10us"]
+expander_settings = ["10us_1path", "1000us_1path", "static_1path", "static_5path", "static_ECMP"]
+# expander_settings = ["10us_1path", "100us_1path", "1000us_1path", "static_ECMP"]
+# opera_settings = ["regular_1path", "static_1path", "static_slice60", "static_slice120", "static_slice240", "regular_1path_slowswitching"]
+opera_settings = ["regular_1path"]
+all_settings = [expander_settings, opera_settings, vlb_settings]
+# all_settings = [expander_settings]
+prefix = ["Expander", "Opera", "VLB"]
+# prefix = ["Expander"]
+graph_settings = ["full", "zoomed"]
 
 for gs in graph_settings:
     for load in ["1percLoad", "10percLoad", "20percLoad"]:
@@ -26,6 +29,7 @@ for gs in graph_settings:
         forlegend = []
         for i in range(len(all_settings)):
             for expr in all_settings[i]:
+                flows = defaultdict(list)
                 with open(f"../sim/{prefix[i]}_{load}_{expr}.txt", "r") as f:
                     lines = f.readlines()
                     for line in lines:
@@ -63,6 +67,6 @@ for gs in graph_settings:
         #plt.xlabel("Flow size (bytes)")
         ax1.legend(handles = forlegend, bbox_to_anchor=(1.3, 1.0), loc = 'upper right')
         fig.tight_layout()
-        plt.savefig(f"./{dir}/Opera_FCT_Comparison_{load}_{gs}.png", bbox_inches='tight')
+        plt.savefig(f"./{dir}/All_FCT_Comparison_{load}_{gs}.png", bbox_inches='tight')
         plt.show()
         plt.close()
