@@ -80,6 +80,12 @@ ECNQueue::receivePacket(Packet & pkt)
     _enqueued.push_front(&pkt);
     _queuesize += pkt.size();
     pkt.inc_queueing(_queuesize);
+    pkt.set_last_queueing(_queuesize);
+/*
+    if(_top->is_last_hop(_port)) {
+        cout << "CORE RATIO " << (double)_queuesize/pkt.get_queueing() <<  " " << _queuesize << " " << pkt.get_queueing() << endl;
+    }
+*/
 
     //record queuesize per slice
     int slice = _top->time_to_superslice(eventlist().now());

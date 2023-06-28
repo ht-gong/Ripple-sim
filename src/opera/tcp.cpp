@@ -23,7 +23,7 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
 {
     _mss = Packet::data_packet_size();
     //_maxcwnd = 0xffffffff;//MAX_SENT*_mss;
-    _maxcwnd = 65536;//MAX_SENT*_mss;
+    _maxcwnd = 65535;//MAX_SENT*_mss;
     _sawtooth = 0;
     _subflow_id = -1;
     _rtt_avg = timeFromMs(0);
@@ -140,6 +140,14 @@ uint32_t TcpSrc::effective_window() {
 #endif
 }
 
+void TcpSrc::reportTP() {
+    simtime_picosec sample_duration = eventlist().now()-_last_sample; 
+    float tp = _bytes_in_sample/(long double)(sample_duration/1E12);
+    cout << "TP " << _flow_id << " " << tp << endl;
+    _last_sample = eventlist().now();
+    _bytes_in_sample = 0;
+}
+
 void TcpSrc::cmpIdealCwnd(uint64_t ideal_mbps){
     long double rtt = 0.00000524288;
     int slice = _top->time_to_superslice(eventlist().now());
@@ -197,10 +205,8 @@ TcpSrc::receivePacket(Packet& pkt)
     int slice = _top->time_to_superslice(eventlist().now());
     //cout << "TcpSrc receive packet ackno:" << seqno << endl;
 
-    _last_hop_per_trip = pkt.get_crthop();
-    if(pkt.get_crthop() > _max_hops_per_trip)
-        _max_hops_per_trip = pkt.get_crthop();
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
+
     ts = p->ts();
     packetid_t pktid = p->id();
     vector<int> rtt_path = p->get_path();
@@ -226,12 +232,13 @@ TcpSrc::receivePacket(Packet& pkt)
     //compute rtt
     uint64_t m = eventlist().now()-ts;
     /*
-    if(get_flowid() == 0){
-    cout << "RTT " << m << " " << eventlist().now() << " " << seqno << " " << pktid << " ";
+    if(random()%20 == 0){
+    cout << "RTTPATH " << m << " ";
     for(int hop : rtt_path) {
         cout << hop << " ";
     }
     cout << endl;
+    }
     */
 
     if (m!=0){
@@ -261,8 +268,7 @@ TcpSrc::receivePacket(Packet& pkt)
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << " " 
-            << _max_hops_per_trip << " " << _last_hop_per_trip << endl;
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << endl;
 	/*
         cout << "PATHS " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() << " ";
         for(vector<int> path : _sink->_used_paths) {
@@ -294,6 +300,7 @@ TcpSrc::receivePacket(Packet& pkt)
     if (seqno > _last_acked) { // a brand new ack
         _RFC2988_RTO_timeout = eventlist().now() + _rto;// RFC 2988 5.3
         _last_ping = eventlist().now();
+        _bytes_in_sample += seqno-_last_acked;
 
         if (seqno >= _highest_sent) {
             _highest_sent = seqno;
@@ -482,8 +489,10 @@ TcpSrc::receivePacket(Packet& pkt)
     //print if retransmission is due to reordered packet (was not dropped)
     //also as we're retransmitting it, clear the seqno from the dropped list
     if (!was_it_dropped(_last_acked+1, true)) {
+/*
         cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size  << " " << seqno << endl;
         _found_retransmit++;
+*/
 #define ORACLE
 #ifdef ORACLE
         //we know this was not dropped, do not deflate window/retransmit
@@ -615,7 +624,7 @@ TcpSrc::send_packets() {
         //send SYN packet and wait for SYN/ACK
         TcpPacket * p  = TcpPacket::new_syn_pkt(_top, _flow, _flow_src, _flow_dst, this, _sink, 1, 1);
         p->set_flow_id(_flow_id);
-        assert(p->size() == 1);
+        assert(p->size() == 1+HEADER_SIZE);
         _highest_sent = 1;
 
         sendToNIC(p);
@@ -858,9 +867,10 @@ TcpSink::receivePacket(Packet& pkt) {
     simtime_picosec fts = p->get_fabricts();
     int pktslice = p->get_tcp_slice();
 
-    pkt.get_tcpsrc()->_last_hop_per_trip = pkt.get_crthop();
-    if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
-        pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
+    //randomly sample packets for queueing
+    if(random()%100 == 0){
+        cout << "PKT " << p->get_queueing() << " " << p->get_last_queueing() << " " << _src->eventlist().now()-fts << endl;
+    }
 
     //check paths
     vector<int> used_path = pkt.get_path();
@@ -877,13 +887,16 @@ TcpSink::receivePacket(Packet& pkt) {
 
     bool marked = p->flags()&ECN_CE;
     
-    int size = p->size();
+    int size = p->size()-HEADER_SIZE;
+    assert(size > 0);
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
     if (last_ts > fts){
+/*
         cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " << last_seqno << " " 
             "LATE " << fts << " " << p->get_crthop() << " " << p->get_queueing() << " " << seqno << endl;
+*/
         _src->_found_reorder++;
     }
     last_ts = fts;
@@ -980,7 +993,7 @@ TcpSink::receivePacket(Packet& pkt) {
 	    }
 	}
     }
-    send_ack(fts,marked,pktslice);
+    send_ack(fts,marked,pktslice,used_path);
 }
 
 Queue* 
@@ -993,7 +1006,7 @@ TcpSink::sendToNIC(Packet* pkt) {
 }
 
 void 
-TcpSink::send_ack(simtime_picosec ts,bool marked, int pktslice) {
+TcpSink::send_ack(simtime_picosec ts,bool marked, int pktslice, vector<int> path) {
     //terribly ugly but that's how opera people made it...
     //just use the previous tcpsrc as a source, packet will get routed based
     //on the inverted src/sink ids and then be received by the source at the end
@@ -1042,6 +1055,7 @@ TcpSink::send_ack(simtime_picosec ts,bool marked, int pktslice) {
         ack->set_flags(ECN_ECHO);
     else
         ack->set_flags(0);
+    ack->set_path(path);
 
     sendToNIC(ack);
 }
@@ -1234,7 +1248,7 @@ RTTSampler::doNextEvent() {
 
 void 
 RTTSampler::srcSend() {
-    SamplePacket* p = SamplePacket::newpkt(_top, _src, _dst, this, 1436);
+    SamplePacket* p = SamplePacket::newpkt(_top, _src, _dst, this, 64);
     Queue* q = sendToNIC(p);
     assert(q);
 }
@@ -1253,7 +1267,7 @@ void
 RTTSampler::dstRecv(Packet* p) {
     simtime_picosec ts = p->get_fabricts();
     p->free();
-    p = SamplePacket::newpkt(_top, _dst, _src, this, 1);
+    p = SamplePacket::newpkt(_top, _dst, _src, this, 64);
     ((SamplePacket*)p)->set_ts(ts);
     Queue* q = sendToNIC(p);
     assert(q);
@@ -1263,7 +1277,7 @@ void
 RTTSampler::srcRecv(Packet* p) {
     simtime_picosec ts = ((SamplePacket*)p)->ts();
     p->free();
-    // cout << "RTT " << eventlist().now()-ts << " " << eventlist().now() << endl;
+    cout << "RTT " << eventlist().now()-ts << " " << eventlist().now() << endl;
 }
 
 Queue*

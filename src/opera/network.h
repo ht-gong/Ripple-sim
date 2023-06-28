@@ -150,6 +150,8 @@ class Packet {
     void set_queueing(unsigned queueing) {_queueing = queueing;}
     unsigned get_queueing() {return _queueing;}
     void inc_queueing(unsigned queueing) {_queueing += queueing;}
+    void set_last_queueing(unsigned queueing) {_last_hop_queueing = queueing;}
+    unsigned get_last_queueing() {return _last_hop_queueing;}
     void clear_path() {_tor_path.clear();}
     vector<int> get_path() {return _tor_path;}
     void add_hop(int tor) {_tor_path.push_back(tor);}
@@ -208,6 +210,7 @@ class Packet {
     uint32_t _flags; // used for ECN & friends
     simtime_picosec _fabricts; //timestamp from nic sentout
     unsigned _queueing; //amount of queueing packet goes through
+    unsigned _last_hop_queueing;
 
     ///////// For RLB //////////
 

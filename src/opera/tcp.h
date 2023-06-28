@@ -83,6 +83,7 @@ class TcpSrc : public PacketSink, public EventSource {
 
     uint32_t effective_window();
     void cmpIdealCwnd(uint64_t ideal_mbps);
+    void reportTP();
     virtual void rtx_timer_hook(simtime_picosec now,simtime_picosec period);
     virtual const string& nodename() { return _nodename; }
 
@@ -104,8 +105,6 @@ class TcpSrc : public PacketSink, public EventSource {
     uint32_t _maxcwnd;
     uint16_t _dupacks;
     uint64_t _last_acked;
-    uint32_t _max_hops_per_trip;
-    uint32_t _last_hop_per_trip;
     //track which tdtcp state had a packet retransmitted
     map<uint64_t, int> _rtx_to_slice;
     //variables that are split between states in TDTCP
@@ -189,6 +188,9 @@ class TcpSrc : public PacketSink, public EventSource {
     int _flow_src; // the sender (source) for this flow
     int _flow_dst; // the receiver (sink) for this flow
 
+    unsigned _bytes_in_sample = 0;
+    simtime_picosec _last_sample = 0;
+
     // Mechanism
     void clear_timer(uint64_t start,uint64_t end);
 
@@ -246,7 +248,7 @@ class TcpSink : public PacketSink, public DataReceiver, public Logged {
     //const Route* _route;
 
     // Mechanism
-    void send_ack(simtime_picosec ts,bool marked,int pktslice);
+    void send_ack(simtime_picosec ts,bool marked,int pktslice, vector<int> path);
 
     string _nodename;
 };

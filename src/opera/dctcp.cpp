@@ -191,3 +191,10 @@ DCTCPSrc::rtx_timer_hook(simtime_picosec now,simtime_picosec period){
     TcpSrc::rtx_timer_hook(now,period);
 };
 
+void DCTCPSrc::doNextEvent() {
+    if(!_rtx_timeout_pending) {
+        startflow();
+    }
+    TcpSrc::doNextEvent();
+}
+

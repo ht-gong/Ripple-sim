@@ -217,24 +217,6 @@ void CompositeQueue::doNextEvent() {
 
 void CompositeQueue::receivePacket(Packet& pkt) {
 
-	// debug:
-	//if (pkt.get_time_sent() == 342944606400 && pkt.get_real_src() == 177 && pkt.get_real_dst() == 423)
-	//	cout << "debug @compositequeue: ToR " << _tor << ", port " << _port << " received the packet" << endl;
-
-	// debug:
-	//cout << "_maxsize = " << _maxsize << endl;
-
-    //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_ARRIVE);
-
-    // debug:
-	//if (pkt.been_bounced() == true && pkt.bounced() == false) {
-	//	cout << "ToR " << _tor << " received a previously bounced packet" << endl;
-	//	cout << "    src = " << pkt.get_src() << endl;
-	//} else if (pkt.bounced() == true) {
-	//	cout << "ToR " << _tor << " received a currently bounced packet" << endl;
-	//	cout << "    src = " << pkt.get_src() << endl;
-	//}
-
 	switch (pkt.type()) {
     case RLB:
     {
@@ -246,6 +228,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 
     	_enqueued_rlb.push_front(&pkt);
 		_queuesize_rlb += pkt.size();
+        _max_recorded_size = _queuesize_rlb > _max_recorded_size ? _queuesize_rlb : _max_recorded_size;
 
         break;
     }
@@ -253,23 +236,12 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     {
         NdpPacket *p = (NdpPacket*)&pkt;
         p->inc_queueing(_queuesize_low);
-        /*
-        if (p->get_src() == 403 && p->get_dst() == 19 && (p->seqno() == 1066949 || p->seqno() == 1065513)) {
-            cout << "SEQ " << p->seqno() << " INQUEUE " << nodename() << " AT " << 
-                eventlist().now()/1E6 << endl;
-        }
-        */
     }
     case NDPACK:
     case NDPNACK:
     case NDPPULL:
     {
         if (!pkt.header_only()){
-
-        	// debug:
-			//if (_tor == 0 && _port == 6)
-			//	cout << "> received a full packet: " << pkt.size() << " bytes" << endl;
-
 			if (_queuesize_low + pkt.size() <= _maxsize || drand()<0.5) {
 				//regular packet; don't drop the arriving packet
 
@@ -564,6 +536,13 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     }
     }
     
+    int slice = _top->time_to_superslice(eventlist().now());
+    if (queuesize() > _max_recorded_size_slice[slice]) {
+        _max_recorded_size_slice[slice] = queuesize();
+    }
+    if (queuesize() > _max_recorded_size) {
+        _max_recorded_size = queuesize();
+    }
     if (_serv == QUEUE_INVALID) {
 		beginService();
     }

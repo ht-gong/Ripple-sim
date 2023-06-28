@@ -164,6 +164,7 @@ int main(int argc, char **argv) {
 
     // debug:
     cout << "Loading traffic..." << endl;
+    map<int, NdpPullPacer*> pacers;
 
     //ifstream input("flows.txt");
     ifstream input(flowfile);
@@ -193,10 +194,11 @@ int main(int argc, char **argv) {
 
                 // Set the pull rate to something reasonable.
                 // we can be more aggressive if the load is lower
-                NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); // 1 = pull at line rate
-                //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, .17);
-
-                NdpSink* flowSnk = new NdpSink(top, flowpacer, flow_src, flow_dst);
+                if(pacers[flow_dst] == NULL) {
+                    NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); 
+                    pacers[flow_dst] = flowpacer;
+                }
+                NdpSink* flowSnk = new NdpSink(top, pacers[flow_dst], flow_src, flow_dst);
                 ndpRtxScanner.registerNdp(*flowSrc);
 
                 // set up the connection event
@@ -205,13 +207,12 @@ int main(int argc, char **argv) {
                 sinkLogger.monitorSink(flowSnk);
 
             }  else { // background flow, send it over RLB
-                continue;
 
                 // generate an RLB source/sink:
 
                 RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
                 // debug:
-                //cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
+                cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
                 flowSrc->set_flowsize(vtemp[2]); // bytes
 
                 RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
@@ -225,12 +226,12 @@ int main(int argc, char **argv) {
 
     cout << "Traffic loaded." << endl;
 
-    //RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
-    //master->start();
+    RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+    master->start();
 
     // NOTE: UtilMonitor defined in "pipe"
-    //UtilMonitor* UM = new UtilMonitor(top, eventlist);
-    //UM->start(timeFromSec(utiltime)); // print utilization every X milliseconds.
+    UtilMonitor* UM = new UtilMonitor(top, eventlist);
+    UM->start(timeFromSec(0.00002)); // print utilization every X milliseconds.
 
     // debug:
     cout << "Starting... " << endl;

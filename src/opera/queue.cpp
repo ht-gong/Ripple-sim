@@ -72,7 +72,7 @@ void Queue::sendFromQueue(Packet* pkt) {
         nextpipe = top->get_pipe_serv_tor(pkt->get_src());
         nextpipe->receivePacket(*pkt);
     } else {
-        //pkt->add_hop(_tor);
+        pkt->add_hop(_tor);
         //cout << "sendFromQueue (from ToR) " << _tor << " " << _port << endl; 
         // we're sending out of a ToR queue
         if (top->is_last_hop(pkt->get_crtport())) {
@@ -457,9 +457,11 @@ void PriorityQueue::completeService() {
 	            // randomly choose a path for the packet
 	            // !!! todo: add other options like permutation, etc...
 	            int path_index = random() % npaths;
+                    //cout << "path_index " << path_index << endl;
 
 	            pkt->set_slice_sent(slice); // "timestamp" the packet
                 pkt->set_fabricts(eventlist().now());
+                    pkt->set_queueing(0);
 	            pkt->set_path_index(path_index); // set which path the packet will take
 
 	            // set some initial packet parameters used for label switching

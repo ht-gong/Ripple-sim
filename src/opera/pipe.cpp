@@ -258,6 +258,23 @@ void Pipe::sendFromPipe(Packet *pkt) {
 //////////////////////////////////////////////
 
 
+UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist)
+  : EventSource(eventlist,"utilmonitor"), _top(top)
+{
+    _H = _top->no_of_nodes(); // number of hosts
+    _N = _top->no_of_tors(); // number of racks
+    _hpr = _top->no_of_hpr(); // number of hosts per rack
+    uint64_t rate = 10000000000 / 8; // bytes / second
+    rate = rate * _H;
+    //rate = rate / 1500; // total packets per second
+
+    _max_agg_Bps = rate;
+
+    // debug:
+    //cout << "max bytes per second = " << rate << endl;
+
+}
+
 UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist, map<uint64_t, TcpSrc*> flow_map)
   : EventSource(eventlist,"utilmonitor"), _top(top), _flow_map(flow_map)
 {
@@ -305,15 +322,16 @@ void UtilMonitor::printAggUtil() {
     //cout << "Max packets = " << _max_pkts_in_period << endl;
 
     double util = (double)B_sum / (double)_max_B_in_period;
-
     cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
+/*
     for (int tor = 0; tor < _top->no_of_tors(); tor++) {
         for (int uplink = 0; uplink < _top->no_of_hpr()*2; uplink++) {
             Queue* q = _top->get_queue_tor(tor, uplink);
             q->reportMaxqueuesize();
         }
     }
+*/
     /*
     cout << "QueueReport" << endl;
     for (int tor = 0; tor < _top->no_of_tors(); tor++) {
@@ -331,12 +349,14 @@ void UtilMonitor::printAggUtil() {
         float share = is_it->second;
         uint64_t tp = 100000*share;
         TcpSrc *tcpsrc = _flow_map[id];
-        if(tcpsrc) tcpsrc->cmpIdealCwnd(tp);
+        if(tcpsrc) {
+            tcpsrc->cmpIdealCwnd(tp);
+            tcpsrc->reportTP();
+        }
     }
     */
     if (eventlist().now() + _period < eventlist().getEndtime())
         eventlist().sourceIsPendingRel(*this, _period);
-
 }
 
 map<uint64_t, float> 

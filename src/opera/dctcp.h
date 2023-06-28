@@ -24,6 +24,7 @@ class DCTCPSrc : public TcpSrc {
     virtual void rtx_timer_hook(simtime_picosec now,simtime_picosec period);
     virtual void startflow();
     virtual void cleanup();
+    virtual void doNextEvent();
 
  private:
 #ifdef TDTCP

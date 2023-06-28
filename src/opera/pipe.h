@@ -38,6 +38,7 @@ class Pipe : public EventSource, public PacketSink {
 class UtilMonitor : public EventSource {
  public:
 
+    UtilMonitor(DynExpTopology* top, EventList &eventlist);
     UtilMonitor(DynExpTopology* top, EventList &eventlist, map<uint64_t, TcpSrc*> flow_map);
 
     void start(simtime_picosec period);

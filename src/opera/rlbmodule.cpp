@@ -27,7 +27,7 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
     _Ncommit_queues = _top->no_of_hpr(); // number of commit queues = number of hosts per rack
     _mss = 1436; // packet payload length (bytes)
     _hdr = 64; // header length (bytes)
-    _link_rate = 10000000000 / 8;
+    _link_rate = 100000000000 / 8;
     _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slicetime(3) + _top->get_slicetime(0)); // seconds (was 0.000281;)
     // ^^^ note: we try to send RLB traffic right up to the reconfiguration point (one pkt serialization & propagation before reconfig.)
     // in general, we have two options:
