@@ -15,7 +15,7 @@
 #include "rlbpacket.h" // added for debugging
 
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
-: EventSource(eventlist,"pipe"), _delay(delay)
+: EventSource(eventlist,"pipe"), _delay(delay), _routing(Routing())
 {
     //stringstream ss;
     //ss << "pipe(" << delay/1000000 << "us)";
@@ -160,19 +160,7 @@ void Pipe::sendFromPipe(Packet *pkt) {
             // we compute the current slice at the end of the packet transmission
             // !!! as a future optimization, we could have the "wrong" host NACK any packets
             // that go through at the wrong time
-            int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
-                top->get_nsuperslice();
-            // next, get the relative time from the beginning of that superslice
-            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
-                (top->get_nsuperslice()*top->get_slicetime(3));
-            int slice; // the current slice
-            if (reltime < top->get_slicetime(0))
-                slice = 0 + superslice*3;
-            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
-                slice = 1 + superslice*3;
-            else
-                slice = 2 + superslice*3;
+            int slice = top->time_to_slice(eventlist().now());
 
             int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
             if (nextToR >= 0) {// the rotor switch is up
@@ -237,15 +225,8 @@ void Pipe::sendFromPipe(Packet *pkt) {
         }
         pkt->inc_crthop(); // increment the hop
 
-        // get the port:
-        if (pkt->get_crthop() == pkt->get_maxhops()) { // no more hops defined, need to set downlink port
-            pkt->set_crtport(top->get_lastport(pkt->get_dst()));
-
-        } else {
-            pkt->set_crtport(top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
-                        pkt->get_slice_sent(), pkt->get_path_index(), pkt->get_crthop()));
-        }
-
+        _routing.routing(pkt, eventlist().now());
+        
         Queue* nextqueue = top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
         assert(nextqueue);
         nextqueue->receivePacket(*pkt);

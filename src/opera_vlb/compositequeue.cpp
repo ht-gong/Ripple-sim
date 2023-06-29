@@ -551,3 +551,9 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 mem_b CompositeQueue::queuesize() {
     return _queuesize_low + _queuesize_high;
 }
+
+mem_b CompositeQueue::slice_queuesize(int slice){
+	//unimplemented 
+    assert(0);
+    return 0;
+}

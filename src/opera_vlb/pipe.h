@@ -12,6 +12,7 @@
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
+#include "routing.h"
 
 
 class Pipe : public EventSource, public PacketSink {
@@ -30,6 +31,7 @@ class Pipe : public EventSource, public PacketSink {
     const string& nodename() { return _nodename; }
  private:
     simtime_picosec _delay;
+    Routing _routing;
     typedef pair<simtime_picosec,Packet*> pktrecord_t;
     list<pktrecord_t> _inflight; // the packets in flight (or being serialized)
     string _nodename;

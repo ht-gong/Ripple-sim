@@ -156,6 +156,10 @@ class Packet {
     vector<int> get_path() {return _tor_path;}
     void add_hop(int tor) {_tor_path.push_back(tor);}
     void set_path(vector<int> path) { _tor_path = path;}
+    void set_crtslice(int slice) {_crtslice = slice;}
+    int get_crtslice() {return _crtslice;}
+    bool get_longflow() {return _longflow;}
+    void set_longflow(bool longflow) {_longflow = longflow;}
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -211,6 +215,7 @@ class Packet {
     simtime_picosec _fabricts; //timestamp from nic sentout
     unsigned _queueing; //amount of queueing packet goes through
     unsigned _last_hop_queueing;
+    bool _longflow;
 
     ///////// For RLB //////////
 
@@ -237,7 +242,7 @@ class Packet {
     bool _lasthop;
     int _maxhops;
     int _crtport;
-
+    int _crtslice;
 
     packetid_t _id;
     PacketFlow* _flow;

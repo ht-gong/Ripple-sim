@@ -13,6 +13,7 @@
 #include "rlb.h" // needed to make dummy packet
 #include "tcp.h"
 #include "rlbmodule.h"
+#include "routing.h"
 
 Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLogger* logger)
   : EventSource(eventlist,"queue"), _maxsize(maxsize), _tor(0), _port(0), _top(NULL),
@@ -34,6 +35,8 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
     stringstream ss;
     _max_recorded_size_slice.resize(_top->get_nsuperslice());
     _max_recorded_size = 0;
+    _routing = new Routing();
+    _queue_alarm = new QueueAlarm(eventlist, port, this, top);
     //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
     //_nodename = ss.str();
 }
@@ -43,6 +46,7 @@ void Queue::beginService() {
     /* schedule the next dequeue event */
     assert(!_enqueued.empty());
     eventlist().sourceIsPendingRel(*this, drainTime(_enqueued.back()));
+    _sending_pkt = _enqueued.back();
 }
 
 void Queue::completeService() {
@@ -51,7 +55,8 @@ void Queue::completeService() {
     Packet* pkt = _enqueued.back();
     _enqueued.pop_back();
     _queuesize -= pkt->size();
-
+    _sending_pkt = NULL;
+    
     /* tell the packet to move on to the next pipe */
     //pkt->sendFromQueue();
     sendFromQueue(pkt);
@@ -125,6 +130,9 @@ void Queue::doNextEvent() {
     completeService();
 }
 
+simtime_picosec Queue::get_queueing_delay(int slice){
+     return slice_queuesize(slice)*_ps_per_byte;
+}
 
 void Queue::receivePacket(Packet& pkt) {
     updatePktIn(pkt.flow_id());
@@ -395,16 +403,7 @@ void PriorityQueue::completeService() {
 
                 pkt->set_src_ToR(_top->get_firstToR(pkt->get_src())); // set the sending ToR. This is used for subsequent routing
 
-	            // send on the first path (index 0) to the "intermediate" destination
-	            int path_index = 0; // index 0 ensures it's the direct path
-	            pkt->set_path_index(path_index); // set which path the packet will take
-
-	            // set some initial packet parameters used for routing
-	            pkt->set_lasthop(false);
-	            pkt->set_crthop(-1);
-	            pkt->set_crtToR(-1);
-	            pkt->set_maxhops(_top->get_no_hops(pkt->get_src_ToR(),
-	                _top->get_firstToR(pkt->get_dst()), pkt->get_slice_sent(), path_index));
+	            _routing->routingFromPQ(pkt, eventlist().now());
 	        }
 	        /* tell the packet to move on to the next pipe */
 	        sendFromQueue(pkt);
@@ -493,4 +492,10 @@ void PriorityQueue::completeService() {
 
 mem_b PriorityQueue::queuesize() {
     return _queuesize[Q_RLB] + _queuesize[Q_LO] + _queuesize[Q_MID] + _queuesize[Q_HI];
+}
+
+mem_b PriorityQueue::slice_queuesize(int slice){
+	//unimplemented 
+    assert(0);
+    return 0;
 }

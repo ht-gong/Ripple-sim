@@ -46,6 +46,7 @@ class DynExpTopology: public Topology{
   int64_t get_nsuperslice() {return _nsuperslice;}
   simtime_picosec get_slicetime(int ind) {return _slicetime[ind];} // picoseconds spent in each slice
   int time_to_superslice(simtime_picosec t);
+  simtime_picosec get_relative_time(simtime_picosec t);
   int time_to_slice(simtime_picosec t); // Given a time, return the slice number (within a cycle)
   int time_to_absolute_slice(simtime_picosec t); // Given a time, return the absolute slice number
   simtime_picosec get_slice_start_time(int slice); // Get the start of a slice
@@ -88,6 +89,7 @@ class DynExpTopology: public Topology{
   int no_of_nodes() const {return _no_of_nodes;} // number of servers
   int no_of_tors() const {return _ntor;} // number of racks
   int no_of_hpr() const {return _ndl;} // number of hosts per rack = number of downlinks
+  bool is_downlink(int port) {return port < _ndl;}
   
 
  private:
