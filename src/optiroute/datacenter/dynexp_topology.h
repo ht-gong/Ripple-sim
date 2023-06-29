@@ -75,7 +75,11 @@ class DynExpTopology: public Topology{
   int failed_links;
   queue_type qt;
 
-  DynExpTopology(mem_b queuesize, Logfile* log, EventList* ev, queue_type q, string topfile, RoutingAlgorithm routalg);
+  DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, 
+                                string topfile, RoutingAlgorithm routalg);
+
+  DynExpTopology(mem_b queuesize, Logfile* log, EventList* ev, queue_type q, string topfile, 
+                RoutingAlgorithm routalg, int marking_threshold, simtime_picosec slice_duration);
 
   void init_network();
 
@@ -110,6 +114,8 @@ class DynExpTopology: public Topology{
   vector<vector<vector<vector<vector<int>>>>> _lbls;
   int _ndl, _nul, _ntor, _no_of_nodes; // number down links, number uplinks, number ToRs, number servers
   int _nslice; // number of topologies
+  simtime_picosec _slice_dur = 0; // slice duration, if specified from cmdline then overrides the duration read from file
+  int _marking_thresh = 0; // marking threshold of TCDCP, if specified from cmdline then default is overriden
   RoutingAlgorithm _routalg;
   simtime_picosec _connected_time; // duration of one connected topology
   simtime_picosec _reconfig_time;  // time it takes to reconfigure entire topology

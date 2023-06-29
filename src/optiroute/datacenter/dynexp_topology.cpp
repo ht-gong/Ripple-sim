@@ -22,12 +22,22 @@ extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 string ntoa(double n);
 string itoa(uint64_t n);
 
-DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, string topfile, RoutingAlgorithm routalg){
-    _queuesize = queuesize;
-    logfile = lg;
-    eventlist = ev;
-    qt = q;
-    _routalg = routalg;
+DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, 
+                                string topfile, RoutingAlgorithm routalg):
+                                _queuesize(queuesize), logfile(lg), eventlist(ev), qt(q), _routalg(routalg) {
+  
+    read_params(topfile);
+ 
+    set_params();
+
+    init_network();
+}
+
+DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, 
+                                string topfile, RoutingAlgorithm routalg, int marking_threshold, simtime_picosec slice_duration):
+                                _queuesize(queuesize), logfile(lg), eventlist(ev), qt(q), _routalg(routalg), 
+                                _slice_dur(slice_duration), _marking_thresh(marking_threshold) {
+    
 
     read_params(topfile);
  
@@ -57,8 +67,10 @@ void DynExpTopology::read_params(string topfile) {
     stream.str(""); stream.clear(); // clear `stream` for re-use in this scope 
     stream << line;
     stream >> _nslice;
-
+    
     stream >> _connected_time;
+    _connected_time = (_slice_dur ? _slice_dur : _connected_time); // cmdline duration overrides the one specified in topology file
+    
     stream >> _reconfig_time;
     // total time in the "superslice"
     _tot_time = _connected_time + _reconfig_time;
@@ -160,8 +172,11 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, routing);
     else if (qt==DEFAULT)
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, routing);
-    else if (qt==ECN)
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*ECN_K, tor, port, this, routing);
+    else if (qt==ECN) {
+        if(!_marking_thresh)
+          _marking_thresh = DEFAULT_ECN_K;
+        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*_marking_thresh, tor, port, this, routing);
+    }
     assert(0);
 }
 

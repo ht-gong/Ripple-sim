@@ -59,6 +59,8 @@ int main(int argc, char **argv) {
 
     // defined in flags:
     int cwnd;
+    int marking_threshold = 0;
+    simtime_picosec slice_duration = 0;
     stringstream filename(ios_base::out);
     string flowfile; // read the flows from a specified file
     string topfile; // read the topology from a specified file
@@ -82,6 +84,12 @@ int main(int argc, char **argv) {
 	       i++;
         } else if (!strcmp(argv[i],"-cwnd")){
 	       cwnd = atoi(argv[i+1]);
+	       i++;
+        } else if (!strcmp(argv[i],"-dctcpmarking")){
+	       marking_threshold = atoi(argv[i+1]);
+	       i++;
+        } else if (!strcmp(argv[i],"-slicedur")){
+	       slice_duration = strtoull(argv[i+1], NULL, 10);
 	       i++;
         } else if (!strcmp(argv[i],"-q")){
 	       queuesize = atoi(argv[i+1]) * DEFAULT_PACKET_SIZE;
@@ -177,7 +185,8 @@ int main(int argc, char **argv) {
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, ECN, topfile, routing_alg);
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, ECN, topfile, 
+                                                routing_alg, marking_threshold, slice_duration);
 #endif
 
 	// initialize all sources/sinks

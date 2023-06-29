@@ -445,8 +445,6 @@ mem_b PriorityQueue::queuesize() {
     return _queuesize[Q_RLB] + _queuesize[Q_LO] + _queuesize[Q_MID] + _queuesize[Q_HI];
 }
 
-
-
 mem_b PriorityQueue::slice_queuesize(int slice){
 	//unimplemented 
     assert(0);

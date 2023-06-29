@@ -13,6 +13,9 @@
 // Note: you never construct a new TcpPacket or TcpAck directly; 
 // rather you use the static method newpkt() which knows to reuse old packets from the database.
 
+#define HEADER_SIZE 64
+#define MTU_SIZE 1500
+
 class TcpPacket : public Packet {
 public:
 	typedef uint64_t seq_t;
@@ -26,12 +29,13 @@ public:
         p->set_dst(flow_dst);
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;
+        p->_flags = 0;
 	    p->_type = TCP;
 	    p->_seqno = seqno;
 	    p->_data_seqno=dataseqno;
 	    p->_syn = false;
-        p->_size = size;
-		p->_flags = 0;
+        p->_size = size+HEADER_SIZE;
+        assert(p->_size <= MTU_SIZE);
 	    return p;
 	}
 
@@ -81,12 +85,13 @@ public:
         p->set_dst(flow_dst);
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;
+        p->_flags = 0;
 	    p->_type = TCPACK;
 	    p->_seqno = seqno;
 	    p->_ackno = ackno;
 	    p->_data_ackno = dackno;
-        p->_size = 40;
-		p->_flags = 0;
+        p->_size = HEADER_SIZE;
+
 	    return p;
 	}
 

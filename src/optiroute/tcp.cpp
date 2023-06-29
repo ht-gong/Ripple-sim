@@ -541,7 +541,7 @@ TcpSrc::send_packets() {
         //cout << "need to establish\n";
         //send SYN packet and wait for SYN/ACK
         TcpPacket * p  = TcpPacket::new_syn_pkt(_top, _flow, _flow_src, _flow_dst, this, _sink, 1, 1);
-        assert(p->size() == 1);
+        //assert(p->size() == 1);
         _highest_sent = 1;
 
         sendToNIC(p);
@@ -789,7 +789,7 @@ TcpSink::receivePacket(Packet& pkt) {
 
     bool marked = p->flags()&ECN_CE;
     
-    int size = p->size();
+    int size = p->size() - HEADER_SIZE;
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
     if (last_ts > fts){
         // cout << "REORDER " << " " << _src->get_flow_src()<< " " << _src->get_flow_dst() << " "
