@@ -12,14 +12,15 @@ zoom_thresh = 1E4
 
 vlb_settings = ["1us", "10us"]
 # vlb_settings = ["10us"]
-expander_settings = ["10us_1path", "1000us_1path", "static_1path", "static_5path", "static_ECMP"]
-# expander_settings = ["10us_1path", "100us_1path", "1000us_1path", "static_ECMP"]
+# expander_settings = ["10us_1path", "1000us_1path", "static_1path", "static_5path", "static_ECMP"]
+expander_settings = ["10us_1path_ECNK=32", "10us_1path_ECNK=65", "100us_1path_ECNK=32", "100us_1path_ECNK=65", "1000us_1path_ECNK=32", "1000us_1path_ECNK=65", \
+                     "static_1path_ECNK=32", "static_1path_ECNK=65"]
 # opera_settings = ["regular_1path", "static_1path", "static_slice60", "static_slice120", "static_slice240", "regular_1path_slowswitching"]
 opera_settings = ["regular_1path"]
-all_settings = [expander_settings, opera_settings, vlb_settings]
-# all_settings = [expander_settings]
-prefix = ["Expander", "Opera", "VLB"]
-# prefix = ["Expander"]
+# all_settings = [expander_settings, opera_settings, vlb_settings]
+all_settings = [expander_settings]
+# prefix = ["Expander", "Opera", "VLB"]
+prefix = ["Expander"]
 graph_settings = ["full", "zoomed"]
 
 for gs in graph_settings:
@@ -51,9 +52,15 @@ for gs in graph_settings:
                 for flowsize in flowsizes:
                     fcts50.append(np.percentile(flows[flowsize], 50))
                 m = next(marker)
-                a, = ax1.plot(flowsizes, fcts99, marker=m, label=f"{prefix[i]}_{expr}")
+                if expr[-2:] == '65':
+                    a, = ax1.plot(flowsizes, fcts99, marker=m, color=forlegend[-1].get_color(), label=f"{prefix[i]}_{expr}", linestyle='--')
+                else:
+                    a, = ax1.plot(flowsizes, fcts99, marker=m, label=f"{prefix[i]}_{expr}", linestyle='-')
                 ax1.set_title(f'FCT Comparison {load} 99 tail {gs}')
-                ax2.plot(flowsizes, fcts50, marker=m, label=f"{prefix[i]}_{expr}")
+                if expr[-2:] == '65':
+                    a, = ax2.plot(flowsizes, fcts50, marker=m, color=forlegend[-1].get_color(), label=f"{prefix[i]}_{expr}", linestyle='--')
+                else:
+                    a, = ax2.plot(flowsizes, fcts50, marker=m, label=f"{prefix[i]}_{expr}", linestyle='-')
                 ax2.set_title(f'FCT Comparison {load} 50 tail {gs}')
                 
                 for ax in [ax1, ax2]:
@@ -67,6 +74,6 @@ for gs in graph_settings:
         #plt.xlabel("Flow size (bytes)")
         ax1.legend(handles = forlegend, bbox_to_anchor=(1.3, 1.0), loc = 'upper right')
         fig.tight_layout()
-        plt.savefig(f"./{dir}/All_FCT_Comparison_{load}_{gs}.png", bbox_inches='tight')
+        plt.savefig(f"./{dir}/ExpanderECN_FCT_Comparison_{load}_{gs}.png", bbox_inches='tight')
         plt.show()
         plt.close()
