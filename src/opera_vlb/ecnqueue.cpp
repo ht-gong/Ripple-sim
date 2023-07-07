@@ -8,7 +8,7 @@
 #include "queue_lossless.h"
 #include "tcppacket.h"
 #include <iostream>
-#define DEBUG
+// #define DEBUG
 
 ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize, 
 			 EventList& eventlist, QueueLogger* logger, mem_b K,
@@ -111,18 +111,36 @@ ECNQueue::receivePacket(Packet & pkt)
 
 void ECNQueue::beginService() {
      /* schedule the next dequeue event */
-     assert(!_enqueued[_crt_tx_slice].empty());
-     assert(drainTime(_enqueued[_crt_tx_slice].back()) != 0);
-     eventlist().sourceIsPendingRel(*this, drainTime(_enqueued[_crt_tx_slice].back()));
-     _sending_pkt = _enqueued[_crt_tx_slice].back();
-     _enqueued[_crt_tx_slice].pop_back();
+    assert(!_enqueued[_crt_tx_slice].empty());
+    assert(drainTime(_enqueued[_crt_tx_slice].back()) != 0);
+
+    Packet* to_be_sent = _enqueued[_crt_tx_slice].back();
+    DynExpTopology* top = to_be_sent->get_topology();
+
+    simtime_picosec finish_push = eventlist().now() + drainTime(to_be_sent) /*229760*/;
+
+    int finish_push_slice = top->time_to_slice(finish_push); // plus the link delay
+    
+    if(!top->is_downlink(_port) && finish_push_slice != _crt_tx_slice) {
+        // Uplink port attempting to serve pkt across configurations
+        #ifdef DEBUG
+        cout<<"Uplink port attempting to serve pkt across configurations\n";
+        #endif
+        return;
+    }    
+    
+    eventlist().sourceIsPendingRel(*this, drainTime(_enqueued[_crt_tx_slice].back()));
+    _is_servicing = true;
+    _last_service_begin = eventlist().now();
+    _sending_pkt = _enqueued[_crt_tx_slice].back();
+    _enqueued[_crt_tx_slice].pop_back();
 
      //mark on dequeue
-     if (queuesize() > _K)
- 	  _sending_pkt->set_flags(_sending_pkt->flags() | ECN_CE);
+    if (queuesize() > _K)
+ 	    _sending_pkt->set_flags(_sending_pkt->flags() | ECN_CE);
 
      //_queuesize[_crt_tx_slice] -= _sending_pkt->size();
-     Packet *pkt = _sending_pkt;
+    Packet *pkt = _sending_pkt;
      
     #ifdef DEBUG
     unsigned seqno = 0;
@@ -166,6 +184,7 @@ ECNQueue::completeService()
 
     sendFromQueue(_sending_pkt);
     _sending_pkt = NULL;
+    _is_servicing = false;
     
     if (!_enqueued[_crt_tx_slice].empty() && _state_send==LosslessQueue::READY) {
         /* schedule the next dequeue event */
@@ -174,13 +193,13 @@ ECNQueue::completeService()
 }
 
 mem_b ECNQueue::queuesize() {
-     if(_top->is_downlink(_port))
-         return _queuesize[0];
-     int sum = 0;
-     for(int i = 0; i < _dl_queue; i++){
-         sum += _queuesize[i];
-     }
-     return sum;
+    if(_top->is_downlink(_port))
+        return _queuesize[0];
+    int sum = 0;
+    for(int i = 0; i < _dl_queue; i++){
+        sum += _queuesize[i];
+    }
+    return sum;
  }
 
  void ECNQueue::dump_queuesize() {

@@ -215,7 +215,7 @@ class Packet {
     simtime_picosec _fabricts; //timestamp from nic sentout
     unsigned _queueing; //amount of queueing packet goes through
     unsigned _last_hop_queueing;
-    bool _longflow;
+    bool _longflow = false;
 
     ///////// For RLB //////////
 
@@ -243,6 +243,7 @@ class Packet {
     int _maxhops;
     int _crtport;
     int _crtslice;
+    int _hop_index;
 
     packetid_t _id;
     PacketFlow* _flow;

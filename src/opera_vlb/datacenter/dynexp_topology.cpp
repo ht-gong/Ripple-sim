@@ -132,6 +132,14 @@ void DynExpTopology::read_params(string topfile) {
       }
     }
 
+    _rpath_indices.resize(_no_of_nodes);
+    for (int i = 0; i < _no_of_nodes; i++) {
+      _rpath_indices[i].resize(_no_of_nodes);
+      for (int j = 0; j < _no_of_nodes; j++) {
+        _rpath_indices[i][j].resize(_nslice);
+      }
+    }
+
     // debug:
     cout << "Loading topology..." << endl;
 
@@ -203,6 +211,16 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem
 void DynExpTopology::init_network() {
   QueueLoggerSampling* queueLogger;
 
+  for (int i = 0; i < _no_of_nodes; i++) {
+    for (int j = 0; j < _no_of_nodes; j++) {
+      if(get_firstToR(i) == get_firstToR(j)) {
+        continue;
+      }
+      for (int k = 0; k < _nslice; k++) {
+          _rpath_indices[i][j][k] = rand() % _nul;
+      }
+    }
+  }
   // initialize server to ToR pipes / queues
   for (int j = 0; j < _no_of_nodes; j++) { // sweep nodes
     rlb_modules[j] = NULL;
@@ -328,7 +346,7 @@ simtime_picosec DynExpTopology::get_relative_time(simtime_picosec t) {
  }
 
 int DynExpTopology::time_to_superslice(simtime_picosec t) {
-    int64_t superslice = (t / get_slicetime(3)) %
+    int64_t superslice = (t / get_slicetime(2)) %
         get_nsuperslice();
     return superslice;
 }
@@ -376,11 +394,15 @@ void DynExpTopology::inc_host_buffer(int host) {
     _host_buffers[host]++;
     if(_host_buffers[host] > _max_host_buffers[host]) {
         _max_host_buffers[host] = _host_buffers[host];
-        cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
+        // cout << "MAXBUF " << host << " " << _max_host_buffers[host] << endl;
     }
 }
 
 void DynExpTopology::decr_host_buffer(int host) {
     assert(_host_buffers[host] > 0);
     _host_buffers[host]--;
+}
+
+int DynExpTopology::get_path_indices(int srcHost, int dstHost, int slice) {
+  return _rpath_indices[srcHost][dstHost][slice];
 }

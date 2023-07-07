@@ -13,7 +13,7 @@
 class Routing {
  public:
    Routing() {}
-   simtime_picosec routing(Packet* pkt, simtime_picosec t);
+   simtime_picosec routing(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
    simtime_picosec routingFromPQ(Packet* pkt, simtime_picosec t);
 };
 

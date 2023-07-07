@@ -30,6 +30,7 @@ public:
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;
         p->_flags = 0;
+		p->set_longflow(false);
 	    p->_type = TCP;
 	    p->_seqno = seqno;
 	    p->_data_seqno=dataseqno;

@@ -67,6 +67,7 @@ class DynExpTopology: public Topology{
   unsigned get_host_buffer(int host);
   void inc_host_buffer(int host);
   void decr_host_buffer(int host);
+  int get_path_indices(int srcHost, int dstHost, int slice);
 
 
   Logfile* logfile;
@@ -107,6 +108,8 @@ class DynExpTopology: public Topology{
   // Connected time slices
   // indexing: [src][dst] -> <time_slice, port> where the src-dst ToRs are connected
   vector<vector<vector<pair<int, int>>>> _connected_slices;
+  // random path indices for per-flow VLB
+  vector<vector<vector<int>>> _rpath_indices;
   int _ndl, _nul, _ntor, _no_of_nodes; // number down links, number uplinks, number ToRs, number servers
   int _nslice; // number of topologies
   int64_t _nsuperslice; // number of "superslices" (periodicity of topology)

@@ -262,8 +262,8 @@ TcpSrc::receivePacket(Packet& pkt)
     }
     //  cout << "Base "<<timeAsMs(_base_rtt)<< " RTT " << timeAsMs(_rtt)<< " Queued " << queued_packets << endl;
 
-    if (_rto<timeFromMs(1))
-        _rto = timeFromMs(1);
+    if (_rto<timeFromMs(5.8))
+        _rto = timeFromMs(5.8);
 
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
@@ -340,11 +340,7 @@ TcpSrc::receivePacket(Packet& pkt)
             _unacked = _cwnd;
             _effcwnd = _cwnd;
 #endif
-            if(_longflow){
-                _bulk_sender->sendOrSchedule();
-            } else {
-                send_packets();
-            }
+            send_packets();
             return;
         }
         // We're in fast recovery, i.e. one packet has been
@@ -377,11 +373,7 @@ TcpSrc::receivePacket(Packet& pkt)
             _dupacks = 0;
             _in_fast_recovery = false;
 
-            if(_longflow){
-                _bulk_sender->sendOrSchedule();
-            } else {
-                send_packets();
-            }
+            send_packets();
             return;
         }
         // In fast recovery, and still getting ACKs for the
@@ -407,11 +399,7 @@ TcpSrc::receivePacket(Packet& pkt)
         _cwnd += _mss;
 #endif
         retransmit_packet();
-        if(_longflow){
-            _bulk_sender->sendOrSchedule();
-        } else {
-            send_packets();
-        }
+        send_packets();
         return;
     }
     // It's a dup ack
@@ -439,11 +427,9 @@ TcpSrc::receivePacket(Packet& pkt)
         if (_last_acked+_cwnd >= _highest_sent+_mss) 
             _effcwnd=_unacked; // starting to send packets again
 #endif
-        if(_longflow){
-            _bulk_sender->sendOrSchedule();
-        } else {
-            send_packets();
-        }
+
+        send_packets();
+
         return;
     }
     // Not yet in fast recovery. What should we do instead?
@@ -459,11 +445,7 @@ TcpSrc::receivePacket(Packet& pkt)
             if (_logger) 
                 _logger->logTcp(*this, TcpLogger::TCP_RCV_DUP);
             */
-            if(_longflow){
-                _bulk_sender->sendOrSchedule();
-            } else {
-                send_packets();
-            }
+            send_packets();
             return;
         }
     // _dupacks==3
@@ -683,6 +665,9 @@ TcpSrc::send_packets() {
 
         uint16_t size = _highest_sent+_mss <= _flow_size ? _mss : _flow_size-_highest_sent+1;
         TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _highest_sent+1, data_seq, size);
+        if(_longflow) {
+            p->set_longflow(true);
+        }
         //cout << "sending seqno:" << p->seqno() << endl;
 	p->set_packetid(id_gen++);
         p->set_flow_id(_flow_id);
@@ -869,7 +854,7 @@ TcpSink::receivePacket(Packet& pkt) {
 
     //randomly sample packets for queueing
     if(random()%100 == 0){
-        cout << "PKT " << p->get_queueing() << " " << p->get_last_queueing() << " " << _src->eventlist().now()-fts << endl;
+        // cout << "PKT " << p->get_queueing() << " " << p->get_last_queueing() << " " << _src->eventlist().now()-fts << endl;
     }
 
     //check paths
@@ -1277,7 +1262,7 @@ void
 RTTSampler::srcRecv(Packet* p) {
     simtime_picosec ts = ((SamplePacket*)p)->ts();
     p->free();
-    cout << "RTT " << eventlist().now()-ts << " " << eventlist().now() << endl;
+    // cout << "RTT " << eventlist().now()-ts << " " << eventlist().now() << endl;
 }
 
 Queue*

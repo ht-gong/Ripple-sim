@@ -50,6 +50,8 @@ class Queue : public EventSource, public PacketSink {
     simtime_picosec serviceTime();
     int num_drops() const {return _num_drops;}
     void reset_drops() {_num_drops = 0;}
+    simtime_picosec get_is_servicing() {return _is_servicing;}
+    simtime_picosec get_last_service_time() {return _last_service_begin;}
 
     virtual void setRemoteEndpoint(Queue* q) {_remoteEndpoint = q;};
     virtual void setRemoteEndpoint2(Queue* q) {_remoteEndpoint = q;q->setRemoteEndpoint(this);};
@@ -98,6 +100,8 @@ class Queue : public EventSource, public PacketSink {
     QueueAlarm* _queue_alarm;
     Packet* _sending_pkt = NULL;
     int _crt_tx_slice = 0;
+    simtime_picosec _last_service_begin = 0;
+    bool _is_servicing = false;
 
     //track flows at queue
     map<uint64_t, int> _pkts_per_flow;
