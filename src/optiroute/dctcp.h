@@ -11,7 +11,7 @@
 class DCTCPSrc : public TcpSrc {
  public:
      DCTCPSrc(TcpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, 
-             DynExpTopology *top, int flow_src, int flow_dst);
+             DynExpTopology *top, int flow_src, int flow_dst, Routing* routing);
     ~DCTCPSrc(){}
 
     // Mechanism

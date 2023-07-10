@@ -2,6 +2,6 @@
 #ifndef ROUTINGUTIL_H
 #define ROUTINGUTIL_H
 
-enum RoutingAlgorithm {SINGLESHORTEST, KSHORTEST, VLB, ECMP};
+enum RoutingAlgorithm {SINGLESHORTEST, KSHORTEST, VLB, ECMP, LONGSHORT};
 
 #endif

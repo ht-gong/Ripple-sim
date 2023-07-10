@@ -23,8 +23,8 @@ string ntoa(double n);
 string itoa(uint64_t n);
 
 DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, 
-                                string topfile, RoutingAlgorithm routalg):
-                                _queuesize(queuesize), logfile(lg), eventlist(ev), qt(q), _routalg(routalg) {
+                                string topfile, Routing* routing):
+                                _queuesize(queuesize), logfile(lg), eventlist(ev), qt(q), _routing(routing) {
   
     read_params(topfile);
  
@@ -34,8 +34,8 @@ DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue
 }
 
 DynExpTopology::DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, 
-                                string topfile, RoutingAlgorithm routalg, int marking_threshold, simtime_picosec slice_duration):
-                                _queuesize(queuesize), logfile(lg), eventlist(ev), qt(q), _routalg(routalg), 
+                                string topfile, Routing* routing, int marking_threshold, simtime_picosec slice_duration):
+                                _queuesize(queuesize), logfile(lg), eventlist(ev), qt(q), _routing(routing), 
                                 _slice_dur(slice_duration), _marking_thresh(marking_threshold) {
     
 
@@ -110,6 +110,21 @@ void DynExpTopology::read_params(string topfile) {
       }
     }
 
+    // calculate connected slices
+    _connected_slices.resize(_ntor);
+    for (int i = 0; i < _ntor; i++) {
+      _connected_slices[i].resize(_ntor);
+    }
+
+    for (int i = 0; i < _nslice; i++) {
+      for (int j = 0; j < _nul*_ntor; j++) {
+        int src_tor = j / _nul;
+        int dst_tor = _adjacency[i][j];
+        if(dst_tor >= 0)
+            _connected_slices[src_tor][dst_tor].push_back(make_pair(i, (j % _nul) + _ndl));
+      }
+    }
+
     // debug:
     cout << "Loading topology..." << endl;
 
@@ -159,23 +174,23 @@ RlbModule* DynExpTopology::alloc_rlb_module(DynExpTopology* top, int node) {
     return new RlbModule(top, *eventlist, node); // *** all the other params (e.g. link speed) are HARD CODED in RlbModule constructor
 }
 
-Queue* DynExpTopology::alloc_src_queue(DynExpTopology* top, QueueLogger* queueLogger, int node, Routing* routing) {
-    return new PriorityQueue(speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node, this, routing);
+Queue* DynExpTopology::alloc_src_queue(DynExpTopology* top, QueueLogger* queueLogger, int node) {
+    return new PriorityQueue(speedFromMbps((uint64_t)HOST_NIC), memFromPkt(FEEDER_BUFFER), *eventlist, queueLogger, node, this, _routing);
 }
 
-Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, int tor, int port, Routing* routing) {
-    return alloc_queue(queueLogger, HOST_NIC, queuesize, tor, port, routing);
+Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, int tor, int port) {
+    return alloc_queue(queueLogger, HOST_NIC, queuesize, tor, port);
 }
 
-Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port, Routing* routing) {
+Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port) {
     if (qt==COMPOSITE)
-        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, routing);
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
     else if (qt==DEFAULT)
-        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, routing);
+        return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
     else if (qt==ECN) {
         if(!_marking_thresh)
           _marking_thresh = DEFAULT_ECN_K;
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*_marking_thresh, tor, port, this, routing);
+        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*_marking_thresh, tor, port, this, _routing);
     }
     assert(0);
 }
@@ -183,7 +198,6 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem
 // initializes all the pipes and queues in the Topology
 void DynExpTopology::init_network() {
   QueueLoggerSampling* queueLogger;
-  Routing* routing = new Routing(_routalg);
 
   // pre-samples the path indices for each flow, used for routing
   for (int i = 0; i < _no_of_nodes; i++) {
@@ -192,7 +206,8 @@ void DynExpTopology::init_network() {
         continue;
       }
       for (int k = 0; k < _nslice; k++) {
-         if(_routalg == ECMP || _routalg == KSHORTEST) {
+         if(_routing->get_routing_algorithm() == ECMP || 
+            _routing->get_routing_algorithm() == KSHORTEST) {
           int npaths = get_no_paths(get_firstToR(i), get_firstToR(j), k);
           if (npaths == 0) {
                 cout << "Error: there were no paths for slice " << k  << " src " << i <<
@@ -200,7 +215,8 @@ void DynExpTopology::init_network() {
                 assert(0);
             }
           _rpath_indices[i][j][k] = rand() % npaths;
-        } else if(_routalg == VLB) {
+        } else if(_routing->get_routing_algorithm() == VLB || 
+                  _routing->get_routing_algorithm() == LONGSHORT) {
           _rpath_indices[i][j][k] = rand() % _nul;
         }
       }
@@ -221,13 +237,13 @@ void DynExpTopology::init_network() {
 
     rlb_modules[j] = alloc_rlb_module(this, j);
 
-    queues_serv_tor[j] = alloc_src_queue(this, queueLogger, j , routing);
+    queues_serv_tor[j] = alloc_src_queue(this, queueLogger, j);
     ostringstream oss;
     oss << "NICQueue " << j;
     queues_serv_tor[j]->setName(oss.str());
     //queues_serv_tor[j][k]->setName("Queue-SRC" + ntoa(k + j*_ndl) + "->TOR" +ntoa(j));
     //logfile->writeName(*(queues_serv_tor[j][k]));
-    pipes_serv_tor[j] = new Pipe(timeFromNs(delay_host2ToR), *eventlist, routing);
+    pipes_serv_tor[j] = new Pipe(timeFromNs(delay_host2ToR), *eventlist, _routing);
     //pipes_serv_tor[j][k]->setName("Pipe-SRC" + ntoa(k + j*_ndl) + "->TOR" + ntoa(j));
     //logfile->writeName(*(pipes_serv_tor[j][k]));
   }
@@ -246,7 +262,7 @@ void DynExpTopology::init_network() {
         // it's a downlink to a server
         queueLogger = new QueueLoggerSampling(timeFromMs(1000), *eventlist);
         logfile->addLogger(*queueLogger);
-        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k, routing);
+        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k);
         ostringstream oss;
         if (qt==COMPOSITE)
           oss << "CompositeQueue";
@@ -258,7 +274,7 @@ void DynExpTopology::init_network() {
         queues_tor[j][k]->setName(oss.str());
         //queues_tor[j][k]->setName("Queue-TOR" + ntoa(j) + "->DST" + ntoa(k + j*_ndl));
         //logfile->writeName(*(queues_tor[j][k]));
-        pipes_tor[j][k] = new Pipe(timeFromNs(delay_host2ToR), *eventlist, routing);
+        pipes_tor[j][k] = new Pipe(timeFromNs(delay_host2ToR), *eventlist, _routing);
         //pipes_tor[j][k]->setName("Pipe-TOR" + ntoa(j)  + "->DST" + ntoa(k + j*_ndl));
         //logfile->writeName(*(pipes_tor[j][k]));
       }
@@ -266,7 +282,7 @@ void DynExpTopology::init_network() {
         // it's a link to another ToR
         queueLogger = new QueueLoggerSampling(timeFromMs(1000), *eventlist);
         logfile->addLogger(*queueLogger);
-        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k, routing);
+        queues_tor[j][k] = alloc_queue(queueLogger, _queuesize, j, k);
         ostringstream oss;
         if (qt==COMPOSITE)
           oss << "CompositeQueue";
@@ -278,7 +294,7 @@ void DynExpTopology::init_network() {
         queues_tor[j][k]->setName(oss.str());
         //queues_tor[j][k]->setName("Queue-TOR" + ntoa(j) + "->uplink" + ntoa(k - _ndl));
         //logfile->writeName(*(queues_tor[j][k]));
-        pipes_tor[j][k] = new Pipe(timeFromNs(delay_ToR2ToR), *eventlist, routing);
+        pipes_tor[j][k] = new Pipe(timeFromNs(delay_ToR2ToR), *eventlist, _routing);
         //pipes_tor[j][k]->setName("Pipe-TOR" + ntoa(j)  + "->uplink" + ntoa(k - _ndl));
         //logfile->writeName(*(pipes_tor[j][k]));
       }
@@ -352,7 +368,6 @@ int DynExpTopology::absolute_slice_to_slice(int slice) {
   return slice % get_nslice();
 }
 
-
 // Gets the starting (absolute) time of a slice 
 simtime_picosec DynExpTopology::get_slice_start_time(int slice) {
   return slice * get_slice_time();
@@ -361,6 +376,23 @@ simtime_picosec DynExpTopology::get_slice_start_time(int slice) {
 bool DynExpTopology::is_reconfig(simtime_picosec t) {
   return get_relative_time(t) > _connected_time;
 }
+
+pair<int, int> DynExpTopology::get_direct_routing(int srcToR, int dstToR, int slice) {
+  vector<pair<int, int>> connected = _connected_slices[srcToR][dstToR];
+  // YX: TODO: change to binary search
+  int index = -1;
+  for (index = 0; index < connected.size(); index++) {
+    if (connected[index].first >= slice) {
+      break;
+    }
+  }
+  if (index == connected.size()) {
+    index = 0;
+  }
+  //return uplink,slice
+  return make_pair(connected[index].second, connected[index].first);
+}
+
 
 void DynExpTopology::count_queue(Queue* queue){
   if (_link_usage.find(queue)==_link_usage.end()){

@@ -17,9 +17,9 @@
 ////////////////////////////////////////////////////////////////
 
 TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger, 
-	       EventList &eventlist, DynExpTopology *top, int flow_src, int flow_dst)
+	       EventList &eventlist, DynExpTopology *top, int flow_src, int flow_dst, Routing* routing)
     : EventSource(eventlist,"tcp"),  _logger(logger), _flow(pktlogger),
-      _top(top), _flow_src(flow_src), _flow_dst(flow_dst)
+      _top(top), _flow_src(flow_src), _flow_dst(flow_dst), _routing(routing)
 {
     _mss = Packet::data_packet_size();
     _maxcwnd = 0xffffffff;//MAX_SENT*_mss;
@@ -575,7 +575,7 @@ TcpSrc::send_packets() {
         while(_cwnd - in_flight >= _mss) {
             uint64_t nextseq = _sack_handler.nextSeg();
             TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, 
-                    nextseq, 0, _mss);
+                    nextseq, 0, _mss, 0, _routing->get_pkt_priority(this));
             p->set_ts(eventlist().now());
             if(nextseq <= _highest_sent) {
                 _sack_handler.updateHiRtx(nextseq);
@@ -598,7 +598,8 @@ TcpSrc::send_packets() {
         uint64_t data_seq = 0;
 
         uint16_t size = _highest_sent+_mss <= _flow_size ? _mss : _flow_size-_highest_sent+1;
-        TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _highest_sent+1, data_seq, size);
+        TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink,
+                                         _highest_sent+1, data_seq, size,  _routing->get_pkt_priority(this));
         //cout << "sending seqno:" << p->seqno() << endl;
         p->set_ts(eventlist().now());
         p->set_tcp_slice(slice);
@@ -635,7 +636,8 @@ TcpSrc::retransmit_packet() {
 
     uint64_t data_seq = 0;
 
-    TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _last_acked+1, data_seq, _pkt_size);
+    TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this,
+                                     _sink, _last_acked+1, data_seq, _pkt_size, _routing->get_pkt_priority(this));
 #ifdef TCP_SACK
     _sack_handler.updateHiRtx(_last_acked+1);
 #endif

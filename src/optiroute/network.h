@@ -151,6 +151,8 @@ class Packet {
     void inc_queueing(unsigned queueing) {_queueing += queueing;}
     void set_crtslice(int slice) {_crtslice = slice;}
     int get_crtslice() {return _crtslice;}
+    void set_priority(int prior) {_priority = prior;}
+    int get_priority() {return _priority;}
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -230,6 +232,7 @@ class Packet {
     int _maxhops;
     int _crtport;
     int _crtslice;
+    int _priority; // packet priority for routing
 
     packetid_t _id;
     PacketFlow* _flow;

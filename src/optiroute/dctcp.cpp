@@ -13,7 +13,7 @@ string ntoa(double n);
 ////////////////////////////////////////////////////////////////
 
 DCTCPSrc::DCTCPSrc(TcpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, 
-        DynExpTopology *top, int flow_src, int flow_dst)  : TcpSrc(logger, pktlogger, eventlist, top, flow_src, flow_dst)
+        DynExpTopology *top, int flow_src, int flow_dst, Routing* routing)  : TcpSrc(logger, pktlogger, eventlist, top, flow_src, flow_dst, routing)
 {
     _pkts_seen = 0;
     _pkts_marked = 0;

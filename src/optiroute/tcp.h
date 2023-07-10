@@ -15,6 +15,7 @@
 #include "eventlist.h"
 #include "sent_packets.h"
 #include "dynexp_topology.h"
+#include "routing.h"
 
 //#define MODEL_RECEIVE_WINDOW 1
 
@@ -50,7 +51,7 @@ class TcpSACK {
 class TcpSrc : public PacketSink, public EventSource {
     friend class TcpSink;
  public:
-    TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, DynExpTopology *top, int flow_src, int flow_dst);
+    TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, DynExpTopology *top, int flow_src, int flow_dst, Routing* routing);
     uint32_t get_id(){ return id;}
     virtual void connect(TcpSink& sink, simtime_picosec startTime);
     void startflow();
@@ -119,6 +120,7 @@ class TcpSrc : public PacketSink, public EventSource {
     uint32_t _found_reorder = 0;
     uint32_t _found_retransmit = 0;
     int buffer_change = 0;
+    
 
     //round trip time estimate, needed for coupled congestion control
     simtime_picosec _rtt, _rto, _mdev,_base_rtt;
@@ -168,6 +170,7 @@ class TcpSrc : public PacketSink, public EventSource {
     vector<uint64_t> _dropped_at_queue;
     vector<pair<TcpAck::seq_t, TcpAck::seq_t>> _sacks;
     TcpSACK _sack_handler;
+    Routing* _routing;
 
     // Housekeeping
     TcpLogger* _logger;

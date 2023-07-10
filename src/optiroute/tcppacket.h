@@ -22,11 +22,12 @@ public:
 
 	inline static TcpPacket* newpkt(DynExpTopology* top, PacketFlow &flow,
 					int flow_src, int flow_dst, TcpSrc *tcp_src, TcpSink *tcp_sink,
-                    seq_t seqno, seq_t dataseqno,int size) {
+                    seq_t seqno, seq_t dataseqno,int size, int priority) {
 	    TcpPacket* p = _packetdb.allocPacket();
         p->set_topology(top);
         p->set_src(flow_src);
         p->set_dst(flow_dst);
+		p->_priority = priority;
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;
         p->_flags = 0;
@@ -41,14 +42,14 @@ public:
 
 	inline static TcpPacket* newpkt(DynExpTopology *top, PacketFlow &flow,
 					int flow_src, int flow_dst, TcpSrc *tcp_src, TcpSink *tcp_sink, 
-                    seq_t seqno, int size) {
-		return newpkt(top,flow,flow_src,flow_dst,tcp_src,tcp_sink,seqno,0,size);
+                    seq_t seqno, int size, int priority) {
+		return newpkt(top,flow,flow_src,flow_dst,tcp_src,tcp_sink,seqno,0,size, priority);
 	}
 
 	inline static TcpPacket* new_syn_pkt(DynExpTopology *top, PacketFlow &flow,
 					int flow_src, int flow_dst, TcpSrc *tcp_src, TcpSink *tcp_sink,
                     seq_t seqno, int size) {
-		TcpPacket* p = newpkt(top, flow,flow_src,flow_dst,tcp_src,tcp_sink,seqno,0,size);
+		TcpPacket* p = newpkt(top, flow,flow_src,flow_dst,tcp_src,tcp_sink,seqno,0,size, 0);
 		p->_syn = true;
 		return p;
 	}
@@ -83,6 +84,7 @@ public:
         p->set_topology(top);
         p->set_src(flow_src);
         p->set_dst(flow_dst);
+		p->_priority = 0; 	// Assume control pkts have highest priority
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;
         p->_flags = 0;

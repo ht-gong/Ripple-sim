@@ -23,6 +23,7 @@
 // Choose the topology here:
 #include "dynexp_topology.h"
 #include "routing_util.h"
+#include "routing.h"
 #include "rlb.h"
 #include "rlbmodule.h"
 
@@ -122,6 +123,8 @@ int main(int argc, char **argv) {
                 routing_alg = VLB;
             } else if (!strcmp(argv[i + 1], "ECMP")) {
                 routing_alg = ECMP;
+            } else if (!strcmp(argv[i + 1], "LongShort")) {
+                routing_alg = LONGSHORT;
             } else {
                 exit_error(argv[0]);
             }
@@ -150,6 +153,8 @@ int main(int argc, char **argv) {
         i++;
     }
     srand(13); // random seed
+
+    Routing* routing = new Routing(routing_alg, cutoff);
 
     eventlist.setEndtime(timeFromSec(simtime)); // in seconds
     Clock c(timeFromSec(5 / 100.), eventlist);
@@ -186,7 +191,7 @@ int main(int argc, char **argv) {
 // this creates the Expander topology
 #ifdef DYNEXP
     DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, ECN, topfile, 
-                                                routing_alg, marking_threshold, slice_duration);
+                                                routing, marking_threshold, slice_duration);
 #endif
 
 	// initialize all sources/sinks
@@ -216,42 +221,42 @@ int main(int argc, char **argv) {
             int flow_src = vtemp[0];
             int flow_dst = vtemp[1];
 
-            if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
+            // if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
 
-                // generate an NDP source/sink:
-                TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst);
-                //flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
-                flowSrc->set_flowsize(vtemp[2]); // bytes
+            // generate an DCTCP source/sink:
+            TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, routing);
+            //flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
+            flowSrc->set_flowsize(vtemp[2]); // bytes
 
-                // Set the pull rate to something reasonable.
-                // we can be more aggressive if the load is lower
-                //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); // 1 = pull at line rate
-                //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, .17);
+            // Set the pull rate to something reasonable.
+            // we can be more aggressive if the load is lower
+            //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); // 1 = pull at line rate
+            //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, .17);
 
-                TcpSink* flowSnk = new TcpSink();
-                tcpRtxScanner.registerTcp(*flowSrc);
+            TcpSink* flowSnk = new TcpSink();
+            tcpRtxScanner.registerTcp(*flowSrc);
 
-                // set up the connection event
-                flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
+            // set up the connection event
+            flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
 
-                sinkLogger.monitorSink(flowSnk);
+            sinkLogger.monitorSink(flowSnk);
 
-            }  else { // background flow, send it over RLB
-                continue;
+            // }  else { // background flow, send it over RLB
+            //     continue;
 
-                // generate an RLB source/sink:
+            //     // generate an RLB source/sink:
 
-                RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
-                // debug:
-                //cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
-                flowSrc->set_flowsize(vtemp[2]); // bytes
+            //     RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
+            //     // debug:
+            //     //cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
+            //     flowSrc->set_flowsize(vtemp[2]); // bytes
 
-                RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
+            //     RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
 
-                // set up the connection event
-                flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
+            //     // set up the connection event
+            //     flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
 
-            }
+            // }
         }
     }
 

@@ -150,6 +150,9 @@ void Pipe::sendFromPipe(Packet *pkt) {
             // we compute the current slice at the end of the packet transmission
             // !!! as a future optimization, we could have the "wrong" host NACK any packets
             // that go through at the wrong time
+            
+            // Relaxing the constraint so packets will reach their destination if it has been pushed onto the wire 
+            // just before reconfig. It will arrive at the dst of its sending slice.
             int slice = top->time_to_slice(eventlist().now() - _delay);
 
             int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
@@ -225,7 +228,7 @@ void Pipe::sendFromPipe(Packet *pkt) {
         pkt->inc_crthop(); // increment the hop
         pkt->inc_hop_index(); // increment hop index as well
         
-        _routing->routing(pkt, eventlist().now(), eventlist().now());
+        _routing->routing_from_ToR(pkt, eventlist().now(), eventlist().now());
 
         Queue* nextqueue = top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
         assert(nextqueue);

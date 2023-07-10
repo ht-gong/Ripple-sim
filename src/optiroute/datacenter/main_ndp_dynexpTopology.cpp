@@ -112,6 +112,8 @@ int main(int argc, char **argv) {
                 routing_alg = VLB;
             } else if (!strcmp(argv[i + 1], "ECMP")) {
                 routing_alg = ECMP;
+            } else if (!strcmp(argv[i + 1], "Optiroute")) {
+                routing_alg = LONGSHORT;
             } else {
                 exit_error(argv[0]);
             }
@@ -140,6 +142,8 @@ int main(int argc, char **argv) {
         i++;
     }
     srand(13); // random seed
+
+    Routing* routing = new Routing(routing_alg, cutoff);
 
     eventlist.setEndtime(timeFromSec(simtime)); // in seconds
     Clock c(timeFromSec(5 / 100.), eventlist);
@@ -173,7 +177,7 @@ int main(int argc, char **argv) {
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, COMPOSITE, topfile, routing_alg);
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, COMPOSITE, topfile, routing);
 #endif
 
 	// initialize all sources/sinks

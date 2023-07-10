@@ -76,18 +76,19 @@ class DynExpTopology: public Topology{
   queue_type qt;
 
   DynExpTopology(mem_b queuesize, Logfile* lg, EventList* ev,queue_type q, 
-                                string topfile, RoutingAlgorithm routalg);
+                                string topfile, Routing* routing);
 
   DynExpTopology(mem_b queuesize, Logfile* log, EventList* ev, queue_type q, string topfile, 
-                RoutingAlgorithm routalg, int marking_threshold, simtime_picosec slice_duration);
+                Routing* routing, int marking_threshold, simtime_picosec slice_duration);
 
   void init_network();
 
   RlbModule* alloc_rlb_module(DynExpTopology* top, int node);
 
-  Queue* alloc_src_queue(DynExpTopology* top, QueueLogger* q, int node, Routing* routing);
-  Queue* alloc_queue(QueueLogger* q, mem_b queuesize, int tor, int port, Routing* routing);
-  Queue* alloc_queue(QueueLogger* q, uint64_t speed, mem_b queuesize, int tor, int port, Routing* routing);
+  Queue* alloc_src_queue(DynExpTopology* top, QueueLogger* q, int node);
+  Queue* alloc_queue(QueueLogger* q, mem_b queuesize, int tor, int port);
+  Queue* alloc_queue(QueueLogger* q, uint64_t speed, mem_b queuesize, int tor, int port);
+  pair<int, int> get_direct_routing(int srcToR, int dstToR, int slice); // Direct routing between src and dst ToRs
 
   void count_queue(Queue*);
   //vector<int>* get_neighbours(int src) {return NULL;};
@@ -112,11 +113,14 @@ class DynExpTopology: public Topology{
   // label switched paths
   // indexing: [src][dst][slice][path_ind][sequence of switch ports (queues)]
   vector<vector<vector<vector<vector<int>>>>> _lbls;
+  // Connected time slices
+  // indexing: [src][dst] -> <time_slice, port> where the src-dst ToRs are connected
+  vector<vector<vector<pair<int, int>>>> _connected_slices;
   int _ndl, _nul, _ntor, _no_of_nodes; // number down links, number uplinks, number ToRs, number servers
   int _nslice; // number of topologies
   simtime_picosec _slice_dur = 0; // slice duration, if specified from cmdline then overrides the duration read from file
   int _marking_thresh = 0; // marking threshold of TCDCP, if specified from cmdline then default is overriden
-  RoutingAlgorithm _routalg;
+  Routing* _routing;
   simtime_picosec _connected_time; // duration of one connected topology
   simtime_picosec _reconfig_time;  // time it takes to reconfigure entire topology
   simtime_picosec _tot_time;  // slice time + reconfiguration time
