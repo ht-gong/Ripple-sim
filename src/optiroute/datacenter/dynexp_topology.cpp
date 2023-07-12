@@ -61,7 +61,6 @@ void DynExpTopology::read_params(string topfile) {
     stream >> _ndl;
     stream >> _nul;
     stream >> _ntor;
-
     // get number of topologies
     getline(input, line);
     stream.str(""); stream.clear(); // clear `stream` for re-use in this scope 
@@ -74,6 +73,11 @@ void DynExpTopology::read_params(string topfile) {
     stream >> _reconfig_time;
     // total time in the "superslice"
     _tot_time = _connected_time + _reconfig_time;
+
+    if(_routing->get_routing_algorithm() == OPTIROUTE) {
+      stream >> _nlogicportion;
+    }
+    _nlogicslice = _nlogicportion * _nslice;
 
     // get topology
     // format:
@@ -106,7 +110,15 @@ void DynExpTopology::read_params(string topfile) {
     for (int i = 0; i < _ntor; i++) {
       _lbls[i].resize(_ntor);
       for (int j = 0; j < _ntor; j++) {
-        _lbls[i][j].resize(_nslice);
+        _lbls[i][j].resize(_nlogicslice);
+      }
+    }
+
+    _optslices.resize(_ntor);
+    for (int i = 0; i < _ntor; i++) {
+      _optslices[i].resize(_ntor);
+      for (int j = 0; j < _ntor; j++) {
+        _optslices[i][j].resize(_nlogicslice);
       }
     }
 
@@ -148,6 +160,15 @@ void DynExpTopology::read_params(string topfile) {
         _lbls[s][d][slice].resize(sz + 1);
         for (int i = 2; i < vtemp.size(); i++) {
         	_lbls[s][d][slice][sz].push_back(vtemp[i]);
+        }
+        if(_routing->get_routing_algorithm() == OPTIROUTE) {
+          getline(input, line);
+          stringstream stream(line);
+          int temp;
+          _optslices[s][d][slice].resize(sz + 1);
+          while(stream >> temp) {
+            _optslices[s][d][slice][sz].push_back(temp);
+          }
         }
       }
     }
@@ -322,6 +343,10 @@ int DynExpTopology::get_port(int srcToR, int dstToR, int slice, int path_ind, in
   return _lbls[srcToR][dstToR][slice][path_ind][hop];
 }
 
+int DynExpTopology::get_opt_slice(int srcToR, int dstToR, int slice, int path_ind, int hop) {
+  return _optslices[srcToR][dstToR][slice][path_ind][hop];
+}
+
 bool DynExpTopology::is_last_hop(int port) {
   //cout << "Checking if it's the last hop..." << endl;
   //cout << "   Port = " << port << endl;
@@ -355,7 +380,7 @@ simtime_picosec DynExpTopology::get_relative_time(simtime_picosec t) {
 
 // Gets relative slice from the start of one cycle
 int DynExpTopology::time_to_slice(simtime_picosec t){
-  return (t / get_slice_time()) % get_nslice();
+  return (t / get_slice_time()) % get_nslices();
 }
 
 // Gets absolute slice from start of the simulation
@@ -363,14 +388,33 @@ int DynExpTopology::time_to_absolute_slice(simtime_picosec t) {
   return t / get_slice_time();
 }
 
+int DynExpTopology::time_to_logic_slice(simtime_picosec t) {
+  return time_to_absolute_logic_slice(t) % _nlogicslice;
+}
+
+// Gets absolute logic slice from start of the simulation
+int DynExpTopology::time_to_absolute_logic_slice(simtime_picosec t) {
+  int count = std::min((t % get_slice_time()) / get_logic_slice_time(), (simtime_picosec)_nlogicportion - 1);
+  return (t / get_slice_time()) * _nlogicportion + count;
+}
+
 // Gets absolute slice from start of the simulation
 int DynExpTopology::absolute_slice_to_slice(int slice) {
-  return slice % get_nslice();
+  return slice % _nslice;
+}
+
+int DynExpTopology::absolute_logic_slice_to_slice(int slice) {
+  return slice % _nlogicslice;
 }
 
 // Gets the starting (absolute) time of a slice 
 simtime_picosec DynExpTopology::get_slice_start_time(int slice) {
   return slice * get_slice_time();
+}
+
+simtime_picosec DynExpTopology::get_logic_slice_start_time(int slice) {
+  return (slice / _nlogicportion) * get_slice_time() + 
+         (slice % _nlogicportion) * get_logic_slice_time();
 }
 
 bool DynExpTopology::is_reconfig(simtime_picosec t) {

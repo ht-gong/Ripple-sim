@@ -33,7 +33,7 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
     _queuesize = 0;
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
     stringstream ss;
-    _max_recorded_size_slice.resize(_top->get_nslice());
+    _max_recorded_size_slice.resize(_top->get_nlogicslices());
     _max_recorded_size = 0;
     _queue_alarm = new QueueAlarm(eventlist, port, this, top);
     //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";

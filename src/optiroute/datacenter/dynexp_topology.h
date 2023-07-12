@@ -44,13 +44,18 @@ class DynExpTopology: public Topology{
 
   RlbModule* get_rlb_module(int host) {return rlb_modules[host];}
 
-  int64_t get_nslice() {return _nslice;}
   simtime_picosec get_slice_time() {return _tot_time;} // picoseconds spent in total
+  simtime_picosec get_logic_slice_time() {return _connected_time / _nlogicportion;} // picosecond of each logic slice's duration
   simtime_picosec get_relative_time(simtime_picosec t);
+  int get_opt_slice(int srcToR, int dstToR, int slice, int path_ind, int hop);
   int time_to_slice(simtime_picosec t);
   int absolute_slice_to_slice(int slice);
+  int absolute_logic_slice_to_slice(int slice);
   int time_to_absolute_slice(simtime_picosec t);
+  int time_to_logic_slice(simtime_picosec t);
+  int time_to_absolute_logic_slice(simtime_picosec t);
   simtime_picosec get_slice_start_time(int slice); 
+  simtime_picosec get_logic_slice_start_time(int slice);
   bool is_reconfig(simtime_picosec t);
   int get_firstToR(int node) {return node / _ndl;}
   int get_lastport(int dst) {return dst % _ndl;}
@@ -65,6 +70,7 @@ class DynExpTopology: public Topology{
   int get_path_indices(int srcHost, int dstHost, int slice);
   int get_no_hops(int srcToR, int dstToR, int slice, int path_ind);
   int get_nslices() {return _nslice;} 
+  int get_nlogicslices() {return _nlogicslice;}
   unsigned get_host_buffer(int host);
   void inc_host_buffer(int host);
   void decr_host_buffer(int host);
@@ -113,11 +119,16 @@ class DynExpTopology: public Topology{
   // label switched paths
   // indexing: [src][dst][slice][path_ind][sequence of switch ports (queues)]
   vector<vector<vector<vector<vector<int>>>>> _lbls;
+  // optiroute optimal path slices corresponding to path in _lbls
+  // indexing: [src][dst][slice][path_ind][sequence of optimal sending slices]
+  vector<vector<vector<vector<vector<int>>>>> _optslices;
   // Connected time slices
   // indexing: [src][dst] -> <time_slice, port> where the src-dst ToRs are connected
   vector<vector<vector<pair<int, int>>>> _connected_slices;
   int _ndl, _nul, _ntor, _no_of_nodes; // number down links, number uplinks, number ToRs, number servers
   int _nslice; // number of topologies
+  int _nlogicportion = 1; // number of logic slices per physical slice
+  int _nlogicslice = 1; // number of logic slices
   simtime_picosec _slice_dur = 0; // slice duration, if specified from cmdline then overrides the duration read from file
   int _marking_thresh = 0; // marking threshold of TCDCP, if specified from cmdline then default is overriden
   Routing* _routing;

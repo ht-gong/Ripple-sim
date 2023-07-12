@@ -19,7 +19,7 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
     _state_send = LosslessQueue::READY;
     _top = top;
     // TODO: change
-    int slices = top->get_nslice()*2;
+    int slices = top->get_nlogicslices();
     _dl_queue = slices;
     _enqueued.resize(slices + 1);
     _queuesize.resize(slices + 1);
@@ -93,10 +93,9 @@ ECNQueue::receivePacket(Packet & pkt)
     _enqueued[pkt_slice].push_front(&pkt);
     _queuesize[pkt_slice] += pkt.size();
     pkt.inc_queueing(queuesize());
-    // dump_queuesize();
 
     //record queuesize per slice
-    int slice = _top->time_to_slice(eventlist().now());
+    int slice = _top->time_to_logic_slice(eventlist().now());
     if (queuesize() > _max_recorded_size_slice[slice]) {
         _max_recorded_size_slice[slice] = queuesize();
     }
@@ -122,9 +121,9 @@ void ECNQueue::beginService() {
     
     simtime_picosec finish_push = eventlist().now() + drainTime(to_be_sent) /*229760*/;
 
-    int finish_push_slice = top->time_to_slice(finish_push); // plus the link delay
+    int finish_push_slice = top->time_to_logic_slice(finish_push); // plus the link delay
     if(top->is_reconfig(finish_push)) {
-        finish_push_slice = top->absolute_slice_to_slice(finish_push_slice + 1);
+        finish_push_slice = top->absolute_logic_slice_to_slice(finish_push_slice + 1);
     }
 
     if(!top->is_downlink(_port) && finish_push_slice != _crt_tx_slice) {

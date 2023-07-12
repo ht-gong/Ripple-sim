@@ -125,6 +125,8 @@ int main(int argc, char **argv) {
                 routing_alg = ECMP;
             } else if (!strcmp(argv[i + 1], "LongShort")) {
                 routing_alg = LONGSHORT;
+            } else if (!strcmp(argv[i + 1], "OptiRoute")) {
+                routing_alg = OPTIROUTE;
             } else {
                 exit_error(argv[0]);
             }
