@@ -51,9 +51,11 @@ for load in ["1percLoad", "10percLoad", "20percLoad"]:
                 sortedvals /= np.sum(sortedvals)
                 sortedvals = np.cumsum(sortedvals)
                 if expr[-2:] == '65':
-                    a, = plt.plot(sortedbins, sortedvals, color=forlegend[-1].get_color(), label=f"{prefix[i]}_{expr}", linestyle='--') 
+                    # a, = plt.plot(sortedbins, sortedvals, color=forlegend[-1].get_color(), label=f"{prefix[i]}_{expr}", linestyle='--') 
+                    a, = plt.plot(sortedbins[:51], sortedvals[:51], color=forlegend[-1].get_color(), label=f"{prefix[i]}_{expr}", linestyle='--') 
                 else:
-                    a, = plt.plot(sortedbins, sortedvals, label=f"{prefix[i]}_{expr}", linestyle='-') 
+                    # a, = plt.plot(sortedbins, sortedvals, label=f"{prefix[i]}_{expr}", linestyle='-')
+                    a, = plt.plot(sortedbins[:51], sortedvals[:51], label=f"{prefix[i]}_{expr}", linestyle='-') 
                 forlegend.append(a)
         plt.xlabel("QueueSize")
         plt.title(f"QueueSize CDF {load}")

@@ -27,6 +27,8 @@ public:
         p->set_topology(top);
         p->set_src(flow_src);
         p->set_dst(flow_dst);
+		p->_crtToR = -1;
+		p->_lasthop = false;
 		p->_priority = priority;
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;

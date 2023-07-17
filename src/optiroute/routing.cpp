@@ -54,6 +54,7 @@ simtime_picosec Routing::routing_from_PQ(Packet* pkt, simtime_picosec t) {
         pkt->set_crtslice(slice);
     }
 
+    return 0;
 }
 
 simtime_picosec Routing::routing_from_ToR(Packet* pkt, simtime_picosec t, simtime_picosec init_time) {
@@ -69,7 +70,7 @@ simtime_picosec Routing::routing_from_ToR(Packet* pkt, simtime_picosec t, simtim
     if(_routing_algorithm == VLB || _routing_algorithm == LONGSHORT && pkt->get_priority() == 1) {
         return routing_from_ToR_VLB(pkt, t, t);
     } else if(_routing_algorithm == OPTIROUTE) {
-        return routing_from_ToR_OptiRoute(pkt, t, t);
+        return routing_from_ToR_OptiRoute(pkt, t, t, false);
     } else {
         return routing_from_ToR_Expander(pkt, t, t);
     }
@@ -174,8 +175,8 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
 
 }
 
-simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec t, simtime_picosec init_time) {
-        unsigned seqno = 0;
+simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec t, simtime_picosec init_time, bool rerouted) {
+    unsigned seqno = 0;
     if(pkt->type() == TCP) {
         seqno = ((TcpPacket*)pkt)->seqno();
     } else if (pkt->type() == TCPACK) {
@@ -230,38 +231,37 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
 
     #ifdef DEBUG
     cout <<seqno << "Routing Opt crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
-            << " hop: " << pkt->get_hop_index() << " port: "<<expected_port<< " Now: " << t << " Logsl: " << top->time_to_logic_slice(t) << " Physl: " << top->time_to_slice(t)  
-            << " Last comp: "<< cur_q->get_last_service_time() << " Finish push:" << finish_push_slice << " " << finish_push << " Finish slice:"<<finish_slice<< " " << finish_time << endl;
+            << " hop: " << pkt->get_hop_index() << " Expectedport: "<<expected_port<< " Now: " << t << " Logsl: " << top->time_to_logic_slice(t) << " Physl: " << top->time_to_slice(t)  
+            << " Sentsl: " <<pkt->get_slice_sent() << " Expectedsl: " << expected_slice << " Finish push:" << finish_push_slice << " " << finish_push << " Finish slice:"<<finish_slice<< " " << finish_time << endl;
     #endif
     if(top->is_reconfig(finish_push)) {
         finish_push_slice = top->absolute_logic_slice_to_slice(finish_push_slice + 1);
     }
 
     #ifdef LOOKUP
-    // 3 possibilities:
+    // 2 possibilities:
     if (finish_push_slice == expected_slice) {
-        // 1. The packet is pushed and propogated within the expected slice
+        // 1. The packet is pushed within the expected slice
         pkt->set_crtslice(expected_slice);
         pkt->set_crtport(expected_port);
-        if(finish_slice != expected_slice && top->get_nextToR(top->time_to_slice(t), pkt->get_crtToR(), pkt->get_crtport()) != top->get_firstToR(pkt->get_dst())) {
-            // 2. The packet is pushed in the expected slice, but finishes propogating in the next
-            pkt->set_src_ToR(top->get_nextToR(top->time_to_slice(t), pkt->get_crtToR(), pkt->get_crtport()));
-            pkt->set_path_index(get_path_index(pkt, top->time_to_slice(finish_slice)));
-            pkt->set_slice_sent(finish_slice);
-            pkt->set_hop_index(-1);
-        }
         return finish_time;
     } else {
-        // 3. The packet be pushed "across slices", thus it needs to be rerouted to the start of next slice
-        simtime_picosec nxt_slice_time = top->get_logic_slice_start_time(top->time_to_absolute_logic_slice(t) + 1);
+        // 2. The packet cannot match current schedule, thus we start rerouting it from the current slice
+        simtime_picosec nxt_slice_time;
+        if(!rerouted) {
+            // Never been rerouted before, start from now
+            nxt_slice_time = t;
+        } else {
+            nxt_slice_time = top->get_logic_slice_start_time(top->time_to_absolute_logic_slice(t) + 1);
+        }
         pkt->set_src_ToR(pkt->get_crtToR());
-        pkt->set_path_index(get_path_index(pkt, top->time_to_slice(nxt_slice_time)));
+        pkt->set_path_index(get_path_index(pkt, top->time_to_logic_slice(nxt_slice_time)));
         pkt->set_slice_sent(top->time_to_logic_slice(nxt_slice_time));
         pkt->set_hop_index(0);
         #ifdef DEBUG
-        cout << "Reroute Opt crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << pkt->get_crtslice()<< " at " <<t << "finishing at" << finish_push << endl;
+        cout << seqno <<"Reroute Opt crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << pkt->get_crtslice()<< " at " <<t <<  " next route time " << nxt_slice_time << endl;
         #endif
-        return routing_from_ToR_OptiRoute(pkt, nxt_slice_time, init_time);
+        return routing_from_ToR_OptiRoute(pkt, nxt_slice_time, init_time, true);
     }
     #endif 
 
