@@ -3,5 +3,6 @@
 #define ROUTINGUTIL_H
 
 enum RoutingAlgorithm {SINGLESHORTEST, KSHORTEST, VLB, ECMP, LONGSHORT, OPTIROUTE};
+enum PacketStrategy {STRICT, HOHO};
 
 #endif

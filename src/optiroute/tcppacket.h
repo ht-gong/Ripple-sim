@@ -44,7 +44,7 @@ public:
 
 	inline static TcpPacket* newpkt(DynExpTopology *top, PacketFlow &flow,
 					int flow_src, int flow_dst, TcpSrc *tcp_src, TcpSink *tcp_sink, 
-                    seq_t seqno, int size, int priority) {
+                    seq_t seqno, int size, double priority) {
 		return newpkt(top,flow,flow_src,flow_dst,tcp_src,tcp_sink,seqno,0,size, priority);
 	}
 

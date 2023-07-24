@@ -209,6 +209,7 @@ int main(int argc, char **argv) {
     if (input.is_open()){
         string line;
         int64_t temp;
+        int64_t maxflow = 0;
         // get flows. Format: (src) (dst) (bytes) (starttime nanoseconds)
         while(!input.eof()){
             vector<int64_t> vtemp;
@@ -229,6 +230,7 @@ int main(int argc, char **argv) {
             TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, routing);
             //flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
             flowSrc->set_flowsize(vtemp[2]); // bytes
+            maxflow = std::max(vtemp[2], maxflow);
 
             // Set the pull rate to something reasonable.
             // we can be more aggressive if the load is lower
@@ -260,7 +262,9 @@ int main(int argc, char **argv) {
 
             // }
         }
+        routing->set_max_flow_size(maxflow);
     }
+
 
     cout << "Traffic loaded." << endl;
 

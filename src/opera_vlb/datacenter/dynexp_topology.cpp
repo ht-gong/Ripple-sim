@@ -403,6 +403,6 @@ void DynExpTopology::decr_host_buffer(int host) {
     _host_buffers[host]--;
 }
 
-int DynExpTopology::get_path_indices(int srcHost, int dstHost, int slice) {
+int DynExpTopology::get_rpath_indices(int srcHost, int dstHost, int slice) {
   return _rpath_indices[srcHost][dstHost][slice];
 }

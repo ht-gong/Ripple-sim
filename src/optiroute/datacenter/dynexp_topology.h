@@ -67,7 +67,9 @@ class DynExpTopology: public Topology{
   bool is_last_hop(int port);
   bool port_dst_match(int port, int crtToR, int dst);
   int get_no_paths(int srcToR, int dstToR, int slice);
-  int get_path_indices(int srcHost, int dstHost, int slice);
+  int get_rpath_indices(int srcHost, int dstHost, int slice);
+  vector<pair<uint64_t, vector<int>>>* get_lb_and_paths(int srcHost, int dstHost, int slice);
+  int get_path_indices(int srcHost, int dstHost, int srctor, int dsttor, int logslice, int path_ind);
   int get_no_hops(int srcToR, int dstToR, int slice, int path_ind);
   int get_nslices() {return _nslice;} 
   int get_nlogicslices() {return _nlogicslice;}
@@ -119,6 +121,9 @@ class DynExpTopology: public Topology{
   // label switched paths
   // indexing: [src][dst][slice][path_ind][sequence of switch ports (queues)]
   vector<vector<vector<vector<vector<int>>>>> _lbls;
+  // path indexer for Optiroute
+  // indexing: [src][dst][slice][path_ind](lower bound of optimal packet size, [path_ind in labels that correspond])
+  vector<vector<vector<vector<pair<uint64_t, vector<int>>>>>> _path_indices;
   // optiroute optimal path slices corresponding to path in _lbls
   // indexing: [src][dst][slice][path_ind][sequence of optimal sending slices]
   vector<vector<vector<vector<vector<int>>>>> _optslices;

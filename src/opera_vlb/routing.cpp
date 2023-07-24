@@ -93,7 +93,7 @@ simtime_picosec Routing::routing(Packet* pkt, simtime_picosec t, simtime_picosec
             pkt->set_crtslice(route.second);
 
         } else {
-            int randnum = top->get_path_indices(pkt->get_src(), pkt->get_dst(), top->time_to_slice(init_time));
+            int randnum = top->get_rpath_indices(pkt->get_src(), pkt->get_dst(), top->time_to_slice(init_time));
             pkt->set_crtport(top->no_of_hpr() + randnum);
             pkt->set_crtslice(cur_slice);
 

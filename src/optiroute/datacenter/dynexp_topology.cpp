@@ -1,6 +1,7 @@
 // -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-
 #include "dynexp_topology.h"
 #include <vector>
+#include <algorithm>
 #include "string.h"
 #include <sstream>
 #include <strstream>
@@ -15,9 +16,10 @@
 //#include "prioqueue.h"
 
 #include "rlbmodule.h"
-
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
+
+#define OPTIROUTE_ECMP
 
 string ntoa(double n);
 string itoa(uint64_t n);
@@ -105,12 +107,19 @@ void DynExpTopology::read_params(string topfile) {
       }
     }
 
-    // get label switched paths (rest of file)
     _lbls.resize(_ntor);
     for (int i = 0; i < _ntor; i++) {
       _lbls[i].resize(_ntor);
       for (int j = 0; j < _ntor; j++) {
         _lbls[i][j].resize(_nlogicslice);
+      }
+    }
+
+    _path_indices.resize(_ntor);
+    for (int i = 0; i < _ntor; i++) {
+      _path_indices[i].resize(_ntor);
+      for (int j = 0; j < _ntor; j++) {
+        _path_indices[i][j].resize(_nlogicslice);
       }
     }
 
@@ -144,7 +153,7 @@ void DynExpTopology::read_params(string topfile) {
     while(!input.eof()) {
       int s, d; // current source and destination tor
       int slice; // which topology slice we're in
-      vector<int> vtemp;
+      vector<uint64_t> vtemp;
       getline(input, line);
       if (line.length() <= 0) continue;
       stringstream stream(line);
@@ -158,10 +167,10 @@ void DynExpTopology::read_params(string topfile) {
         d = vtemp[1]; // current dest
         sz = _lbls[s][d][slice].size();
         _lbls[s][d][slice].resize(sz + 1);
-        for (int i = 2; i < vtemp.size(); i++) {
-        	_lbls[s][d][slice][sz].push_back(vtemp[i]);
-        }
         if(_routing->get_routing_algorithm() == OPTIROUTE) {
+          for (int i = 3; i < vtemp.size(); i++) {
+            _lbls[s][d][slice][sz].push_back(vtemp[i]);
+          }
           getline(input, line);
           stringstream stream(line);
           int temp;
@@ -169,9 +178,37 @@ void DynExpTopology::read_params(string topfile) {
           while(stream >> temp) {
             _optslices[s][d][slice][sz].push_back(temp);
           }
+          uint64_t lb_flowsize = vtemp[2];
+          bool found = false;
+          for(int path_ind = 0; path_ind < _path_indices[s][d][slice].size(); path_ind++) {
+            if(_path_indices[s][d][slice][path_ind].first == lb_flowsize) {
+              _path_indices[s][d][slice][path_ind].second.push_back(sz);
+              found = true;
+            }
+          }
+          if(!found) {
+            _path_indices[s][d][slice].push_back({lb_flowsize, vector<int>(1, sz)});
+          }
+        } else {
+          for (int i = 2; i < vtemp.size(); i++) {
+            _lbls[s][d][slice][sz].push_back(vtemp[i]);
+          }
         }
       }
     }
+    if(_routing->get_routing_algorithm() == OPTIROUTE) {
+      for (int i = 0; i < _ntor; i++) {
+        for (int j = 0; j < _ntor; j++) {
+          for (int k = 0; k < _nlogicslice; k++) {
+            std::sort(_path_indices[i][j][k].begin(), _path_indices[i][j][k].end(), [](pair<uint64_t, vector<int>> a, pair<uint64_t, vector<int>> b)
+                                    {
+                                        return a.first < b.first;
+                                    });
+          }
+        }
+      }
+    }
+    
 
     // debug:
     cout << "Loaded topology." << endl;
@@ -239,6 +276,8 @@ void DynExpTopology::init_network() {
         } else if(_routing->get_routing_algorithm() == VLB || 
                   _routing->get_routing_algorithm() == LONGSHORT) {
           _rpath_indices[i][j][k] = rand() % _nul;
+        } else if(_routing->get_routing_algorithm() == OPTIROUTE) {
+          _rpath_indices[i][j][k] = rand();
         }
       }
     }
@@ -323,10 +362,22 @@ void DynExpTopology::init_network() {
   }
 }
 
-int DynExpTopology::get_path_indices(int srcHost, int dstHost, int slice) {
+int DynExpTopology::get_rpath_indices(int srcHost, int dstHost, int slice) {
   return _rpath_indices[srcHost][dstHost][slice];
 }
 
+vector<pair<uint64_t, vector<int>>>* DynExpTopology::get_lb_and_paths(int src, int dst, int slice) {
+  return &_path_indices[src][dst][slice];
+}
+int DynExpTopology::get_path_indices(int srctor, int dsttor, int srcHost, int dstHost, int logslice, int path_ind) {
+  #ifdef OPTIROUTE_ECMP
+    int randnum = _rpath_indices[srcHost][dstHost][logslice / _nlogicportion] % 
+      _path_indices[srctor][dsttor][logslice][path_ind].second.size();
+    return _path_indices[srctor][dsttor][logslice][path_ind].second[randnum];
+  #else
+    return _path_indices[srctor][dsttor][logslice][path_ind].second[0];
+  #endif
+}
 
 int DynExpTopology::get_nextToR(int slice, int crtToR, int crtport) {
   int uplink = crtport - _ndl + crtToR*_nul;

@@ -67,7 +67,7 @@ class DynExpTopology: public Topology{
   unsigned get_host_buffer(int host);
   void inc_host_buffer(int host);
   void decr_host_buffer(int host);
-  int get_path_indices(int srcHost, int dstHost, int slice);
+  int get_rpath_indices(int srcHost, int dstHost, int slice);
 
 
   Logfile* logfile;

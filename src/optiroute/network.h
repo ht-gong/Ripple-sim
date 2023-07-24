@@ -151,8 +151,8 @@ class Packet {
     void inc_queueing(unsigned queueing) {_queueing += queueing;}
     void set_crtslice(int slice) {_crtslice = slice;}
     int get_crtslice() {return _crtslice;}
-    void set_priority(int prior) {_priority = prior;}
-    int get_priority() {return _priority;}
+    void set_priority(double prior) {_priority = prior;}
+    double get_priority() {return _priority;}
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -188,6 +188,8 @@ class Packet {
     uint64_t _time_sent;
     void set_fabricts(simtime_picosec ts) {_fabricts = ts;}
     simtime_picosec get_fabricts() {return _fabricts;}
+    void set_pkt_strat(PacketStrategy s) {_pkt_strat = s;}
+    PacketStrategy get_pkt_strat() {return _pkt_strat;}
 
 
  protected:
@@ -232,7 +234,8 @@ class Packet {
     int _maxhops;
     int _crtport;
     int _crtslice;
-    int _priority; // packet priority for routing
+    double _priority; // packet priority for routing
+    PacketStrategy _pkt_strat; // packet strategy for routing 
 
     packetid_t _id;
     PacketFlow* _flow;

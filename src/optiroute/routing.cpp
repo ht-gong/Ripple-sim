@@ -14,20 +14,24 @@
 #include "tcp.h"
 #include "ndp.h"
 // #define DEBUG
+// #define HOHO
 #define LOOKUP
 
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 
-int Routing::get_pkt_priority(TcpSrc* tcp_src) {
+
+double Routing::get_pkt_priority(TcpSrc* tcp_src) {
     if(_routing_algorithm == LONGSHORT) {
         if(tcp_src->get_flowsize() < _cutoff) {
-            return 0;
+            return 0.0;
         } else {
-            return 1;
+            return 1.0;
         }
-    } 
-    return 0;
+    } else if (_routing_algorithm == OPTIROUTE) {
+        return (double) tcp_src->get_flowsize();
+    }
+    return 0.0;
 }
 
 // Routing out of Host into Tor
@@ -42,7 +46,6 @@ simtime_picosec Routing::routing_from_PQ(Packet* pkt, simtime_picosec t) {
      
     if (pkt->get_src_ToR() == top->get_firstToR(pkt->get_dst())) {
         // the packet is being sent within the same rack
-        pkt->set_maxhops(0); // want to select a downlink port immediately
     } else {// the packet is being sent between racks
 
         // we will choose the path based on the current slice
@@ -50,7 +53,7 @@ simtime_picosec Routing::routing_from_PQ(Packet* pkt, simtime_picosec t) {
         
         pkt->set_slice_sent(slice); // "timestamp" the packet
         pkt->set_fabricts(t);
-        pkt->set_path_index(get_path_index(pkt, slice)); // set which path the packet will take
+        pkt->set_path_index(get_path_index(pkt, t)); // set which path the packet will take
         pkt->set_crtslice(slice);
     }
 
@@ -76,22 +79,39 @@ simtime_picosec Routing::routing_from_ToR(Packet* pkt, simtime_picosec t, simtim
     }
 }
 
-int Routing::get_path_index(Packet* pkt, int physical_slice) {
+int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
+    DynExpTopology* top = pkt->get_topology();
     if(_routing_algorithm == SINGLESHORTEST) {
         return pkt->get_path_index();
     }
     if(_routing_algorithm == KSHORTEST) {
-        return pkt->get_topology()->get_path_indices(pkt->get_src(), pkt->get_dst(), physical_slice);
+        int physical_slice = top->time_to_slice(t);
+        return pkt->get_topology()->get_rpath_indices(pkt->get_src(), pkt->get_dst(), physical_slice);
     }
     // special case since the number of paths may change as we go across slices
     if(_routing_algorithm == ECMP) {
-        DynExpTopology* top = pkt->get_topology();
+        int physical_slice = top->time_to_slice(t);
         // perserve original outgoing port and adds it onto new src_Tor to get path index
         int newsrc = pkt->get_src_ToR() * top->no_of_hpr() + pkt->get_src() % top->no_of_hpr();
-        return top->get_path_indices(newsrc, pkt->get_dst(), physical_slice);
+        return top->get_rpath_indices(newsrc, pkt->get_dst(), physical_slice);
     }
     if(_routing_algorithm == VLB) {
         return -1; // VLB does not use this function
+    }
+    if(_routing_algorithm == OPTIROUTE) {
+        int logical_slice = top->time_to_logic_slice(t);
+        vector<pair<uint64_t, vector<int>>>* v = top->get_lb_and_paths(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), logical_slice);
+        assert(v->size());
+        int index = 1;
+        #ifndef HOHO
+        while(index < v->size()) {
+            if((double) (*v)[index].first > pkt->get_priority()) {
+                break;
+            }
+            index++;
+        }
+        #endif
+        return top->get_path_indices(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), pkt->get_src(), pkt->get_dst(), logical_slice, index - 1);
     }
     return 0;
 }
@@ -140,7 +160,7 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
     int finish_slice = top->time_to_logic_slice(finish_time);
 
     #ifdef DEBUG
-    cout <<seqno << "Routing Exp crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
+    cout <<seqno << "Routing Exp crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " priority: " << pkt->get_priority() 
             << " hop: " << pkt->get_hop_index() << " port: "<<cur_slice_port<< " Now: " << t << " Logsl: " << top->time_to_logic_slice(t) << " Physl: " << top->time_to_slice(t)  
             << " Last comp: "<< cur_q->get_last_service_time() << " Finish push:" << finish_push_slice << " " << finish_push << " Finish slice:"<<finish_slice<< " " << finish_time << endl;
     #endif
@@ -156,7 +176,7 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
         if(finish_slice != cur_slice && top->get_nextToR(cur_slice, pkt->get_crtToR(), pkt->get_crtport()) != top->get_firstToR(pkt->get_dst())) {
             // 2. The packet is pushed in the same slice, but finishes propogating in the next
             pkt->set_src_ToR(top->get_nextToR(cur_slice, pkt->get_crtToR(), pkt->get_crtport()));
-            pkt->set_path_index(get_path_index(pkt, finish_slice));
+            pkt->set_path_index(get_path_index(pkt, finish_time));
             pkt->set_hop_index(-1);
         }
         return finish_time;
@@ -164,7 +184,7 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
         // 3. The packet is pushed "across slices", thus it needs to be rerouted to the start of next slice
         simtime_picosec nxt_slice_time = top->get_logic_slice_start_time(top->time_to_absolute_logic_slice(t) + 1);
         pkt->set_src_ToR(pkt->get_crtToR());
-        pkt->set_path_index(get_path_index(pkt, top->time_to_slice(nxt_slice_time)));
+        pkt->set_path_index(get_path_index(pkt, nxt_slice_time));
         pkt->set_hop_index(0);
 
         #ifdef DEBUG
@@ -186,6 +206,7 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
     }
 
     DynExpTopology* top = pkt->get_topology();
+
     int cur_slice = top->time_to_logic_slice(t);
     // next port assuming topology does not change
     #ifdef LOOKUP
@@ -194,6 +215,12 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
     int expected_slice = top->get_opt_slice(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
                                 pkt->get_slice_sent(), pkt->get_path_index(), pkt->get_hop_index());
     #endif
+
+    if(top->time_to_absolute_logic_slice(t - init_time) > top->get_nlogicslices()) {
+        pkt->set_crtslice(expected_slice);
+        pkt->set_crtport(expected_port);
+        return 0;
+    }
 
     #ifdef STRICT
 	int expected_port = top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
@@ -230,7 +257,7 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
     int finish_slice = top->time_to_logic_slice(finish_time);
 
     #ifdef DEBUG
-    cout <<seqno << "Routing Opt crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
+    cout <<seqno << "Routing Opt crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " priority: " << pkt->get_priority() 
             << " hop: " << pkt->get_hop_index() << " Expectedport: "<<expected_port<< " Now: " << t << " Logsl: " << top->time_to_logic_slice(t) << " Physl: " << top->time_to_slice(t)  
             << " Sentsl: " <<pkt->get_slice_sent() << " Expectedsl: " << expected_slice << " Finish push:" << finish_push_slice << " " << finish_push << " Finish slice:"<<finish_slice<< " " << finish_time << endl;
     #endif
@@ -255,7 +282,7 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
             nxt_slice_time = top->get_logic_slice_start_time(top->time_to_absolute_logic_slice(t) + 1);
         }
         pkt->set_src_ToR(pkt->get_crtToR());
-        pkt->set_path_index(get_path_index(pkt, top->time_to_logic_slice(nxt_slice_time)));
+        pkt->set_path_index(get_path_index(pkt, nxt_slice_time));
         pkt->set_slice_sent(top->time_to_logic_slice(nxt_slice_time));
         pkt->set_hop_index(0);
         #ifdef DEBUG
@@ -295,7 +322,7 @@ simtime_picosec Routing::routing_from_ToR_VLB(Packet* pkt, simtime_picosec t, si
         pkt->set_crtport(route.first);
         pkt->set_crtslice(route.second);
     } else {
-        int randnum = top->get_path_indices(pkt->get_src(), pkt->get_dst(), top->time_to_slice(init_time));
+        int randnum = top->get_rpath_indices(pkt->get_src(), pkt->get_dst(), top->time_to_slice(init_time));
         pkt->set_crtport(top->no_of_hpr() + randnum);
         pkt->set_crtslice(cur_slice);
     }
