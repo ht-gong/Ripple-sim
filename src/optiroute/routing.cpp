@@ -15,7 +15,11 @@
 #include "ndp.h"
 // #define DEBUG
 // #define HOHO
+// #define DYNAMIC_FSIZE
+// #define REROUTE_MITIGATION
 #define LOOKUP
+
+#define REROUTE_EDGE 500000
 
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
@@ -29,6 +33,9 @@ double Routing::get_pkt_priority(TcpSrc* tcp_src) {
             return 1.0;
         }
     } else if (_routing_algorithm == OPTIROUTE) {
+        #ifdef DYNAMIC_FSIZE
+            return (double) tcp_src->get_remaining_flowsize();
+        #endif
         return (double) tcp_src->get_flowsize();
     }
     return 0.0;
@@ -111,6 +118,12 @@ int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
             index++;
         }
         #endif
+        #ifdef REROUTE_MITIGATION
+            if(top->is_reconfig(t, REROUTE_EDGE)){ 
+                index = std::max(index - 1, 1);
+            }
+        #endif 
+
         return top->get_path_indices(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), pkt->get_src(), pkt->get_dst(), logical_slice, index - 1);
     }
     return 0;

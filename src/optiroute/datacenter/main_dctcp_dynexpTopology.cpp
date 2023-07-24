@@ -262,7 +262,6 @@ int main(int argc, char **argv) {
 
             // }
         }
-        routing->set_max_flow_size(maxflow);
     }
 
 

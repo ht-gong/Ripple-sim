@@ -472,6 +472,10 @@ bool DynExpTopology::is_reconfig(simtime_picosec t) {
   return get_relative_time(t) > _connected_time;
 }
 
+bool DynExpTopology::is_reconfig(simtime_picosec t, simtime_picosec addedtime) {
+  return time_to_slice(t) == time_to_slice(t + addedtime);
+}
+
 pair<int, int> DynExpTopology::get_direct_routing(int srcToR, int dstToR, int slice) {
   vector<pair<int, int>> connected = _connected_slices[srcToR][dstToR];
   // YX: TODO: change to binary search

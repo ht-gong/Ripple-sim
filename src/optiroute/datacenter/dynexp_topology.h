@@ -57,6 +57,7 @@ class DynExpTopology: public Topology{
   simtime_picosec get_slice_start_time(int slice); 
   simtime_picosec get_logic_slice_start_time(int slice);
   bool is_reconfig(simtime_picosec t);
+  bool is_reconfig(simtime_picosec t, simtime_picosec addedtime);
   int get_firstToR(int node) {return node / _ndl;}
   int get_lastport(int dst) {return dst % _ndl;}
   bool is_downlink(int port) {return port < _ndl;}

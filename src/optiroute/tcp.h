@@ -64,6 +64,7 @@ class TcpSrc : public PacketSink, public EventSource {
 
     void set_flowsize(uint64_t flow_size_in_bytes) {
         _flow_size = flow_size_in_bytes;
+        _remaining_flow_size = flow_size_in_bytes;
         if (_flow_size < _mss)
             _pkt_size = _flow_size;
         else
@@ -84,6 +85,7 @@ class TcpSrc : public PacketSink, public EventSource {
     virtual const string& nodename() { return _nodename; }
 
     inline uint64_t get_flowsize() {return _flow_size;} // bytes
+    inline uint64_t get_remaining_flowsize() {return _remaining_flow_size;}
     inline int get_flow_src() {return _flow_src;}
     inline int get_flow_dst() {return _flow_dst;}
     inline void set_start_time(simtime_picosec startTime) {_start_time = startTime;}
@@ -95,6 +97,7 @@ class TcpSrc : public PacketSink, public EventSource {
     uint64_t _highest_sent;  //seqno is in bytes
     uint64_t _packets_sent;
     uint64_t _flow_size;
+    uint64_t _remaining_flow_size;
 
     uint32_t _maxcwnd;
     uint16_t _dupacks;

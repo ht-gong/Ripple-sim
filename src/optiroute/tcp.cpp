@@ -606,6 +606,8 @@ TcpSrc::send_packets() {
 
         _highest_sent += size;  //XX beware wrapping
         _packets_sent += size;
+        _remaining_flow_size -= size;
+        _remaining_flow_size = std::max((uint64_t)0, _remaining_flow_size);
 #ifdef TCP_SACK
         _sack_handler.updateHiData(_highest_sent);
 #endif
