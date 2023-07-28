@@ -6,7 +6,7 @@ Hosts_p_rack=6;
 
 H=Nrack*Hosts_p_rack; % number of hosts
 
-loadfrac0=.2; % fraction of theoretically possible load
+loadfrac0=.01; % fraction of theoretically possible load
 
 % ----- define simulation length (time):
 
@@ -87,7 +87,7 @@ flowcdf=data(:,2).';
 avg_flowsize=sum(flowsize(2:end).*diff(flowcdf)); % bytes / flow
 linkrate=100e9/8; % bytes / second
 		
-filename=sprintf('websearch_flows_%.0fpercLoad_%.0fsec_%dhosts_%dGbps',100*loadfrac0, totaltime, H, linkrate*8/1e9);
+filename=sprintf('websearch_%.0fpercLoad_%.0fsec_%dhosts_%dGbps',100*loadfrac0, totaltime, H, linkrate*8/1e9);
 
 lambda_host_max=linkrate/avg_flowsize; % flows / second (per host)
 lambda_host=loadfrac0*lambda_host_max; % flows / second for each host
