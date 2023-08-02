@@ -195,6 +195,7 @@ void DynExpTopology::read_params(string topfile) {
             _lbls[s][d][slice][sz].push_back(vtemp[i]);
           }
         }
+        _paths_maxhop = std::max(_paths_maxhop, (int)_lbls[s][d][slice][sz].size());
       }
     }
     if(_routing->get_routing_algorithm() == OPTIROUTE) {
@@ -474,7 +475,7 @@ bool DynExpTopology::is_reconfig(simtime_picosec t) {
 }
 
 bool DynExpTopology::is_reconfig(simtime_picosec t, simtime_picosec addedtime) {
-  return time_to_slice(t) == time_to_slice(t + addedtime);
+  return time_to_absolute_slice(t) != time_to_absolute_slice(t + addedtime);
 }
 
 pair<int, int> DynExpTopology::get_direct_routing(int srcToR, int dstToR, int slice) {

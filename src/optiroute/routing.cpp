@@ -15,11 +15,12 @@
 #include "ndp.h"
 // #define DEBUG
 // #define HOHO
-#define DYNAMIC_FSIZE
-// #define REROUTE_MITIGATION
+// #define DYNAMIC_FSIZE
+#define REROUTE_MITIGATION
 #define LOOKUP
 
-#define REROUTE_EDGE 500000
+#define PUSHTIME_PER_PKT 620000
+#define DOWNGRADE_POWER 2
 
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
@@ -107,6 +108,18 @@ int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
     }
     if(_routing_algorithm == OPTIROUTE) {
         int logical_slice = top->time_to_logic_slice(t);
+        #ifdef REROUTE_MITIGATION
+            int maxhop = top->get_path_max_hop();
+            // if(top->is_reconfig(t, 500000)){ 
+            //     if(pkt->get_crthop() > maxhop) {
+            //         cout<<"downgraded\n";
+            //         index = std::max(index - 1, 1);
+            //     }
+            // }
+            if(pkt->get_crthop() >= maxhop && top->is_reconfig(t, PUSHTIME_PER_PKT * maxhop)) {
+                pkt->set_priority(pkt->get_priority() * DOWNGRADE_POWER);
+            }
+        #endif 
         vector<pair<uint64_t, vector<int>>>* v = top->get_lb_and_paths(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), logical_slice);
         assert(v->size());
         int index = 1;
@@ -118,11 +131,20 @@ int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
             index++;
         }
         #endif
-        #ifdef REROUTE_MITIGATION
-            if(top->is_reconfig(t, REROUTE_EDGE)){ 
-                index = std::max(index - 1, 1);
-            }
-        #endif 
+        // #ifdef REROUTE_MITIGATION
+        //     int maxhop = top->get_path_max_hop();
+        //     // if(top->is_reconfig(t, 500000)){ 
+        //     //     if(pkt->get_crthop() > maxhop) {
+        //     //         cout<<"downgraded\n";
+        //     //         index = std::max(index - 1, 1);
+        //     //     }
+        //     // }
+        //     if(pkt->get_crthop() >= maxhop && top->is_reconfig(t, PUSHTIME_PER_PKT * maxhop)) {
+        //         int pathind = top->get_path_indices(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), pkt->get_src(), pkt->get_dst(), logical_slice, index - 1);
+        //         index = std::max(index - 1, 1);
+        //         cout << "downgraded\n";
+        //     }
+        // #endif 
 
         return top->get_path_indices(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), pkt->get_src(), pkt->get_dst(), logical_slice, index - 1);
     }

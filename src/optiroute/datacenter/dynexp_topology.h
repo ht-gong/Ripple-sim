@@ -61,6 +61,8 @@ class DynExpTopology: public Topology{
   int get_firstToR(int node) {return node / _ndl;}
   int get_lastport(int dst) {return dst % _ndl;}
   bool is_downlink(int port) {return port < _ndl;}
+  int get_path_max_hop() {return _paths_maxhop;}
+  int get_path_hops(int srcToR, int dstToR, int slice, int path_ind) {return _lbls[srcToR][dstToR][slice][path_ind].size();}
 
   // defined in source file
   int get_nextToR(int slice, int crtToR, int crtport);
@@ -142,6 +144,7 @@ class DynExpTopology: public Topology{
   simtime_picosec _reconfig_time;  // time it takes to reconfigure entire topology
   simtime_picosec _tot_time;  // slice time + reconfiguration time
   int64_t _nsuperslice; // number of "superslices" (periodicity of topology)
+  int _paths_maxhop = 0; // number of hops in longest path
   mem_b _queuesize; // queue sizes
 };
 
