@@ -308,14 +308,12 @@ void UtilMonitor::printAggUtil() {
     double util = (double)B_sum / (double)_max_B_in_period;
     cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
-/*
     for (int tor = 0; tor < _top->no_of_tors(); tor++) {
         for (int uplink = 0; uplink < _top->no_of_hpr()*2; uplink++) {
             Queue* q = _top->get_queue_tor(tor, uplink);
-            q->reportMaxqueuesize();
+            q->reportQueuesize();
         }
     }
-*/
     /*
     cout << "QueueReport" << endl;
     for (int tor = 0; tor < _top->no_of_tors(); tor++) {

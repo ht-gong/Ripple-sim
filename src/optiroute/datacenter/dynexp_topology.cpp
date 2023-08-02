@@ -184,6 +184,7 @@ void DynExpTopology::read_params(string topfile) {
             if(_path_indices[s][d][slice][path_ind].first == lb_flowsize) {
               _path_indices[s][d][slice][path_ind].second.push_back(sz);
               found = true;
+              break;
             }
           }
           if(!found) {

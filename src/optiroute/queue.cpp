@@ -174,7 +174,7 @@ simtime_picosec Queue::serviceTime() {
 }
 
 void Queue::reportQueuesize() {
-    cout << "Queuesize " << _tor << "," << _port << "," << queuesize() << endl;
+    cout << "Queue " << _tor << " " << _port << " " << queuesize() << endl;
 }
 
 void Queue::reportMaxqueuesize(){

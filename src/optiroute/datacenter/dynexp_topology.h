@@ -70,7 +70,7 @@ class DynExpTopology: public Topology{
   int get_no_paths(int srcToR, int dstToR, int slice);
   int get_rpath_indices(int srcHost, int dstHost, int slice);
   vector<pair<uint64_t, vector<int>>>* get_lb_and_paths(int srcHost, int dstHost, int slice);
-  int get_path_indices(int srcHost, int dstHost, int srctor, int dsttor, int logslice, int path_ind);
+  int get_path_indices(int srctor, int dsttor, int srcHost, int dstHost, int logslice, int path_ind);
   int get_no_hops(int srcToR, int dstToR, int slice, int path_ind);
   int get_nslices() {return _nslice;} 
   int get_nlogicslices() {return _nlogicslice;}

@@ -214,8 +214,8 @@ TcpSrc::receivePacket(Packet& pkt)
     }
     //  cout << "Base "<<timeAsMs(_base_rtt)<< " RTT " << timeAsMs(_rtt)<< " Queued " << queued_packets << endl;
 
-    if (_rto<timeFromMs(1))
-        _rto = timeFromMs(1);
+    if (_rto<timeFromMs(3))
+        _rto = timeFromMs(3);
 
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
