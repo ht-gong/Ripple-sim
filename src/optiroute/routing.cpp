@@ -15,8 +15,8 @@
 #include "ndp.h"
 // #define DEBUG
 // #define HOHO
-// #define DYNAMIC_FSIZE
-#define REROUTE_MITIGATION
+#define DYNAMIC_FSIZE
+// #define REROUTE_MITIGATION
 #define LOOKUP
 
 #define PUSHTIME_PER_PKT 620000
@@ -290,12 +290,6 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
     // calculate delay considering the queue occupancy
     simtime_picosec finish_time = finish_push + timeFromNs(delay_ToR2ToR);
     int finish_slice = top->time_to_logic_slice(finish_time);
-
-    if(pkt->get_src() == 172 && pkt->get_dst() == 525 && pkt->get_crthop() >= 10) {
-        cout <<seqno << "Routing Opt crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " priority: " << pkt->get_priority() 
-        << " hop: " << pkt->get_hop_index() << " Expectedport: "<<expected_port<< " Now: " << t << " Logsl: " << top->time_to_logic_slice(t) << " Physl: " << top->time_to_slice(t)  
-        << " Sentsl: " <<pkt->get_slice_sent() << " Expectedsl: " << expected_slice << " Finish push:" << finish_push_slice << " " << finish_push << " Finish slice:"<<finish_slice<< " " << finish_time << endl;
-    }
 
     #ifdef DEBUG
     cout <<seqno << "Routing Opt crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " priority: " << pkt->get_priority() 

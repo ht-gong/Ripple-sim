@@ -11,6 +11,8 @@
 #include "ndppacket.h"
 #include "rlbpacket.h" // added for debugging
 
+#define LINKRATE 100000000000
+
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist, Routing* routing)
 : EventSource(eventlist,"pipe"), _delay(delay), _routing(routing)
 {
@@ -248,7 +250,7 @@ UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist)
     _H = _top->no_of_nodes(); // number of hosts
     _N = _top->no_of_tors(); // number of racks
     _hpr = _top->no_of_hpr(); // number of hosts per rack
-    uint64_t rate = 10000000000 / 8; // bytes / second
+    uint64_t rate = LINKRATE / 8; // bytes / second
     rate = rate * _H;
     //rate = rate / 1500; // total packets per second
 
