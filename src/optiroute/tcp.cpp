@@ -575,7 +575,7 @@ TcpSrc::send_packets() {
         while(_cwnd - in_flight >= _mss) {
             uint64_t nextseq = _sack_handler.nextSeg();
             TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, 
-                    nextseq, 0, _mss, 0, _routing->get_pkt_priority(this));
+                    nextseq, 0, _mss, 0, _routing->get_pkt_priority(this, 0));
             p->set_ts(eventlist().now());
             if(nextseq <= _highest_sent) {
                 _sack_handler.updateHiRtx(nextseq);
@@ -599,7 +599,7 @@ TcpSrc::send_packets() {
 
         uint16_t size = _highest_sent+_mss <= _flow_size ? _mss : _flow_size-_highest_sent+1;
         TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink,
-                                         _highest_sent+1, data_seq, size,  _routing->get_pkt_priority(this));
+                                         _highest_sent+1, data_seq, size,  _routing->get_pkt_priority(this, size));
         //cout << "sending seqno:" << p->seqno() << endl;
         p->set_ts(eventlist().now());
         p->set_tcp_slice(slice);
@@ -639,7 +639,7 @@ TcpSrc::retransmit_packet() {
     uint64_t data_seq = 0;
 
     TcpPacket* p = TcpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this,
-                                     _sink, _last_acked+1, data_seq, _pkt_size, _routing->get_pkt_priority(this));
+                                     _sink, _last_acked+1, data_seq, _pkt_size, _routing->get_pkt_priority(this, 0));
 #ifdef TCP_SACK
     _sack_handler.updateHiRtx(_last_acked+1);
 #endif

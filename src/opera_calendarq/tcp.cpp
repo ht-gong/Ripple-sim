@@ -207,6 +207,9 @@ TcpSrc::receivePacket(Packet& pkt)
     int slice = _top->time_to_superslice(eventlist().now());
     //cout << "TcpSrc receive packet ackno:" << seqno << endl;
 
+    pkt.get_tcpsrc()->_last_hop_per_trip = pkt.get_crthop();
+    if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
+        pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
 
     ts = p->ts();
@@ -270,7 +273,8 @@ TcpSrc::receivePacket(Packet& pkt)
     if (seqno >= _flow_size && !_finished){
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change << endl;
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change  
+            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << endl;
 	/*
         cout << "PATHS " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() << " ";
         for(vector<int> path : _sink->_used_paths) {

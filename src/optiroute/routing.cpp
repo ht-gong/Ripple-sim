@@ -15,6 +15,8 @@
 #include "ndp.h"
 // #define DEBUG
 // #define HOHO
+#define HEADER_SIZE 64
+
 #define DYNAMIC_FSIZE
 
 // #define REROUTE_MITIGATION
@@ -27,7 +29,7 @@ extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 
 
-double Routing::get_pkt_priority(TcpSrc* tcp_src) {
+double Routing::get_pkt_priority(TcpSrc* tcp_src, uint16_t pkt_size) {
     if(_routing_algorithm == LONGSHORT) {
         if(tcp_src->get_flowsize() < _cutoff) {
             return 0.0;
@@ -39,6 +41,12 @@ double Routing::get_pkt_priority(TcpSrc* tcp_src) {
             return (double) tcp_src->get_remaining_flowsize();
         #endif
         return (double) tcp_src->get_flowsize();
+    } else if (_routing_algorithm == VLB) {
+        if(pkt_size <= HEADER_SIZE) {
+            return 0.0;
+        } else {
+            return 1.0;
+        }
     }
     return 0.0;
 }
@@ -79,7 +87,7 @@ simtime_picosec Routing::routing_from_ToR(Packet* pkt, simtime_picosec t, simtim
     }
 
     // dispatches to different routing strategies
-    if(_routing_algorithm == VLB || _routing_algorithm == LONGSHORT && pkt->get_priority() == 1) {
+    if((_routing_algorithm == VLB || _routing_algorithm == LONGSHORT) && pkt->get_priority() == 1.0) {
         return routing_from_ToR_VLB(pkt, t, t);
     } else if(_routing_algorithm == OPTIROUTE) {
         return routing_from_ToR_OptiRoute(pkt, t, t, false);
@@ -103,9 +111,6 @@ int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
         // perserve original outgoing port and adds it onto new src_Tor to get path index
         int newsrc = pkt->get_src_ToR() * top->no_of_hpr() + pkt->get_src() % top->no_of_hpr();
         return top->get_rpath_indices(newsrc, pkt->get_dst(), physical_slice);
-    }
-    if(_routing_algorithm == VLB) {
-        return -1; // VLB does not use this function
     }
     if(_routing_algorithm == OPTIROUTE) {
         int logical_slice = top->time_to_logic_slice(t);
