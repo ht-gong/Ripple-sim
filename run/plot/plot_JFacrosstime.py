@@ -13,20 +13,23 @@ N_TOR = 108
 N_UPLINK = 6
 QUEUE_SIZE = 300
 PKT_SIZE = 1500
-
-# vlb_settings = ["10us"]
+SAMPLE_TIME1 = 300000
+SAMPLE_TIME2 = 500000
+SAMPLE_INTERVAL = 20
+ 
+expander_settings = ["300us_1path"]
+optiroute_settings = ["300us_portion2_queue0_ECMP"]
 # expander_settings = ["10us_1path", "1000us_1path", "static_1path", "static_5path", "static_ECMP"]
-expander_settings = ["10us_1path_ECNK=32"]
-optiroute_settings = ["10us_portion2_queue0_lookup_1path",  
-                      "10us_portion2_queue8_lookup_1path",
-                      "10us_portion5_queue0_lookup_1path",
-                      "10us_portion5_queue8_lookup_1path"]
-# opera_settings = ["regular_1path", "static_1path", "static_slice60", "static_slice120", "static_slice240", "regular_1path_slowswitching"]
+# expander_settings = ["1us_1path_ECNK=32", "1us_1path_ECNK=65", "10us_1path_ECNK=32", "10us_1path_ECNK=65", "100us_1path_ECNK=32", "100us_1path_ECNK=65", "1000us_1path_ECNK=32", "1000us_1path_ECNK=65", \
+#                       "10000us_1path_ECNK=32", "10000us_1path_ECNK=65", "static_1path_ECNK=32", "static_1path_ECNK=65"]
+# opera_settings = ["regular_allshort_1path"]
+# opera_settings = ["regular_allshort_1path"]
+operacalendarq_settings = ["1path"]
 # all_settings = [expander_settings, opera_settings, vlb_settings]
-all_settings = [expander_settings, optiroute_settings]
+all_settings = [expander_settings, optiroute_settings, operacalendarq_settings]
 # prefix = ["Expander", "Opera", "VLB"]
-
-prefix = ["Expander", "Optiroute"]
+prefix = ["Expander", "Optiroute", "Operacalendarq"]
+graph_settings = ["full", "zoomed"]
 
 def jain_fairness(arr):
     if np.sum(np.square(arr)) == 0:
@@ -34,8 +37,7 @@ def jain_fairness(arr):
     N = N_TOR * N_UPLINK - 2
     return np.sum(arr) ** 2 / (N * np.sum(np.square(arr)))
 
-for load in ["20percLoad"]:
-    
+for load in ["20percLoad_websearch_more_skew"]:
     for i in range(len(all_settings)):
         for expr in all_settings[i]:
             forlegend = []
@@ -54,7 +56,8 @@ for load in ["20percLoad"]:
                         port = int(line[2])
                         queues[(tor, port)].append(int(line[3]))
                     if line[0] == "Util":
-                        times = np.append(times, [float(line[2])])
+                        if line[1] != 'Curtime':
+                            times = np.append(times, [float(line[2])])
                 print(len(queues[(0, 6)]))
                 jfs = np.zeros(len(times))
                 avgs = np.zeros(len(times))
@@ -70,13 +73,13 @@ for load in ["20percLoad"]:
                 m = next(marker)
                 a, = ax1.plot(times, jfs, marker=m, label=f"{prefix[i]}_{expr}", linestyle='')
                 a, = ax2.plot(times, avgs, marker=m, label=f"{prefix[i]}_{expr}", linestyle='')
-                a, = ax3.plot(times[400000 // 20 : 402000 // 20], avgs[400000 // 20 : 402000 // 20], marker=m, label=f"{prefix[i]}_{expr}", linestyle='-')
-                a, = ax4.plot(times[600000 // 20 : 604000 // 20], avgs[600000 // 20 : 604000 // 20], marker=m, label=f"{prefix[i]}_{expr}", linestyle='-')  
+                a, = ax3.plot(times[SAMPLE_TIME1 // SAMPLE_INTERVAL : (SAMPLE_TIME1 + 5000) // SAMPLE_INTERVAL], jfs[SAMPLE_TIME1 // SAMPLE_INTERVAL : (SAMPLE_TIME1 + 5000) // SAMPLE_INTERVAL], marker=m, label=f"{prefix[i]}_{expr}", linestyle='-')
+                a, = ax4.plot(times[SAMPLE_TIME2 // SAMPLE_INTERVAL : (SAMPLE_TIME2 + 2000) // SAMPLE_INTERVAL], jfs[SAMPLE_TIME2 // SAMPLE_INTERVAL : (SAMPLE_TIME2 + 2000) // SAMPLE_INTERVAL], marker=m, label=f"{prefix[i]}_{expr}", linestyle='-')  
                 forlegend.append(a)
             ax1.set_ylabel("Jain Fairness Index")
             ax2.set_ylabel("Average Queue Size (Packets)")
-            ax3.set_ylabel("Average Queue Size (Packets)")
-            ax4.set_ylabel("Average Queue Size (Packets)")
+            ax3.set_ylabel("Jain Fairness Index")
+            ax4.set_ylabel("Jain Fairness Index")
             for ax in [ax1, ax2, ax3, ax4]:
                 ax.set_xlabel("Time since Start (ms)")
             ax1.legend(handles=forlegend)

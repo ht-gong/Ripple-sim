@@ -23,8 +23,8 @@ QUEUES =100
 dir = date.today().strftime("%Y-%m-%d")
 os.makedirs(dir, exist_ok=True)
 
-expander_settings = ["static_1path_websearch", "static_operapaths"]
-optiroute_settings = []
+expander_settings = ["50us_LongShort", "50us_1path"]
+optiroute_settings = ["50us_portion10_queue0_ECMP"]
 # expander_settings = ["10us_1path", "1000us_1path", "static_1path", "static_5path", "static_ECMP"]
 # expander_settings = ["1us_1path_ECNK=32", "1us_1path_ECNK=65", "10us_1path_ECNK=32", "10us_1path_ECNK=65", "100us_1path_ECNK=32", "100us_1path_ECNK=65", "1000us_1path_ECNK=32", "1000us_1path_ECNK=65", \
 #                       "10000us_1path_ECNK=32", "10000us_1path_ECNK=65", "static_1path_ECNK=32", "static_1path_ECNK=65"]

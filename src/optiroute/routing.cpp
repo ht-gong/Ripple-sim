@@ -15,7 +15,8 @@
 #include "ndp.h"
 // #define DEBUG
 // #define HOHO
-// #define DYNAMIC_FSIZE
+#define DYNAMIC_FSIZE
+
 // #define REROUTE_MITIGATION
 #define LOOKUP
 
