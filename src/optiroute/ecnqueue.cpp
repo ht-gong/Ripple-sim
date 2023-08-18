@@ -64,6 +64,18 @@ ECNQueue::receivePacket(Packet & pkt)
     dump_queuesize();
     #endif
     // dump_queuesize();
+    if (pkt.size() == UINT16_MAX) {
+         if(pkt.type() == TCP){
+            TcpPacket *tcppkt = (TcpPacket*)&pkt;
+            tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
+            cout << "DROPPED because expander routing failed\n";
+            dump_queuesize();
+        }
+        pkt.free();
+        _num_drops++;
+        return;
+    }
+
     if (queuesize() + pkt.size() > _maxsize) {
         /* if the packet doesn't fit in the queue, drop it */
         /*
@@ -176,7 +188,7 @@ ECNQueue::completeService()
     } else if (_sending_pkt->type() == TCPACK) {
         seqno = ((TcpAck*)_sending_pkt)->ackno();
     }
-
+    
     #ifdef DEBUG
     cout << "Queue " << _tor << "," << _port << " completeService seq " << seqno << 
         " pktslice" << _sending_pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<

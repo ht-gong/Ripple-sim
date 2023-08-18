@@ -16,6 +16,7 @@
 // #define DEBUG
 // #define HOHO
 #define DYNAMIC_FSIZE
+
 // #define REROUTE_MITIGATION
 #define LOOKUP
 
@@ -162,6 +163,7 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
     }
 
     DynExpTopology* top = pkt->get_topology();
+
     int cur_slice = top->time_to_logic_slice(t);
     // next port assuming topology does not change
 	int cur_slice_port = top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
@@ -180,7 +182,7 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
     
     simtime_picosec finish_push;
     // to get accurate queueing delay, need to add from when the queue began servicing
-    if(cur_q->get_is_servicing() && top->time_to_logic_slice(init_time) == cur_slice) { // only needed when init_slice == cur_slice
+    if(cur_q->get_is_servicing() && init_time == t) { // only needed when init_slice == cur_slice
         finish_push = cur_q->get_last_service_time() + cur_q->get_queueing_delay(cur_slice) +
             cur_q->drainTime(pkt);
     } else {
@@ -201,6 +203,14 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
     #endif
     if(top->is_reconfig(finish_push)) {
         finish_push_slice = top->absolute_logic_slice_to_slice(finish_push_slice + 1);
+    }
+
+    // traversed full cycle, cannot find space to allocate packet
+    if(top->time_to_absolute_logic_slice(t - init_time) + 1 == top->get_nlogicslices()) {
+        pkt->set_size(UINT16_MAX);  // dummy size to tell queue to drop packet
+        pkt->set_crtslice(cur_slice);
+        pkt->set_crtport(cur_slice_port);
+        return 0;
     }
 
     // 3 possibilities:
