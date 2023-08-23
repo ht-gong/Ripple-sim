@@ -29,7 +29,7 @@ extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
 extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 
 
-double Routing::get_pkt_priority(TcpSrc* tcp_src, uint16_t pkt_size) {
+double Routing::get_pkt_priority(TcpSrc* tcp_src) {
     if(_routing_algorithm == LONGSHORT) {
         if(tcp_src->get_flowsize() < _cutoff) {
             return 0.0;
@@ -41,12 +41,6 @@ double Routing::get_pkt_priority(TcpSrc* tcp_src, uint16_t pkt_size) {
             return (double) tcp_src->get_remaining_flowsize();
         #endif
         return (double) tcp_src->get_flowsize();
-    } else if (_routing_algorithm == VLB) {
-        if(pkt_size <= HEADER_SIZE) {
-            return 0.0;
-        } else {
-            return 1.0;
-        }
     }
     return 0.0;
 }
@@ -87,7 +81,7 @@ simtime_picosec Routing::routing_from_ToR(Packet* pkt, simtime_picosec t, simtim
     }
 
     // dispatches to different routing strategies
-    if((_routing_algorithm == VLB || _routing_algorithm == LONGSHORT) && pkt->get_priority() == 1.0) {
+    if(_routing_algorithm == VLB || (_routing_algorithm == LONGSHORT && pkt->get_priority() == 1.0)) {
         return routing_from_ToR_VLB(pkt, t, t);
     } else if(_routing_algorithm == OPTIROUTE) {
         return routing_from_ToR_OptiRoute(pkt, t, t, false);
@@ -137,20 +131,6 @@ int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
             index++;
         }
         #endif
-        // #ifdef REROUTE_MITIGATION
-        //     int maxhop = top->get_path_max_hop();
-        //     // if(top->is_reconfig(t, 500000)){ 
-        //     //     if(pkt->get_crthop() > maxhop) {
-        //     //         cout<<"downgraded\n";
-        //     //         index = std::max(index - 1, 1);
-        //     //     }
-        //     // }
-        //     if(pkt->get_crthop() >= maxhop && top->is_reconfig(t, PUSHTIME_PER_PKT * maxhop)) {
-        //         int pathind = top->get_path_indices(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), pkt->get_src(), pkt->get_dst(), logical_slice, index - 1);
-        //         index = std::max(index - 1, 1);
-        //         cout << "downgraded\n";
-        //     }
-        // #endif 
 
         return top->get_path_indices(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), pkt->get_src(), pkt->get_dst(), logical_slice, index - 1);
     }

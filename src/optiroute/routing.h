@@ -20,7 +20,7 @@ class Routing {
     _cutoff = cutoff;
    };
    simtime_picosec routing_from_ToR(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
-   double get_pkt_priority(TcpSrc* tcp_src, uint16_t pkt_size);
+   double get_pkt_priority(TcpSrc* tcp_src);
    simtime_picosec routing_from_PQ(Packet* pkt, simtime_picosec t);
    simtime_picosec routing_from_ToR_VLB(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
    simtime_picosec routing_from_ToR_Expander(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
