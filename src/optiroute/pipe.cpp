@@ -12,6 +12,7 @@
 #include "rlbpacket.h" // added for debugging
 
 #define LINKRATE 100000000000
+#define REPORTING_PERIOD 50 // outputs whenever this sampling limit is reached
 
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist, Routing* routing)
 : EventSource(eventlist,"pipe"), _delay(delay), _routing(routing)
@@ -256,6 +257,7 @@ UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist)
     //rate = rate / 1500; // total packets per second
 
     _max_agg_Bps = rate;
+    _counter = 0;
 
     // debug:
     //cout << "max bytes per second = " << rate << endl;
@@ -268,7 +270,7 @@ void UtilMonitor::start(simtime_picosec period) {
 
     // debug:
     //cout << "_max_pkts_in_period = " << _max_pkts_in_period << endl;
-
+    printAggUtil();
     eventlist().sourceIsPending(*this, _period);
 }
 
@@ -297,10 +299,14 @@ void UtilMonitor::printAggUtil() {
 
     for (int tor = 0; tor < _top->no_of_tors(); tor++) {
         for (int uplink = 0; uplink < _top->no_of_hpr(); uplink++) {
-            Queue* q = _top->get_queue_tor(tor, _top->no_of_hpr() + uplink);
-            q->reportQueuesize();
+            if(_counter % REPORTING_PERIOD == 0) {
+                Queue* q = _top->get_queue_tor(tor, _top->no_of_hpr() + uplink);
+                q->reportQueuesize();
+            }
         }
     }
+    
+    _counter++;
     // cout << "QueueReport" << endl;
     // for (int tor = 0; tor < _top->no_of_tors(); tor++) {
     //     for (int uplink = _top->no_of_hpr()+1; uplink < _top->no_of_hpr()*2; uplink++) {

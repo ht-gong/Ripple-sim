@@ -50,6 +50,7 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
 #endif
     _max_hops_per_trip = 0;
     _last_hop_per_trip = 0;
+    _total_hops = 0;
     _last_acked = 0;
     _last_ping = timeInf;
     _dupacks = 0;
@@ -221,7 +222,7 @@ TcpSrc::receivePacket(Packet& pkt)
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change 
-            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << '\n';
+            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << " " << _total_hops << '\n';
         //if (_found_reorder == 0) assert(_found_retransmit == 0);
         /*
         if (get_flow_src() == 355 && get_flow_dst() == 429) {
@@ -402,7 +403,7 @@ TcpSrc::receivePacket(Packet& pkt)
     
     //only count drops in CA state
     _drops++;
-    cout<<"Dupack: " << _flow_src << " " << _flow_dst << '\n';
+    // cout<<"Dupack: " << _flow_src << " " << _flow_dst << '\n';
 #ifdef TDTCP
     //track sliced network that lost the packet for TDTCP
     _fast_recovery_slice = pktslice;
@@ -411,7 +412,7 @@ TcpSrc::receivePacket(Packet& pkt)
     //print if retransmission is due to reordered packet (was not dropped)
     //also as we're retransmitting it, clear the seqno from the dropped list
     if (!was_it_dropped(_last_acked+1, true)) {
-        cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size  << " " << seqno << endl;
+        // cout << "RETRANSMIT " << _flow_src << " " << _flow_dst << " " << _flow_size  << " " << seqno << endl;
         _found_retransmit++;
 #define ORACLE
 #ifdef ORACLE
@@ -607,7 +608,7 @@ TcpSrc::send_packets() {
         _highest_sent += size;  //XX beware wrapping
         _packets_sent += size;
         _remaining_flow_size -= size;
-        _remaining_flow_size = std::max((uint64_t)0, _remaining_flow_size);
+        _remaining_flow_size = std::max((int64_t)0, _remaining_flow_size);
 #ifdef TCP_SACK
         _sack_handler.updateHiData(_highest_sent);
 #endif
@@ -790,6 +791,7 @@ TcpSink::receivePacket(Packet& pkt) {
     pkt.get_tcpsrc()->_last_hop_per_trip = pkt.get_crthop();
     if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
         pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
+    pkt.get_tcpsrc()->_total_hops += pkt.get_crthop();
 
     bool marked = p->flags()&ECN_CE;
     

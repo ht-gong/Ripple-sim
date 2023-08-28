@@ -97,13 +97,14 @@ class TcpSrc : public PacketSink, public EventSource {
     uint64_t _highest_sent;  //seqno is in bytes
     uint64_t _packets_sent;
     uint64_t _flow_size;
-    uint64_t _remaining_flow_size;
+    int64_t _remaining_flow_size;
 
     uint32_t _maxcwnd;
     uint16_t _dupacks;
     uint64_t _last_acked;
     uint32_t _max_hops_per_trip;
     uint32_t _last_hop_per_trip;
+    uint64_t _total_hops;
     //track which tdtcp state had a packet retransmitted
     map<uint64_t, int> _rtx_to_slice;
     //variables that are split between states in TDTCP

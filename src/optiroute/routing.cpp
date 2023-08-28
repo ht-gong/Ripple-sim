@@ -15,7 +15,6 @@
 #include "ndp.h"
 // #define DEBUG
 // #define HOHO
-#define HEADER_SIZE 64
 
 #define DYNAMIC_FSIZE
 
@@ -131,7 +130,6 @@ int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
             index++;
         }
         #endif
-
         return top->get_path_indices(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()), pkt->get_src(), pkt->get_dst(), logical_slice, index - 1);
     }
     return 0;
@@ -395,7 +393,7 @@ QueueAlarm::QueueAlarm(EventList &eventlist, int port, Queue* q, DynExpTopology*
     }
     simtime_picosec t = eventlist.now();
     int next_absolute_slice = top->time_to_absolute_slice(t) + 1;
-    simtime_picosec next_time = top->get_slice_start_time(next_absolute_slice);
+    simtime_picosec next_time = top->get_logic_slice_start_time(next_absolute_slice);
     assert(next_time > t);
     eventlist.sourceIsPending(*this, next_time); 
 }
@@ -420,10 +418,12 @@ void QueueAlarm::doNextEvent(){
 
     assert(_queue->_crt_tx_slice != crt);
     _queue->_crt_tx_slice = crt;
-    // cout << "SETTING TO " << crt << endl;
+    #ifdef DEBUG
+    cout << "queue slice " << crt << " " << _queue->_tor << "SETTING TO " << crt << endl;
+    #endif
     if(_queue->_sending_pkt == NULL && _queue->slice_queuesize(crt) > 0){
         #ifdef DEBUG
-        // cout << "queue slice " << crt << " " << _queue->_tor << " alarm beginService quesize: " <<_queue->queuesize() << endl;
+        cout << "queue slice " << crt << " " << _queue->_tor << " alarm beginService quesize: " <<_queue->queuesize() << endl;
         #endif
         _queue->beginService();
     }
