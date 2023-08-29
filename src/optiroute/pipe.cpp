@@ -295,16 +295,16 @@ void UtilMonitor::printAggUtil() {
 
     double util = (double)B_sum / (double)_max_B_in_period;
 
-    cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
+    if(_counter % REPORTING_PERIOD == 0) {
+        cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
-    for (int tor = 0; tor < _top->no_of_tors(); tor++) {
-        for (int uplink = 0; uplink < _top->no_of_hpr(); uplink++) {
-            if(_counter % REPORTING_PERIOD == 0) {
+        for (int tor = 0; tor < _top->no_of_tors(); tor++) {
+            for (int uplink = 0; uplink < _top->no_of_hpr(); uplink++) {
                 Queue* q = _top->get_queue_tor(tor, _top->no_of_hpr() + uplink);
                 q->reportQueuesize();
             }
         }
-    }
+     }
     
     _counter++;
     // cout << "QueueReport" << endl;

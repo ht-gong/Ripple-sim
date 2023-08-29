@@ -409,8 +409,10 @@ void QueueAlarm::doNextEvent(){
 #endif
 
     if(_queue->slice_queuesize(_queue->_crt_tx_slice) > 0) {
+        #ifdef DEBUG
         std::cout << "Packets " << _queue->slice_queuesize(_queue->_crt_tx_slice)/1436 << 
             " stuck in queue tor " << _queue->_tor << " port " << _queue->_port << " slice " << _queue->_crt_tx_slice << endl;
+        #endif
     }
 
     // cout << "QueueAlarmUtil" << fixed << " " << timeAsMs(eventlist().now()) << endl;
