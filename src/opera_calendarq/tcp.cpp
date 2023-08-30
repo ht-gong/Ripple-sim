@@ -47,8 +47,8 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
         _ssthresh[i] = 0xffffffff;
     */
 #else
-    //_ssthresh = 0xffffffff;
-    _ssthresh = 65536;
+    _ssthresh = 0xffffffff;
+    // _ssthresh = 65536;
 #endif
 
     _last_acked = 0;
@@ -63,6 +63,7 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
     _drops = 0;
     _max_hops_per_trip = 0;
     _last_hop_per_trip = 0;
+    _total_hops = 0;
 
     //_old_route = NULL;
     _last_packet_with_old_route = 0;
@@ -207,9 +208,9 @@ TcpSrc::receivePacket(Packet& pkt)
     int slice = _top->time_to_superslice(eventlist().now());
     //cout << "TcpSrc receive packet ackno:" << seqno << endl;
 
-    pkt.get_tcpsrc()->_last_hop_per_trip = pkt.get_crthop();
-    if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
-        pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
+    _last_hop_per_trip = pkt.get_crthop();
+    if(pkt.get_crthop() > _max_hops_per_trip)
+        _max_hops_per_trip = pkt.get_crthop();
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);
 
     ts = p->ts();
@@ -274,7 +275,7 @@ TcpSrc::receivePacket(Packet& pkt)
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change  
-            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << endl;
+            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << " " << _total_hops << endl;
 	/*
         cout << "PATHS " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() << " ";
         for(vector<int> path : _sink->_used_paths) {
@@ -592,7 +593,7 @@ TcpSrc::inflate_window() {
             _sawtooth ++;
         }
     }
-    if (_cwnd > _maxcwnd) _cwnd = _maxcwnd;
+    // if (_cwnd > _maxcwnd) _cwnd = _maxcwnd;
 }
 #endif
 
@@ -861,6 +862,7 @@ TcpSink::receivePacket(Packet& pkt) {
     pkt.get_tcpsrc()->_last_hop_per_trip = pkt.get_crthop();
     if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
         pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
+    pkt.get_tcpsrc()->_total_hops += pkt.get_crthop();
 
     //check paths
     vector<int> used_path = pkt.get_path();
@@ -932,8 +934,8 @@ TcpSink::receivePacket(Packet& pkt) {
         }
 */
             if(!(fts > out_of_seq_fts)) {
-            cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
-                << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
+            // cout << "OUTOFSEQ " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() << " "
+            //     << out_of_seq_fts-fts << " " << _src->eventlist().now()-out_of_seq_rxts << " " << seqno << " " << out_of_seq_n << endl;
             }
             waiting_for_seq = false;
             out_of_seq_n = 0;

@@ -15,6 +15,7 @@
 #include "rlbpacket.h" // added for debugging
 
 #define LINK_RATE 100000000000
+#define REPORTING_PERIOD 50 
 
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
 : EventSource(eventlist,"pipe"), _delay(delay), _routing(Routing())
@@ -306,16 +307,18 @@ void UtilMonitor::printAggUtil() {
     // debug:
     //cout << "Packets counted = " << (int)pkt_sum << endl;
     //cout << "Max packets = " << _max_pkts_in_period << endl;
+    if(_counter % REPORTING_PERIOD == 0) {
+        double util = (double)B_sum / (double)_max_B_in_period;
+        cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
 
-    double util = (double)B_sum / (double)_max_B_in_period;
-    cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
-
-    for (int tor = 0; tor < _top->no_of_tors(); tor++) {
-        for (int uplink = 0; uplink < _top->no_of_hpr()*2; uplink++) {
-            Queue* q = _top->get_queue_tor(tor, uplink);
-            q->reportQueuesize();
+        for (int tor = 0; tor < _top->no_of_tors(); tor++) {
+            for (int uplink = 0; uplink < _top->no_of_hpr()*2; uplink++) {
+                Queue* q = _top->get_queue_tor(tor, uplink);
+                q->reportQueuesize();
+            }
         }
     }
+    _counter++;
     /*
     cout << "QueueReport" << endl;
     for (int tor = 0; tor < _top->no_of_tors(); tor++) {

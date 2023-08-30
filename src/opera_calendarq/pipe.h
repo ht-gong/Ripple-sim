@@ -56,6 +56,7 @@ class UtilMonitor : public EventSource {
     int _H; // number of hosts
     int _N; // number of racks
     int _hpr; // number of hosts per rack
+    int _counter;
 };
 
 

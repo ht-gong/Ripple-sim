@@ -108,6 +108,7 @@ class TcpSrc : public PacketSink, public EventSource {
 
     uint32_t _max_hops_per_trip;
     uint32_t _last_hop_per_trip;
+    uint64_t _total_hops;
     //track which tdtcp state had a packet retransmitted
     map<uint64_t, int> _rtx_to_slice;
     //variables that are split between states in TDTCP
