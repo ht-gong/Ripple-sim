@@ -42,9 +42,8 @@ simtime_picosec Routing::routingFromPQ(Packet* pkt, simtime_picosec t) {
         assert(npaths > 0);
 
         // randomly choose a path for the packet
-        // !!! todo: add other options like permutation, etc...
-        // int path_index = random() % npaths;
-        int path_index = 0;
+        int path_index = top->get_rpath_indices(pkt->get_src(), pkt->get_dst(), slice) % npaths;
+        // int path_index = 0;
 
         pkt->set_slice_sent(slice); // "timestamp" the packet
         pkt->set_fabricts(t);
