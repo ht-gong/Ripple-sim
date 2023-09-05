@@ -217,7 +217,7 @@ void DynExpTopology::init_network() {
         continue;
       }
       for (int k = 0; k < _nslice; k++) {
-          _rpath_indices[i][j][k] = rand() % _nul;
+          _rpath_indices[i][j][k] = rand();
       }
     }
   }
