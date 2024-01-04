@@ -25,7 +25,9 @@ class Pipe : public EventSource, public PacketSink {
     void sendFromPipe(Packet *pkt);
 
     uint64_t reportBytes(); // reports to the UtilMonitor
+    uint64_t reportBytesPassedThrough();
     uint64_t _bytes_delivered; // keep track of how many (non-hdr,ACK,NACK,PULL,RTX) packets were delivered to hosts
+    uint64_t _bytes_passed_through;
 
     simtime_picosec delay() { return _delay; }
     const string& nodename() { return _nodename; }

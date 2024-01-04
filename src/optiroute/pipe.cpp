@@ -22,6 +22,7 @@ Pipe::Pipe(simtime_picosec delay, EventList& eventlist, Routing* routing)
     //_nodename= ss.str();
 
     _bytes_delivered = 0;
+    _bytes_passed_through = 0;
 
 }
 
@@ -64,8 +65,16 @@ uint64_t Pipe::reportBytes() {
     return temp;
 }
 
+uint64_t Pipe::reportBytesPassedThrough() {
+    uint64_t temp;
+    temp = _bytes_passed_through;
+    _bytes_passed_through = 0; // reset the counter
+    return temp;
+}
+
 void Pipe::sendFromPipe(Packet *pkt) {
     //cout << "sendFromPipe" << endl;
+    _bytes_passed_through += pkt->size();
     if (pkt->is_lasthop()) {
         //cout << "LAST HOP\n";
         // we'll be delivering to an NdpSink or NdpSrc based on packet type
@@ -279,24 +288,31 @@ void UtilMonitor::doNextEvent() {
 }
 
 void UtilMonitor::printAggUtil() {
-
-    uint64_t B_sum = 0;
-
-    for (int tor = 0; tor < _N; tor++) {
-        for (int downlink = 0; downlink < _hpr; downlink++) {
-            Pipe* pipe = _top->get_pipe_tor(tor, downlink);
-            B_sum = B_sum + pipe->reportBytes();
+    if (_counter % REPORTING_PERIOD == 0) {
+        uint64_t B_downlink_sum = 0;
+        uint64_t B_uplink_sum = 0;
+    
+        for (int tor = 0; tor < _N; tor++) {
+            for (int downlink = 0; downlink < _hpr; downlink++) {
+                Pipe* pipe = _top->get_pipe_tor(tor, downlink);
+                B_downlink_sum +=  pipe->reportBytes();
+            }
         }
-    }
 
-    // debug:
-    //cout << "Packets counted = " << (int)pkt_sum << endl;
-    //cout << "Max packets = " << _max_pkts_in_period << endl;
+        for (int tor = 0; tor < _N; tor++) {
+            for (int uplink = 0; uplink < _hpr; uplink++) {
+                Pipe* pipe = _top->get_pipe_tor(tor, _hpr + uplink);
+                B_uplink_sum += pipe->reportBytesPassedThrough();
+            }
+        }
 
-    double util = (double)B_sum / (double)_max_B_in_period;
-
-    if(_counter % REPORTING_PERIOD == 0) {
-        cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
+        // debug:
+        //cout << "Packets counted = " << (int)pkt_sum << endl;
+        //cout << "Max packets = " << _max_pkts_in_period << endl;
+        double util_downlink = (double)B_downlink_sum / ((double)_max_B_in_period * REPORTING_PERIOD);
+        double util_uplink = (double)B_uplink_sum / ((double)_max_B_in_period * REPORTING_PERIOD);
+        assert(util_downlink <= 1.0 && util_uplink <= 1.0);
+        cout << "Util " << fixed << util_downlink << " " << util_uplink << " " << timeAsMs(eventlist().now()) << endl;
 
         for (int tor = 0; tor < _top->no_of_tors(); tor++) {
             for (int uplink = 0; uplink < _top->no_of_hpr(); uplink++) {
