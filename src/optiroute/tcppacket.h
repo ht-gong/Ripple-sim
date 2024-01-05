@@ -33,6 +33,7 @@ public:
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;
         p->_flags = 0;
+        p->_early_fb = false;
 	    p->_type = TCP;
 	    p->_seqno = seqno;
 	    p->_data_seqno=dataseqno;
@@ -90,6 +91,7 @@ public:
         p->_tcp_src = tcp_src;
         p->_tcp_sink = tcp_sink;
         p->_flags = 0;
+        p->_early_fb = false;
 	    p->_type = TCPACK;
 	    p->_seqno = seqno;
 	    p->_ackno = ackno;

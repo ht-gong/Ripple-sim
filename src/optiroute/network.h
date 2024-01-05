@@ -100,6 +100,8 @@ class Packet {
     bool header_only() const {return _is_header;}
     bool bounced() const {return _bounced;}
     bool been_bounced() const {return _been_bounced;}
+    void set_early_fb() { _early_fb = true; }
+    bool early_fb() const { return _early_fb; }
     PacketFlow& flow() const {return *_flow;}
     virtual ~Packet() {};
     inline const packetid_t id() const {return _id;}
@@ -205,6 +207,7 @@ class Packet {
     bool _is_header;
     bool _bounced; // packet has hit a full queue, and is being bounced back to the sender
     bool _been_bounced; // packet has been bounced previously (for debugging only as of 9/4/18)
+    bool _early_fb;
     uint32_t _flags; // used for ECN & friends
     simtime_picosec _fabricts; //timestamp from nic sentout
     unsigned _queueing; //amount of queueing packet goes through

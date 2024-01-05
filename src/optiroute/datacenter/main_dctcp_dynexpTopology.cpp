@@ -72,6 +72,7 @@ int main(int argc, char **argv) {
     int64_t cutoff = 0; // cutoff between NDP and RLB flow sizes. flows < cutoff == NDP.
     RoutingAlgorithm routing_alg = SINGLESHORTEST;
     int64_t slice_time = 0;
+    bool earlyfb = false;
 
     int i = 1;
     filename << "logout.dat";
@@ -86,6 +87,8 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-cwnd")){
 	       cwnd = atoi(argv[i+1]);
 	       i++;
+        } else if (!strcmp(argv[i],"-earlyfb")){
+	       earlyfb = true;
         } else if (!strcmp(argv[i],"-dctcpmarking")){
 	       marking_threshold = atoi(argv[i+1]);
 	       i++;
@@ -192,7 +195,7 @@ int main(int argc, char **argv) {
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, ECN, topfile, 
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, earlyfb ? ECN_EFB : ECN, topfile, 
                                                 routing, marking_threshold, slice_duration);
 #endif
 

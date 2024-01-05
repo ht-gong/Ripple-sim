@@ -60,6 +60,8 @@ class TcpSrc : public PacketSink, public EventSource {
     Queue* sendToNIC(Packet* pkt);
     virtual void receivePacket(Packet& pkt);
 
+    TcpAck* alloc_tcp_ack();
+
     //void replace_route(const Route* newroute);
 
     void set_flowsize(uint64_t flow_size_in_bytes) {

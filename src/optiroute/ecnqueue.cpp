@@ -96,9 +96,16 @@ ECNQueue::receivePacket(Packet & pkt)
     }
     //pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_ARRIVE);
 
-    //mark on enqueue
-    //    if (_queuesize > _K)
-    //  pkt.set_flags(pkt.flags() | ECN_CE);
+    //for early feedback, check for ECN at enqueue time
+    if (queuesize() > _K){
+      if(_early_fb_enabled && pkt.type() == TCP) {
+        if(!pkt.early_fb()){
+          sendEarlyFeedback(pkt);
+        }
+        pkt.set_early_fb();
+        //cout << "early fb " << _tor << " " << _port << endl;
+      }
+    }
 
     /* enqueue the packet */
     bool queueWasEmpty = _enqueued[_crt_tx_slice].empty(); //is the current queue empty?
@@ -153,8 +160,9 @@ void ECNQueue::beginService() {
     _enqueued[_crt_tx_slice].pop_back();
 
     //mark on dequeue
-    if (queuesize() > _K)
-	  _sending_pkt->set_flags(_sending_pkt->flags() | ECN_CE);
+    if (queuesize() > _K){
+      _sending_pkt->set_flags(_sending_pkt->flags() | ECN_CE);
+    }
 
     //_queuesize[_crt_tx_slice] -= _sending_pkt->size();
     
@@ -180,6 +188,10 @@ ECNQueue::completeService()
 {
     /* dequeue the packet */
     assert(_sending_pkt);
+    if(_crt_tx_slice != _sending_pkt->get_crtslice()) {
+    cout << "sending_pkt " << _sending_pkt->get_crtslice() << " efb " << _sending_pkt->early_fb() << " tx_slice " << _crt_tx_slice << " port " << _port << endl; 
+    cout << "crt_tor " << _sending_pkt->get_crtToR() << " crt_port " << _sending_pkt->get_crtport() << " dst_tor " << _top->get_firstToR(_sending_pkt->get_dst()) << endl;
+  }
     assert(_crt_tx_slice == _sending_pkt->get_crtslice());
 
     unsigned seqno = 0;
@@ -229,4 +241,64 @@ void ECNQueue::dump_queuesize() {
         cout<<i<<":"<<_queuesize[i]<<" ";
     }
     cout<<"\n";
+}
+
+void
+ECNQueue::sendEarlyFeedback(Packet &pkt) {
+        //return the packet to the sender
+        DynExpTopology* top = pkt.get_topology();
+
+        TcpSrc* tcpsrc = NULL;
+        unsigned seqno;
+        if(pkt.type() == TCP) {
+            tcpsrc = ((TcpPacket*)(&pkt))->get_tcpsrc();
+            seqno = ((TcpPacket*)(&pkt))->seqno();
+        } else {
+            return;
+        }
+  /*
+        assert(pkt.get_earlyhop() == pkt.get_crthop());
+        if(pkt.id() == 68072) {
+        cout << "SENDING " << pkt.get_earlyhop() << " " <<
+            _tor << " " << _port << endl;
+        }
+  */
+        assert(tcpsrc != NULL);
+        TcpAck *ack = tcpsrc->alloc_tcp_ack();
+        int old_src_ToR = _top->get_firstToR(pkt.get_src());
+        // flip the source and dst of the packet: 
+        int s = pkt.get_src();
+        int d = pkt.get_dst();
+        ack->set_src(d);
+        ack->set_dst(s);
+        ack->set_src_ToR(pkt.get_crtToR());
+       _routing->routing_from_PQ(ack, eventlist().now());
+        ack->set_ts(pkt.get_fabricts());
+        ack->set_crtToR(pkt.get_crtToR());
+        ack->set_early_fb();
+        ack->set_lasthop(false);
+        ack->set_flags(ECN_ECHO)  ;
+        ack->set_hop_index(0);
+        ack->set_crthop(0);
+  
+
+        // get the current ToR, this will be the new src_ToR of the packet
+        int new_src_ToR = ack->get_crtToR();
+
+        if (new_src_ToR == old_src_ToR) {
+            // the packet got returned at the source ToR
+            // we need to send on a downlink right away
+            ack->set_crtport(top->get_lastport(ack->get_dst()));
+            ack->set_maxhops(0);
+            ack->set_crtslice(0);
+
+            // debug:
+            //cout << "   packet RTSed at the first ToR (ToR = " << new_src_ToR << ")" << endl;
+
+        } else {
+            ack->set_src_ToR(new_src_ToR);
+            _routing->routing_from_ToR(ack, eventlist().now(), eventlist().now()); 
+        }
+        Queue* nextqueue = top->get_queue_tor(ack->get_crtToR(), ack->get_crtport());
+        nextqueue->receivePacket(*ack);
 }

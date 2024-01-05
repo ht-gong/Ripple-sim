@@ -58,11 +58,12 @@ DCTCPSrc::receivePacket(Packet& pkt)
     _pkts_seen++;
 
     if (pkt.flags() & ECN_ECHO){
-	_pkts_marked += 1;
+    //cout << "marking\n";
+    _pkts_marked += 1;
 
-	//exit slow start since we're causing congestion
-	if (_ssthresh>_cwnd)
-	    _ssthresh = _cwnd;
+    //exit slow start since we're causing congestion
+    if (_ssthresh>_cwnd)
+      _ssthresh = _cwnd;
     }
 
 #ifdef TDTCP
@@ -103,8 +104,7 @@ DCTCPSrc::receivePacket(Packet& pkt)
 
 	//cout << ntoa(timeAsMs(eventlist().now())) << " UPDATE " << str() << " CWND " << _cwnd << " alfa " << ntoa(_alfa)<< " marked " << ntoa(f) << endl;
     }
-
-    TcpSrc::receivePacket(pkt);
+  TcpSrc::receivePacket(pkt);
     //cout << ntoa(timeAsMs(eventlist().now())) << " ATCPID " << str() << " CWND " << _cwnd << " alfa " << ntoa(_alfa)<< endl;
 }
 

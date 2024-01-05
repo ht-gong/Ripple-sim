@@ -105,10 +105,17 @@ void Queue::sendFromQueue(Packet* pkt) {
                     case NDPPULL:
                         cout << "!!! NDPPULL";
                         break;
-                    case TCP:
+                    case TCP: {
                         cout << "!!! TCP";
                         TcpPacket *tcppkt = (TcpPacket*)pkt;
                         tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
+                        break;
+                    }
+                    case TCPACK: {
+                        TcpAck *tcpack = (TcpAck*)pkt;
+                        cout << "!!! TCPACK efb " << tcpack->early_fb();
+                        tcpack->get_tcpsrc()->add_to_dropped(tcpack->seqno());
+                    }
                 }
                 cout << " packet dropped: port & dst didn't match! (queue.cpp)" << endl;
                 cout << seqno << "    ToR = " << pkt->get_crtToR() << ", port = " << pkt->get_crtport() <<

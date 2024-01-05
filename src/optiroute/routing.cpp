@@ -210,11 +210,11 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
         return finish_time;
     } else {
         // 3. The packet is pushed "across slices", thus it needs to be rerouted to the start of next slice
+        
         simtime_picosec nxt_slice_time = top->get_logic_slice_start_time(top->time_to_absolute_logic_slice(t) + 1);
         pkt->set_src_ToR(pkt->get_crtToR());
         pkt->set_path_index(get_path_index(pkt, nxt_slice_time));
         pkt->set_hop_index(0);
-
         #ifdef DEBUG
         cout << "Reroute Exp crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << pkt->get_crtslice()<< " at " <<t << "finishing at" << finish_push << endl;
         #endif
@@ -387,7 +387,7 @@ simtime_picosec Routing::routing_from_ToR_VLB(Packet* pkt, simtime_picosec t, si
 QueueAlarm::QueueAlarm(EventList &eventlist, int port, Queue* q, DynExpTopology* top)
     : EventSource(eventlist, "QueueAlarm"), _queue(q), _top(top)
 {
-    //nic or downlink queue uses no alarm
+    //nic or downlink queue uses no alarm, sending slice for packet must be set to 0 in that case
     if (!top || top->is_downlink(port)){
         return;
     }

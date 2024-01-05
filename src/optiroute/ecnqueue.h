@@ -22,6 +22,7 @@ class ECNQueue : public Queue {
     void completeService();
     mem_b queuesize(); 
     mem_b slice_queuesize(int slice);
+    void set_early_fb(bool enabled) { _early_fb_enabled = enabled;}
 
  private:
     mem_b _K;
@@ -30,7 +31,9 @@ class ECNQueue : public Queue {
     vector<list<Packet*>> _enqueued;
     int _dl_queue;
     DynExpTopology *_top;
+    void sendEarlyFeedback(Packet &pkt);
     void dump_queuesize();
+    bool _early_fb_enabled;
 };
 
 #endif

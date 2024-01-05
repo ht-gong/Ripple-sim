@@ -23,6 +23,7 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
 {
     _mss = Packet::data_packet_size();
     _maxcwnd = 65535;//MAX_SENT*_mss;
+    //_maxcwnd = 0x80000;//MAX_SENT*_mss;
     _sawtooth = 0;
     _subflow_id = -1;
     _rtt_avg = timeFromMs(0);
@@ -128,6 +129,13 @@ uint32_t TcpSrc::effective_window() {
 #endif
 }
 
+TcpAck* TcpSrc::alloc_tcp_ack() {
+    TcpAck *ack = TcpAck::newpkt(this->_top, this->_flow,
+            this->_flow_dst, this->_flow_src, this,
+            0, 0, 0, 0);
+    return ack;
+}
+
 void 
 TcpSrc::connect(TcpSink& sink, 
 		simtime_picosec starttime) {
@@ -163,6 +171,7 @@ TcpSrc::receivePacket(Packet& pkt)
     TcpAck::seq_t seqno = p->ackno();
     list<pair<uint64_t, uint64_t>> sacks = p->get_sack();
     bool is_sack_loss;
+    bool early_fb = p->early_fb();
     //we update slice for TDTCP based on corresponding data packet slice
     int pktslice = p->get_tcp_slice();
     int slice = _top->time_to_slice(eventlist().now());
@@ -175,6 +184,8 @@ TcpSrc::receivePacket(Packet& pkt)
 
     ts = p->ts();
     p->free();
+
+    if(early_fb) return;
 
     if (_finished || seqno < _last_acked) {
         //cout << "O seqno" << seqno << " last acked "<< _last_acked;
@@ -793,7 +804,7 @@ TcpSink::receivePacket(Packet& pkt) {
         pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
     pkt.get_tcpsrc()->_total_hops += pkt.get_crthop();
 
-    bool marked = p->flags()&ECN_CE;
+    bool marked = p->early_fb() ? false : p->flags()&ECN_CE; //only mark ACK with ECN if early fb not sent
     
     int size = p->size() - HEADER_SIZE;
     //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_RCVDESTROY);

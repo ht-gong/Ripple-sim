@@ -247,10 +247,13 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
     else if (qt==DEFAULT)
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
-    else if (qt==ECN) {
+    else if (qt==ECN || qt==ECN_EFB) {
         if(!_marking_thresh)
           _marking_thresh = DEFAULT_ECN_K;
-        return new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*_marking_thresh, tor, port, this, _routing);
+        ECNQueue *q = new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*_marking_thresh, tor, port, this, _routing);
+        if(qt==ECN_EFB) q->set_early_fb(true);
+        else q->set_early_fb(false);
+        return q;   
     }
     assert(0);
 }
@@ -393,6 +396,10 @@ int DynExpTopology::get_port(int srcToR, int dstToR, int slice, int path_ind, in
   //cout << "Getting port..." << endl;
   //cout << "   Inputs: srcToR = " << srcToR << ", dstToR = " << dstToR << ", slice = " << slice << ", path_ind = " << path_ind << ", hop = " << hop << endl;
   //cout << "   Port = " << _lbls[srcToR][dstToR][slice][path_ind][hop] << endl;
+  if(_lbls[srcToR][dstToR][slice].size() <= path_ind) {
+    cout << _lbls[srcToR][dstToR][slice].size() << " " << path_ind << endl;
+  }
+  assert(_lbls[srcToR][dstToR][slice].size() > path_ind);
   return _lbls[srcToR][dstToR][slice][path_ind][hop];
 }
 
