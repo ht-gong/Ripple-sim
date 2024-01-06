@@ -295,14 +295,16 @@ void UtilMonitor::printAggUtil() {
         for (int tor = 0; tor < _N; tor++) {
             for (int downlink = 0; downlink < _hpr; downlink++) {
                 Pipe* pipe = _top->get_pipe_tor(tor, downlink);
-                B_downlink_sum +=  pipe->reportBytes();
+                uint64_t bytes = pipe->reportBytes();
+                B_downlink_sum += bytes;
+                cout << "Pipe " <<  tor << " " << downlink << " " << (double) bytes / (LINKRATE / 8 * timeAsSec(_period) * REPORTING_PERIOD)  << endl;
             }
-        }
-
-        for (int tor = 0; tor < _N; tor++) {
             for (int uplink = 0; uplink < _hpr; uplink++) {
                 Pipe* pipe = _top->get_pipe_tor(tor, _hpr + uplink);
-                B_uplink_sum += pipe->reportBytesPassedThrough();
+                uint64_t bytes = pipe->reportBytesPassedThrough();
+                B_uplink_sum += bytes;
+                cout << "Pipe " <<  tor << " " << _hpr + uplink 
+                     << " " << (double) bytes / (LINKRATE / 8 * timeAsSec(_period) * REPORTING_PERIOD)  << endl;
             }
         }
 
