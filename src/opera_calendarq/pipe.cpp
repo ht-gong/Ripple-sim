@@ -15,7 +15,7 @@
 #include "rlbpacket.h" // added for debugging
 
 #define LINK_RATE 100000000000
-#define REPORTING_PERIOD 50 
+#define REPORTING_PERIOD 1 // This determines how often we sample the queues and aggregate the link utilization for report on top of Utiltime
 
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
 : EventSource(eventlist,"pipe"), _delay(delay), _routing(Routing())
@@ -266,7 +266,7 @@ UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist)
     //rate = rate / 1500; // total packets per second
 
     _max_agg_Bps = rate;
-
+    _counter = 0;
     // debug:
     //cout << "max bytes per second = " << rate << endl;
 
@@ -283,7 +283,7 @@ UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist, map<uint64_t
     //rate = rate / 1500; // total packets per second
 
     _max_agg_Bps = rate;
-
+    _counter = 0;
     // debug:
     //cout << "max bytes per second = " << rate << endl;
 
@@ -295,8 +295,8 @@ void UtilMonitor::start(simtime_picosec period) {
 
     // debug:
     //cout << "_max_pkts_in_period = " << _max_pkts_in_period << endl;
-
-    eventlist().sourceIsPending(*this, _period);
+    printAggUtil();
+    //eventlist().sourceIsPending(*this, _period);
 }
 
 void UtilMonitor::doNextEvent() {
