@@ -67,6 +67,7 @@ int main(int argc, char **argv) {
     int64_t cutoff = 0; // cutoff between NDP and RLB flow sizes. flows < cutoff == NDP.
     RoutingAlgorithm routing_alg = SINGLESHORTEST;
     int64_t slice_time = 0;
+    simtime_picosec slice_duration = 0;
 
     int i = 1;
     filename << "logout.dat";
@@ -112,23 +113,24 @@ int main(int argc, char **argv) {
                 routing_alg = VLB;
             } else if (!strcmp(argv[i + 1], "ECMP")) {
                 routing_alg = ECMP;
-            } else if (!strcmp(argv[i + 1], "Optiroute")) {
-                routing_alg = LONGSHORT;
+            } else if (!strcmp(argv[i + 1], "OptiRoute")) {
+                routing_alg = OPTIROUTE;
             } else {
                 exit_error(argv[0]);
             }
             i++;
+        } else if (!strcmp(argv[i],"-slicedur")){
+	       slice_duration = strtoull(argv[i+1], NULL, 10);
+	       i++;
         } else if (!strcmp(argv[i],"-flowfile")) {
 			flowfile = argv[i+1];
 			i++;
         } else if (!strcmp(argv[i],"-topfile")) {
             topfile = argv[i+1];
             i++;
-        /*
         } else if (!strcmp(argv[i],"-pullrate")) {
             pull_rate = atof(argv[i+1]);
             i++;
-        */
         } else if (!strcmp(argv[i],"-simtime")) {
             simtime = atof(argv[i+1]);
             i++;
@@ -177,7 +179,8 @@ int main(int argc, char **argv) {
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, COMPOSITE, topfile, routing);
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, COMPOSITE, 
+                                             topfile, routing, 0, slice_duration);
 #endif
 
 	// initialize all sources/sinks

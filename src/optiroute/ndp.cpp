@@ -904,11 +904,13 @@ void NdpSink::receivePacket(Packet& pkt) {
     }
 
     if (last_ts > fts){
+    /*
         cout << "REORDER " << " " << _flow_src << " " << _flow_dst << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
             "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
         _src->_found_reorder++;
+        */
     }
     last_ts = fts;
     last_hops = p->get_crthop();
@@ -1047,7 +1049,7 @@ int NdpPullPacer::_pull_spacing_cdf_count = 0;
 NdpPullPacer::NdpPullPacer(EventList& event, double pull_rate_modifier)  : 
     EventSource(event, "ndp_pacer"), _last_pull(0)
 {
-    _packet_drain_time = (simtime_picosec)(Packet::data_packet_size() * (pow(10.0,12.0) * 8) / speedFromMbps((uint64_t)10000))/pull_rate_modifier;
+    _packet_drain_time = (simtime_picosec)(Packet::data_packet_size() * (pow(10.0,12.0) * 8) / speedFromMbps((uint64_t)100000))/pull_rate_modifier;
     _log_me = false;
     _pacer_no = 0;
 }
