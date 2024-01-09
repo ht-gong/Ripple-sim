@@ -400,6 +400,10 @@ int DynExpTopology::get_port(int srcToR, int dstToR, int slice, int path_ind, in
     cout << _lbls[srcToR][dstToR][slice].size() << " " << path_ind << endl;
   }
   assert(_lbls[srcToR][dstToR][slice].size() > path_ind);
+  //assert(_lbls[srcToR][dstToR][slice][path_ind].size() > hop);
+  if(_lbls[srcToR][dstToR][slice][path_ind][hop] > 11) {
+    cout << "hi :) " << srcToR << " " << dstToR << " " << slice << " " << path_ind << " " << hop << endl;
+  }
   return _lbls[srcToR][dstToR][slice][path_ind][hop];
 }
 

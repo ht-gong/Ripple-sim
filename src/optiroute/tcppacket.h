@@ -16,6 +16,8 @@
 #define HEADER_SIZE 64
 #define MTU_SIZE 1500
 
+static uint64_t packet_id_gen;
+
 class TcpPacket : public Packet {
 public:
 	typedef uint64_t seq_t;
@@ -40,6 +42,7 @@ public:
 	    p->_syn = false;
         p->_size = size+HEADER_SIZE;
         assert(p->_size <= MTU_SIZE);
+      p->_id = packet_id_gen++;
 	    return p;
 	}
 
@@ -97,7 +100,7 @@ public:
 	    p->_ackno = ackno;
 	    p->_data_ackno = dackno;
         p->_size = HEADER_SIZE;
-
+      p->_id = packet_id_gen++;
 	    return p;
 	}
 

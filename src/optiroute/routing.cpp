@@ -85,7 +85,7 @@ simtime_picosec Routing::routing_from_ToR(Packet* pkt, simtime_picosec t, simtim
     } else if(_routing_algorithm == OPTIROUTE) {
         return routing_from_ToR_OptiRoute(pkt, t, t, false);
     } else {
-        return routing_from_ToR_Expander(pkt, t, t);
+        return routing_from_ToR_Expander(pkt, t, t, false);
     }
 }
 
@@ -135,7 +135,7 @@ int Routing::get_path_index(Packet* pkt, simtime_picosec t) {
     return 0;
 }
 
-simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec t, simtime_picosec init_time) {
+simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec t, simtime_picosec init_time, bool rerouted) {
     unsigned seqno = 0;
     if(pkt->type() == TCP) {
         seqno = ((TcpPacket*)pkt)->seqno();
@@ -148,18 +148,23 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
     DynExpTopology* top = pkt->get_topology();
 
     int cur_slice = top->time_to_logic_slice(t);
+    if(cur_slice != pkt->get_crtslice()) {
+    pkt->set_src_ToR(pkt->get_crtToR());
+    pkt->set_path_index(get_path_index(pkt, t));
+    pkt->set_hop_index(0);
+  }
     // next port assuming topology does not change
 	int cur_slice_port = top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
                                 cur_slice, pkt->get_path_index(), pkt->get_hop_index());
-
-    assert(cur_slice_port);
-    #ifdef DEBUG
-    if(!cur_slice_port) {
-        std::cout <<seqno << "Routing Failed crtToR: " << pkt->get_crtToR() << "Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
-        << "hop: " << pkt->get_hop_index() << "port: "<<cur_slice_port<< endl;
+    if(!cur_slice_port) cout << "err " << pkt->get_src_ToR() << " " << top->get_firstToR((pkt->get_dst())) << " " <<
+    cur_slice << " " << pkt->get_path_index() << " " << pkt->get_hop_index() << endl;
+    //assert(cur_slice_port);
+    if(!cur_slice_port || cur_slice_port > 11) {
+        std::cout <<pkt->id() << " routing failed crtToR: " << pkt->get_crtToR() << " Srctor:" <<pkt->get_src_ToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << cur_slice 
+        << " hop: " << pkt->get_hop_index() << " port: "<<cur_slice_port<< 
+      " pathidx " << pkt->get_path_index() << " efb " << pkt->early_fb() << " is_data " << (pkt->type() == TCP) << endl;
         assert(0);
     }
-    #endif
 
     Queue* cur_q = top->get_queue_tor(pkt->get_crtToR(), cur_slice_port);
     
@@ -206,6 +211,18 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
             pkt->set_src_ToR(top->get_nextToR(cur_slice, pkt->get_crtToR(), pkt->get_crtport()));
             pkt->set_path_index(get_path_index(pkt, finish_time));
             pkt->set_hop_index(-1);
+          if(pkt->id() == 2979155) {
+        cout << "DEBUG fail routing\n";
+        }
+          if(pkt->id() == 2980467) {
+        cout << "DEBUG EFB fail routing\n";
+        }
+        }
+          if(pkt->id() == 2979155) {
+        cout << "DEBUG routing " << cur_slice << " " << cur_slice_port << endl;
+        }
+          if(pkt->id() == 2980467) {
+        cout << "DEBUG EFB routing " << cur_slice << " " << cur_slice_port << endl;
         }
         return finish_time;
     } else {
@@ -218,7 +235,7 @@ simtime_picosec Routing::routing_from_ToR_Expander(Packet* pkt, simtime_picosec 
         #ifdef DEBUG
         cout << "Reroute Exp crtToR: " << pkt->get_crtToR() << " dstToR: " << top->get_firstToR(pkt->get_dst()) << " slice: " << pkt->get_crtslice()<< " at " <<t << "finishing at" << finish_push << endl;
         #endif
-        return routing_from_ToR_Expander(pkt, nxt_slice_time, init_time);
+        return routing_from_ToR_Expander(pkt, nxt_slice_time, init_time, true);
     }
 
 }

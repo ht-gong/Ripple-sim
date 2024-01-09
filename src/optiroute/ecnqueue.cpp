@@ -29,6 +29,13 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
 void
 ECNQueue::receivePacket(Packet & pkt)
 {
+    if(pkt.id() == 2979155) {
+      cout << "DEBUG receivePacket " << _tor << " " << _port << " crt_slice " << _crt_tx_slice << " pktslice " << pkt.get_crtslice() << " hop " << pkt.get_hop_index() << endl;
+  }
+    if(pkt.id() == 2980467) {
+      cout << "DEBUG EFB receivePacket " << _tor << " " << _port << " crt_slice " << _crt_tx_slice << " pktslice " << pkt.get_crtslice() << " hop " << pkt.get_hop_index() << endl;
+  }
+
     //is this a PAUSE packet?
     if (pkt.type()==ETH_PAUSE){
         EthPausePacket* p = (EthPausePacket*)&pkt;
@@ -210,6 +217,12 @@ ECNQueue::completeService()
     
     _queuesize[_crt_tx_slice] -= _sending_pkt->size();
 
+    if(_sending_pkt->id() == 2979155) {
+      cout << "DEBUG completeService " << _tor << " " << _port << " crt_slice " << _crt_tx_slice << endl; 
+  }
+    if(_sending_pkt->id() == 2980467) {
+      cout << "DEBUG EFB completeService " << _tor << " " << _port << " crt_slice " << _crt_tx_slice << " pktslice " << _sending_pkt->get_crtslice() << " hop " << _sending_pkt->get_hop_index() << endl;
+  }
     sendFromQueue(_sending_pkt);
     _sending_pkt = NULL;
     _is_servicing = false;
@@ -246,6 +259,7 @@ void ECNQueue::dump_queuesize() {
 void
 ECNQueue::sendEarlyFeedback(Packet &pkt) {
         //return the packet to the sender
+        assert(pkt.type() == TCP);
         DynExpTopology* top = pkt.get_topology();
 
         TcpSrc* tcpsrc = NULL;
@@ -280,6 +294,9 @@ ECNQueue::sendEarlyFeedback(Packet &pkt) {
         ack->set_flags(ECN_ECHO)  ;
         ack->set_hop_index(0);
         ack->set_crthop(0);
+        if(pkt.id() == 2979155) {
+          cout << "DEBUG Early feedback generated id " << ack->id() << endl;
+        }
   
 
         // get the current ToR, this will be the new src_ToR of the packet
@@ -300,5 +317,6 @@ ECNQueue::sendEarlyFeedback(Packet &pkt) {
             _routing->routing_from_ToR(ack, eventlist().now(), eventlist().now()); 
         }
         Queue* nextqueue = top->get_queue_tor(ack->get_crtToR(), ack->get_crtport());
+        assert(nextqueue);
         nextqueue->receivePacket(*ack);
 }

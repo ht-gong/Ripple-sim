@@ -23,7 +23,7 @@ class Routing {
    double get_pkt_priority(TcpSrc* tcp_src);
    simtime_picosec routing_from_PQ(Packet* pkt, simtime_picosec t);
    simtime_picosec routing_from_ToR_VLB(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
-   simtime_picosec routing_from_ToR_Expander(Packet* pkt, simtime_picosec t, simtime_picosec init_time);
+   simtime_picosec routing_from_ToR_Expander(Packet* pkt, simtime_picosec t, simtime_picosec init_time, bool rerouted);
    simtime_picosec routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec t, simtime_picosec init_time, bool rerouted);
    RoutingAlgorithm get_routing_algorithm() {return _routing_algorithm;}
    void set_max_flow_size(int64_t max_flow) {_max_flow_size = max_flow;}

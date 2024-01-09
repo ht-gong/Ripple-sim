@@ -63,6 +63,7 @@ bool CompositeQueue::canBeginService(Packet* to_be_sent) {
 #ifdef DEBUG
     cout<<"Uplink port attempting to serve pkt across configurations\n";
 #endif
+    cout<<"Uplink port attempting to serve pkt across configurations\n";
     return false;
   } else {
     return true;
@@ -71,7 +72,7 @@ bool CompositeQueue::canBeginService(Packet* to_be_sent) {
 
 //this code is cursed
 void CompositeQueue::returnToSender(Packet *pkt) {
-  //cout << "RTS\n";
+  cout << "RTS\n";
   //return the packet to the sender
   //if (_logger) _logger->logQueue(*this, QueueLogger::PKT_BOUNCE, *pkt);
   //pkt->flow().logTraffic(pkt,*this,TrafficLogger::PKT_BOUNCE);
@@ -278,8 +279,10 @@ void CompositeQueue::completeService() {
     	assert(0);
   	}
     
-    if (sendingpkt)
+    if (sendingpkt) {
+      assert(pkt->get_crtslice() == _crt_tx_slice);
   		sendFromQueue(pkt);
+  }
 
   	_serv = QUEUE_INVALID;
 
@@ -311,6 +314,11 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 	//	cout << "    src = " << pkt.get_src() << endl;
 	//}
 
+  if (pkt.size() == UINT16_MAX) {
+    pkt.free();
+    _num_drops++;
+    return;
+  }
   int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
 	switch (pkt.type()) {
     case RLB:
@@ -347,7 +355,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 			//if (_tor == 0 && _port == 6)
 			//	cout << "> received a full packet: " << pkt.size() << " bytes" << endl;
 
-			if (_queuesize_low[pkt_slice] + pkt.size() <= _maxsize || drand()<0.5) {
+			if (_queuesize_low[pkt_slice] + pkt.size() <= _maxsize /*|| drand()<0.5*/) {
 				//regular packet; don't drop the arriving packet
 
 				// we are here because either the queue isn't full or,
