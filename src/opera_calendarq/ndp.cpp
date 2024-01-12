@@ -43,8 +43,10 @@ simtime_picosec NdpSrc::_min_rto = timeFromUs((uint32_t)DEFAULT_RTO_MIN);
 RouteStrategy NdpSrc::_route_strategy = NOT_SET;
 RouteStrategy NdpSink::_route_strategy = NOT_SET;
 
-NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, int flow_src, int flow_dst)
-    : EventSource(eventlist,"ndp"),  _logger(logger), _flow(pktlogger), _flow_src(flow_src), _flow_dst(flow_dst), _top(top) {
+NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, 
+               int flow_src, int flow_dst, bool longflow)
+    : EventSource(eventlist,"ndp"),  _logger(logger), _flow(pktlogger), 
+      _flow_src(flow_src), _flow_dst(flow_dst), _top(top), _is_longflow(longflow) {
     
     _mss = Packet::data_packet_size(); // maximum segment size (mss)
 
@@ -231,6 +233,7 @@ void NdpSrc::processNack(const NdpNack& nack){
     // Note: use `this` to add the Ndp_src (used for RTS)
     p = NdpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, nack.ackno(),
         0, _pkt_size, true, last_packet);
+    p->set_longflow(_is_longflow);
 
     // debug:
     //if (p->been_bounced() == true)
@@ -553,6 +556,7 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
 
         p = NdpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _highest_sent+1,
             pacer_no, _pkt_size, false, last_packet);
+        p->set_longflow(_is_longflow);
 
 
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
@@ -655,6 +659,7 @@ void NdpSrc::retransmit_packet() {
 
         p = NdpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, seqno,
             0, _pkt_size, true, last_packet);
+        p->set_longflow(_is_longflow);
 	
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
         p->set_ts(eventlist().now());

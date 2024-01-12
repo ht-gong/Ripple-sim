@@ -24,6 +24,7 @@
 #include "eventlist.h"
 #include "network.h"
 #include "loggertypes.h"
+#include "routing.h"
 
 class CompositeQueue : public Queue {
  public:
@@ -32,7 +33,7 @@ class CompositeQueue : public Queue {
     virtual void receivePacket(Packet& pkt);
     virtual void doNextEvent();
     // should really be private, but loggers want to see
-    mem_b _queuesize_rlb, _queuesize_low, _queuesize_high;
+    vector<mem_b> _queuesize_rlb, _queuesize_low, _queuesize_high;
     int num_headers() const { return _num_headers;}
     int num_packets() const { return _num_packets;}
     int num_stripped() const { return _num_stripped;}
@@ -63,14 +64,18 @@ class CompositeQueue : public Queue {
     // Mechanism
     void beginService(); // start serving the item at the head of the queue
     void completeService(); // wrap up serving the item at the head of the queue
+    bool canBeginService(Packet* to_be_sent); //check if beginService can be called in calendarqueue context
+    void returnToSender(Packet *pkt);
 
     int _serv;
     int _ratio_high, _ratio_low, _crt;
 
-    list<Packet*> _enqueued_low;
-    list<Packet*> _enqueued_high;
+    vector<list<Packet*>> _enqueued_low;
+    vector<list<Packet*>> _enqueued_high;
 
-    list<Packet*> _enqueued_rlb; // rlb queue
+    vector<list<Packet*>> _enqueued_rlb; // rlb queue
+    
+    Routing _routing;
 };
 
 #endif

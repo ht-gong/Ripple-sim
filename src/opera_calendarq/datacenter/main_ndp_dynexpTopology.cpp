@@ -184,54 +184,38 @@ int main(int argc, char **argv) {
             // source and destination hosts for this flow
             int flow_src = vtemp[0];
             int flow_dst = vtemp[1];
+            unsigned flow_size = vtemp[2];
 
-            if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
+            // generate an NDP source/sink:
+            NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst, flow_size >= cutoff);
+            flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
+            flowSrc->set_flowsize(vtemp[2]); // bytes
 
-                // generate an NDP source/sink:
-                NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
-                flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
-                flowSrc->set_flowsize(vtemp[2]); // bytes
-
-                // Set the pull rate to something reasonable.
-                // we can be more aggressive if the load is lower
-                if(pacers[flow_dst] == NULL) {
-                    NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); 
-                    pacers[flow_dst] = flowpacer;
-                }
-                NdpSink* flowSnk = new NdpSink(top, pacers[flow_dst], flow_src, flow_dst);
-                ndpRtxScanner.registerNdp(*flowSrc);
-
-                // set up the connection event
-                flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
-
-                sinkLogger.monitorSink(flowSnk);
-
-            }  else { // background flow, send it over RLB
-
-                // generate an RLB source/sink:
-
-                RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
-                // debug:
-                cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
-                flowSrc->set_flowsize(vtemp[2]); // bytes
-
-                RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
-
-                // set up the connection event
-                flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
-
+            // Set the pull rate to something reasonable.
+            // we can be more aggressive if the load is lower
+            if(pacers[flow_dst] == NULL) {
+                NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); 
+                pacers[flow_dst] = flowpacer;
             }
+            NdpSink* flowSnk = new NdpSink(top, pacers[flow_dst], flow_src, flow_dst);
+            ndpRtxScanner.registerNdp(*flowSrc);
+
+            // set up the connection event
+            flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
+
+            sinkLogger.monitorSink(flowSnk);
+
         }
     }
 
     cout << "Traffic loaded." << endl;
 
-    RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
-    master->start();
+    //RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+    //master->start();
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);
-    UM->start(timeFromSec(0.00002)); // print utilization every X milliseconds.
+    UM->start(timeFromSec(utiltime)); // print utilization every X milliseconds.
 
     // debug:
     cout << "Starting... " << endl;

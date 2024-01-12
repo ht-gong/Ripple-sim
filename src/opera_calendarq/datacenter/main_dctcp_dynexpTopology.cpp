@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
 
             int flow_size = vtemp[2];
             //if (flow_size > cutoff) continue;
-            TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, flow_size > cutoff);
+            TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, flow_size >= cutoff);
             //TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, false);
             //flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
             flowSrc->set_flowsize(flow_size); // bytes

@@ -51,7 +51,8 @@ class ReceiptEvent {
 class NdpSrc : public PacketSink, public EventSource {
     friend class NdpSink;
  public:
-    NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, int flow_src, int flow_dst);
+    NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, 
+           int flow_src, int flow_dst, bool longflow);
     uint32_t get_id(){ return id;}
     virtual void connect(NdpSink& sink, simtime_picosec startTime);
     void set_traffic_logger(TrafficLogger* pktlogger);
@@ -93,6 +94,7 @@ class NdpSrc : public PacketSink, public EventSource {
     uint32_t _flight_size;
     uint32_t _acked_packets;
     uint32_t _found_reorder = 0;
+    bool _is_longflow;
 
     // the following are used with SCATTER_PERMUTE, SCATTER_RANDOM and PULL_BASED route strategies
 

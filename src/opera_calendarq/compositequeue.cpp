@@ -9,6 +9,7 @@
 #include "rlbpacket.h" // added for debugging
 #include "rlbmodule.h"
 #include "ndppacket.h"
+#include "routing.h"
 
 // !!! NOTE: this one does selective RLB packet dropping.
 
@@ -16,7 +17,7 @@
 
 CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, 
 			       QueueLogger* logger, int tor, int port, DynExpTopology *top)
-  : Queue(bitrate, maxsize, eventlist, logger, tor, port, top)
+  : Queue(bitrate, maxsize, eventlist, logger, tor, port, top), _routing(Routing())
 {
   _tor = tor;
   _port = port;
@@ -36,31 +37,110 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
   _num_stripped = 0;
   _num_bounced = 0;
 
-  _queuesize_high = _queuesize_low = _queuesize_rlb = 0;
+  int slices = top->get_nsuperslice()*2;
+  _enqueued_high.resize(slices + 1);
+  _enqueued_low.resize(slices + 1);
+  _enqueued_rlb.resize(slices + 1);
+  _queuesize_high.resize(slices + 1);
+  _queuesize_low.resize(slices + 1);
+  _queuesize_rlb.resize(slices + 1);
+  std::fill(_queuesize_high.begin(), _queuesize_high.end(), 0);
+  std::fill(_queuesize_low.begin(), _queuesize_low.end(), 0);
+  std::fill(_queuesize_rlb.begin(), _queuesize_rlb.end(), 0);
   _serv = QUEUE_INVALID;
 
 }
 
+bool CompositeQueue::canBeginService(Packet* to_be_sent) {
+    simtime_picosec finish_push = eventlist().now() + drainTime(to_be_sent) /*229760*/;
+
+    int finish_push_slice = _top->time_to_slice(finish_push); // plus the link delay
+    
+    if(!_top->is_downlink(_port) && finish_push_slice != _crt_tx_slice) {
+        // Uplink port attempting to serve pkt across configurations
+        #ifdef DEBUG
+        cout<<"Uplink port attempting to serve pkt across configurations\n";
+        #endif
+        return false;
+    }    
+    return true;
+}
+
+//this code is cursed
+void CompositeQueue::returnToSender(Packet *pkt) {
+  cout << "RTS\n";
+  //return the packet to the sender
+  //if (_logger) _logger->logQueue(*this, QueueLogger::PKT_BOUNCE, *pkt);
+  //pkt->flow().logTraffic(pkt,*this,TrafficLogger::PKT_BOUNCE);
+
+  // debug:
+  //cout << "   ... returning to sender." << endl;
+
+  DynExpTopology* top = pkt->get_topology();
+  pkt->bounce(); // indicate that the packet has been bounced
+  _num_bounced++;
+
+  int old_src_ToR = _top->get_firstToR(pkt->get_src());
+  // flip the source and dst of the packet:
+  int s = pkt->get_src();
+  int d = pkt->get_dst();
+  pkt->set_src(d);
+  pkt->set_dst(s);
+  assert(pkt->get_crtToR() >= 0);
+  pkt->set_src_ToR(pkt->get_crtToR());
+  _routing.routingFromPQ(pkt, eventlist().now());
+  pkt->set_crtToR(pkt->get_src_ToR());
+  pkt->set_lasthop(false);
+  pkt->set_crthop(0);
+
+  // get the current ToR, this will be the new src_ToR of the packet
+  int new_src_ToR = pkt->get_crtToR();
+
+  if (new_src_ToR == old_src_ToR) {
+    // the packet got returned at the source ToR
+    // we need to send on a downlink right away
+    pkt->set_crtport(top->get_lastport(pkt->get_dst()));
+    pkt->set_maxhops(0);
+    pkt->set_crtslice(0);
+
+    // debug:
+    //cout << "   packet RTSed at the first ToR (ToR = " << new_src_ToR << ")" << endl;
+
+  } else {
+    pkt->set_src_ToR(new_src_ToR);
+    _routing.routing(pkt, eventlist().now(), eventlist().now()); 
+  }
+  // debug:
+  //cout << "   packet RTSed to node " << pkt->get_dst() << " at ToR = " << new_src_ToR << endl;
+
+  Queue* nextqueue = top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
+  nextqueue->receivePacket(*pkt);
+}
+
 void CompositeQueue::beginService(){
-	if ( !_enqueued_high.empty() && !_enqueued_low.empty() ){
+	if ( !_enqueued_high[_crt_tx_slice].empty() && !_enqueued_low[_crt_tx_slice].empty() ){
 
 		if (_crt >= (_ratio_high+_ratio_low))
 			_crt = 0;
 
 		if (_crt< _ratio_high) {
-			_serv = QUEUE_HIGH;
-			eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_high.back()));
-			_crt = _crt + 64; // !!! hardcoded header size for now...
+      if(canBeginService(_enqueued_high[_crt_tx_slice].back())){
+        _serv = QUEUE_HIGH;
+        eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_high[_crt_tx_slice].back()));
+        _crt = _crt + 64; // !!! hardcoded header size for now...
+      }
 
 			// debug:
 			//if (_tor == 0 && _port == 6)
 			//	cout << "composite_queue sending a header (full packets in queue)" << endl;
 		} else {
 			assert(_crt < _ratio_high+_ratio_low);
-			_serv = QUEUE_LOW;
-			eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_low.back()));
-			int sz = _enqueued_low.back()->size();
-			_crt = _crt + sz;
+      if(canBeginService(_enqueued_low[_crt_tx_slice].back())){
+        _serv = QUEUE_LOW;
+        eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_low[_crt_tx_slice].back()));
+        int sz = _enqueued_low[_crt_tx_slice].back()->size();
+        _crt = _crt + sz;
+      }
 			// debug:
 			//if (_tor == 0 && _port == 6) {
 			//	cout << "composite_queue sending a full packet (headers in queue)" << endl;
@@ -70,26 +150,31 @@ void CompositeQueue::beginService(){
 		return;
 	}
 
-	if (!_enqueued_high.empty()) {
-		_serv = QUEUE_HIGH;
-		eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_high.back()));
+	if (!_enqueued_high[_crt_tx_slice].empty()) {
+    if(canBeginService(_enqueued_high[_crt_tx_slice].back())){
+      _serv = QUEUE_HIGH;
+      eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_high[_crt_tx_slice].back()));
+    }
 
 		// debug:
 		//if (_tor == 0 && _port == 6)
 		//	cout << "composite_queue sending a header (no packets in queue)" << endl;
 
-	} else if (!_enqueued_low.empty()) {
-		_serv = QUEUE_LOW;
-		eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_low.back()));
+	} else if (!_enqueued_low[_crt_tx_slice].empty()) {
+    if(canBeginService(_enqueued_low[_crt_tx_slice].back())){
+      _serv = QUEUE_LOW;
+      eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_low[_crt_tx_slice].back()));
+    }
 
 		// debug:
 		//if (_tor == 0 && _port == 6)
-		//	cout << "composite_queue sending a full packet: " << (_enqueued_low.back())->size() << " bytes (no headers in queue)" << endl;
+		//	cout << "composite_queue sending a full packet: " << (_enqueued_low[_crt_tx_slice].back())->size() << " bytes (no headers in queue)" << endl;
 
-	} else if (!_enqueued_rlb.empty()) {
+	} else if (!_enqueued_rlb[_crt_tx_slice].empty()) {
 		_serv = QUEUE_RLB;
-		eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_rlb.back()));
+		eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_rlb[_crt_tx_slice].back()));
 	} else {
+    cout << "assert0 " << _tor << " " << _port << " " << queuesize() << " " << slice_queuesize(_crt_tx_slice) << endl;
 		assert(0);
 		_serv = QUEUE_INVALID;
 	}
@@ -104,8 +189,8 @@ void CompositeQueue::completeService() {
 	bool sendingpkt = true;
 
 	if (_serv == QUEUE_RLB) {
-		assert(!_enqueued_rlb.empty());
-		pkt = _enqueued_rlb.back();
+		assert(!_enqueued_rlb[_crt_tx_slice].empty());
+		pkt = _enqueued_rlb[_crt_tx_slice].back();
 
 		DynExpTopology* top = pkt->get_topology();
 		int ul = top->no_of_hpr(); // !!! # uplinks = # downlinks = # hosts per rack
@@ -113,27 +198,14 @@ void CompositeQueue::completeService() {
 		if (_port >= ul) { // it's a ToR uplink
 
 			// check if we're still connected to the right rack:
-
-			// get the current slice:
-			int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
-                top->get_nsuperslice();
-            // next, get the relative time from the beginning of that superslice
-            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
-                (top->get_nsuperslice()*top->get_slicetime(3));
-            int slice; // the current slice
-            if (reltime < top->get_slicetime(0))
-                slice = 0 + superslice*3;
-            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
-                slice = 1 + superslice*3;
-            else
-                slice = 2 + superslice*3;
+			
+			int slice = top->time_to_slice(eventlist().now());
 
             bool pktfound = false;
 
-            while (!_enqueued_rlb.empty()) {
+            while (!_enqueued_rlb[_crt_tx_slice].empty()) {
 
-            	pkt = _enqueued_rlb.back(); // get the next packet
+            	pkt = _enqueued_rlb[_crt_tx_slice].back(); // get the next packet
 
             	// get the destination ToR:
             	int dstToR = top->get_firstToR(pkt->get_dst());
@@ -142,8 +214,8 @@ void CompositeQueue::completeService() {
 
             	if (dstToR == nextToR) {
             		// this is a "fresh" RLB packet
-            		_enqueued_rlb.pop_back();
-					_queuesize_rlb -= pkt->size();
+            		_enqueued_rlb[_crt_tx_slice].pop_back();
+					_queuesize_rlb[_crt_tx_slice] -= pkt->size();
 					pktfound = true;
             		break;
             	} else {
@@ -163,8 +235,8 @@ void CompositeQueue::completeService() {
             		RlbModule* module = top->get_rlb_module(p->get_src()); // returns pointer to Rlb module that sent the packet
     				module->receivePacket(*p, 1); // 1 means to put it at the front of the queue
 
-            		_enqueued_rlb.pop_back(); // pop the packet
-					_queuesize_rlb -= pkt->size(); // decrement the queue size
+            		_enqueued_rlb[_crt_tx_slice].pop_back(); // pop the packet
+					_queuesize_rlb[_crt_tx_slice] -= pkt->size(); // decrement the queue size
             	}
             }
 
@@ -173,22 +245,22 @@ void CompositeQueue::completeService() {
             	sendingpkt = false;
 
 		} else { // its a ToR downlink
-			_enqueued_rlb.pop_back();
-			_queuesize_rlb -= pkt->size();
+			_enqueued_rlb[_crt_tx_slice].pop_back();
+			_queuesize_rlb[_crt_tx_slice] -= pkt->size();
 		}
 
 		//_num_packets++;
 	} else if (_serv == QUEUE_LOW) {
-		assert(!_enqueued_low.empty());
-		pkt = _enqueued_low.back();
-		_enqueued_low.pop_back();
-		_queuesize_low -= pkt->size();
+		assert(!_enqueued_low[_crt_tx_slice].empty());
+		pkt = _enqueued_low[_crt_tx_slice].back();
+		_enqueued_low[_crt_tx_slice].pop_back();
+		_queuesize_low[_crt_tx_slice] -= pkt->size();
 		_num_packets++;
 	} else if (_serv == QUEUE_HIGH) {
-		assert(!_enqueued_high.empty());
-		pkt = _enqueued_high.back();
-		_enqueued_high.pop_back();
-		_queuesize_high -= pkt->size();
+		assert(!_enqueued_high[_crt_tx_slice].empty());
+		pkt = _enqueued_high[_crt_tx_slice].back();
+		_enqueued_high[_crt_tx_slice].pop_back();
+		_queuesize_high[_crt_tx_slice] -= pkt->size();
     	if (pkt->type() == NDPACK)
 			_num_acks++;
     	else if (pkt->type() == NDPNACK)
@@ -202,12 +274,14 @@ void CompositeQueue::completeService() {
     	assert(0);
   	}
     
-    if (sendingpkt)
+    if (sendingpkt) {
+      assert(pkt->get_crtslice() == _crt_tx_slice);
   		sendFromQueue(pkt);
+  }
 
   	_serv = QUEUE_INVALID;
 
-  	if (!_enqueued_high.empty() || !_enqueued_low.empty() || !_enqueued_rlb.empty())
+  	if (!_enqueued_high[_crt_tx_slice].empty() || !_enqueued_low[_crt_tx_slice].empty() || !_enqueued_rlb[_crt_tx_slice].empty())
   		beginService();
 }
 
@@ -217,6 +291,30 @@ void CompositeQueue::doNextEvent() {
 
 void CompositeQueue::receivePacket(Packet& pkt) {
 
+	// debug:
+	//if (pkt.get_time_sent() == 342944606400 && pkt.get_real_src() == 177 && pkt.get_real_dst() == 423)
+	//	cout << "debug @compositequeue: ToR " << _tor << ", port " << _port << " received the packet" << endl;
+
+	// debug:
+	//cout << "_maxsize = " << _maxsize << endl;
+	//cout << "CompositeQueue (node " << _nodename << ") sending a packet at " << timeAsUs(eventlist().now()) << " us" << endl;
+    //pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_ARRIVE);
+
+    // debug:
+	//if (pkt.been_bounced() == true && pkt.bounced() == false) {
+	//	cout << "ToR " << _tor << " received a previously bounced packet" << endl;
+	//	cout << "    src = " << pkt.get_src() << endl;
+	//} else if (pkt.bounced() == true) {
+	//	cout << "ToR " << _tor << " received a currently bounced packet" << endl;
+	//	cout << "    src = " << pkt.get_src() << endl;
+	//}
+
+  if (pkt.size() == UINT16_MAX) {
+    pkt.free();
+    _num_drops++;
+    return;
+  }
+  int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
 	switch (pkt.type()) {
     case RLB:
     {
@@ -226,23 +324,33 @@ void CompositeQueue::receivePacket(Packet& pkt) {
         //    if (p->seqno() == 1)
         //        cout << "# marked packet queued at ToR: " << _tor << ", port: " << _port << endl;
 
-    	_enqueued_rlb.push_front(&pkt);
-		_queuesize_rlb += pkt.size();
-        _max_recorded_size = _queuesize_rlb > _max_recorded_size ? _queuesize_rlb : _max_recorded_size;
+    	_enqueued_rlb[pkt_slice].push_front(&pkt);
+		_queuesize_rlb[pkt_slice] += pkt.size();
 
         break;
     }
     case NDP:
     {
         NdpPacket *p = (NdpPacket*)&pkt;
-        p->inc_queueing(_queuesize_low);
+        p->inc_queueing(_queuesize_low[pkt_slice]);
+        /*
+        if (p->get_src() == 403 && p->get_dst() == 19 && (p->seqno() == 1066949 || p->seqno() == 1065513)) {
+            cout << "SEQ " << p->seqno() << " INQUEUE " << nodename() << " AT " << 
+                eventlist().now()/1E6 << endl;
+        }
+        */
     }
     case NDPACK:
     case NDPNACK:
     case NDPPULL:
     {
         if (!pkt.header_only()){
-			if (_queuesize_low + pkt.size() <= _maxsize || drand()<0.5) {
+
+        	// debug:
+			//if (_tor == 0 && _port == 6)
+			//	cout << "> received a full packet: " << pkt.size() << " bytes" << endl;
+
+			if (_queuesize_low[pkt_slice] + pkt.size() <= _maxsize /*|| drand()<0.5*/) {
 				//regular packet; don't drop the arriving packet
 
 				// we are here because either the queue isn't full or,
@@ -251,20 +359,20 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 
 				bool chk = true;
 		    
-				if (_queuesize_low + pkt.size() > _maxsize) {
+				if (_queuesize_low[pkt_slice] + pkt.size() > _maxsize) {
 					// we're going to drop an existing packet from the queue
 
 					// debug:
 					//if (_tor == 0 && _port == 6)
-					//	cout << "  x clipping a queued packet. (_queuesize_low = " << _queuesize_low << ", pkt.size() = " << pkt.size() << ", _maxsize = " << _maxsize << ")" << endl;
+					//	cout << "  x clipping a queued packet. (_queuesize_low[pkt_slice] = " << _queuesize_low[pkt_slice] << ", pkt.size() = " << pkt.size() << ", _maxsize = " << _maxsize << ")" << endl;
 
-					if (_enqueued_low.empty()){
-						//cout << "QUeuesize " << _queuesize_low << " packetsize " << pkt.size() << " maxsize " << _maxsize << endl;
+					if (_enqueued_low[pkt_slice].empty()){
+						//cout << "QUeuesize " << _queuesize_low[pkt_slice] << " packetsize " << pkt.size() << " maxsize " << _maxsize << endl;
 						assert(0);
 					}
 					//take last packet from low prio queue, make it a header and place it in the high prio queue
 
-					Packet* booted_pkt = _enqueued_low.front();
+					Packet* booted_pkt = _enqueued_low[pkt_slice].front();
 
 					// added a check to make sure that the booted packet makes enough space in the queue
         			// for the incoming packet
@@ -272,8 +380,8 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 
 						chk = true;
 
-						_enqueued_low.pop_front();
-						_queuesize_low -= booted_pkt->size();
+						_enqueued_low[pkt_slice].pop_front();
+						_queuesize_low[pkt_slice] -= booted_pkt->size();
 
 						booted_pkt->strip_payload();
 						_num_stripped++;
@@ -281,7 +389,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 						if (_logger)
 							_logger->logQueue(*this, QueueLogger::PKT_TRIM, pkt);
 				
-						if (_queuesize_high+booted_pkt->size() > _maxsize) {
+						if (_queuesize_high[pkt_slice]+booted_pkt->size() > _maxsize) {
 
 							// debug:
 							//cout << "!!! NDP - header queue overflow <booted> ..." << endl;
@@ -295,84 +403,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 							// new stuff:
 
 							if (booted_pkt->bounced() == false) {
-								//return the packet to the sender
-								//if (_logger) _logger->logQueue(*this, QueueLogger::PKT_BOUNCE, *booted_pkt);
-								//booted_pkt->flow().logTraffic(pkt,*this,TrafficLogger::PKT_BOUNCE);
-
-								// debug:
-								//cout << "   ... returning to sender." << endl;
-
-								DynExpTopology* top = booted_pkt->get_topology();
-								booted_pkt->bounce(); // indicate that the packet has been bounced
-								_num_bounced++;
-
-					            // flip the source and dst of the packet:
-					            int s = booted_pkt->get_src();
-					            int d = booted_pkt->get_dst();
-					            booted_pkt->set_src(d);
-					            booted_pkt->set_dst(s);
-
-					            // get the current ToR, this will be the new src_ToR of the packet
-					            int new_src_ToR = booted_pkt->get_crtToR();
-
-					            if (new_src_ToR == booted_pkt->get_src_ToR()) {
-					            	// the packet got returned at the source ToR
-					            	// we need to send on a downlink right away
-					            	booted_pkt->set_src_ToR(new_src_ToR);
-					            	booted_pkt->set_crtport(top->get_lastport(booted_pkt->get_dst()));
-					            	booted_pkt->set_maxhops(0);
-
-					            	// debug:
-						            //cout << "   packet RTSed at the first ToR (ToR = " << new_src_ToR << ")" << endl;
-
-					            } else {
-					            	booted_pkt->set_src_ToR(new_src_ToR);
-
-					            	// get paths
-					            	// get the current slice:
-									int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
-						                top->get_nsuperslice();
-						            // next, get the relative time from the beginning of that superslice
-						            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-						                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
-						                (top->get_nsuperslice()*top->get_slicetime(3));
-						            int slice; // the current slice
-						            if (reltime < top->get_slicetime(0))
-						                slice = 0 + superslice*3;
-						            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
-						                slice = 1 + superslice*3;
-						            else
-						                slice = 2 + superslice*3;
-
-						            booted_pkt->set_slice_sent(slice); // "timestamp" the packet
-						            // get the number of available paths for this packet during this slice
-					            	int npaths = top->get_no_paths(booted_pkt->get_src_ToR(),
-					                	top->get_firstToR(booted_pkt->get_dst()), slice);
-						            if (npaths == 0)
-						                cout << "Error: there were no paths!" << endl;
-						            assert(npaths > 0);
-
-						            // randomly choose a path for the packet
-						            int path_index = random() % npaths;
-					            	booted_pkt->set_path_index(path_index); // set which path the packet will take
-					            	booted_pkt->set_maxhops(top->get_no_hops(booted_pkt->get_src_ToR(),
-					                	top->get_firstToR(booted_pkt->get_dst()), slice, path_index));
-
-					            	booted_pkt->set_crtport(top->get_port(new_src_ToR, top->get_firstToR(booted_pkt->get_dst()),
-					            		slice, path_index, 0)); // current hop = 0 (hardcoded)
-
-					            }
-
-					            booted_pkt->set_crthop(0);
-					            booted_pkt->set_crtToR(new_src_ToR);
-
-					            // debug:
-						        //cout << "   packet RTSed to node " << booted_pkt->get_dst() << " at ToR = " << new_src_ToR << endl;
-
-					            Queue* nextqueue = top->get_queue_tor(booted_pkt->get_crtToR(), booted_pkt->get_crtport());
-	            				nextqueue->receivePacket(*booted_pkt);
-
-
+                return returnToSender(booted_pkt); 
 						    } else {
 						    	// debug:
 								cout << "   ... this is an RTS packet. Dropped.\n";
@@ -382,8 +413,8 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 						    }
 						}
 						else {
-							_enqueued_high.push_front(booted_pkt);
-							_queuesize_high += booted_pkt->size();
+							_enqueued_high[pkt_slice].push_front(booted_pkt);
+							_queuesize_high[pkt_slice] += booted_pkt->size();
 						}
 					} else {
 						chk = false;
@@ -392,10 +423,10 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 
 				if (chk) {
 					// the new packet fit
-					assert(_queuesize_low + pkt.size() <= _maxsize);
-					_enqueued_low.push_front(&pkt);
-					_queuesize_low += pkt.size();
-					if (_serv==QUEUE_INVALID) {
+					assert(_queuesize_low[pkt_slice] + pkt.size() <= _maxsize);
+					_enqueued_low[pkt_slice].push_front(&pkt);
+					_queuesize_low[pkt_slice] += pkt.size();
+					if (_serv==QUEUE_INVALID && slice_queuesize(_crt_tx_slice) > 0) {
 						beginService();
 					}
 					return;
@@ -419,13 +450,13 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 
 	    assert(pkt.header_only());
 	    
-	    if (_queuesize_high + pkt.size() > _maxsize){
+	    if (_queuesize_high[pkt_slice] + pkt.size() > _maxsize){
 			
 			// debug:
 			//cout << "!!! NDP - header queue overflow ..." << endl;
 
 			// old stuff -------------
-			//cout << "_queuesize_high = " << _queuesize_high << endl;
+			//cout << "_queuesize_high[pkt_slice] = " << _queuesize_high[pkt_slice] << endl;
 			//cout << "Error - need to implement RTS handling!" << endl;
 			//abort();
 			//pkt.free();
@@ -434,84 +465,8 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 			// new stuff:
 
 			if (pkt.bounced() == false) {
-	    		//return the packet to the sender
-	    		//if (_logger) _logger->logQueue(*this, QueueLogger::PKT_BOUNCE, pkt);
-	    		//pkt.flow().logTraffic(pkt,*this,TrafficLogger::PKT_BOUNCE);
+        return returnToSender(&pkt); 
 
-	    		// debug:
-				//cout << "   ... returning to sender." << endl;
-
-				DynExpTopology* top = pkt.get_topology();
-	    		pkt.bounce();
-	    		_num_bounced++;
-
-	            // flip the source and dst of the packet:
-	            int s = pkt.get_src();
-	            int d = pkt.get_dst();
-	            pkt.set_src(d);
-	            pkt.set_dst(s);
-
-	            // get the current ToR, this will be the new src_ToR of the packet
-	            int new_src_ToR = pkt.get_crtToR();
-
-	            if (new_src_ToR == pkt.get_src_ToR()) {
-	            	// the packet got returned at the source ToR
-	            	// we need to send on a downlink right away
-	            	pkt.set_src_ToR(new_src_ToR);
-	            	pkt.set_crtport(top->get_lastport(pkt.get_dst()));
-	            	pkt.set_maxhops(0);
-
-	            	// debug:
-		            //cout << "   packet RTSed at the first ToR (ToR = " << new_src_ToR << ")" << endl;
-
-	            } else {
-	            	pkt.set_src_ToR(new_src_ToR);
-
-	            	// get paths
-	            	// get the current slice:
-					int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
-		                top->get_nsuperslice();
-		            // next, get the relative time from the beginning of that superslice
-		            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-		                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
-		                (top->get_nsuperslice()*top->get_slicetime(3));
-		            int slice; // the current slice
-		            if (reltime < top->get_slicetime(0))
-		                slice = 0 + superslice*3;
-		            else if (reltime < top->get_slicetime(0) + top->get_slicetime(1))
-		                slice = 1 + superslice*3;
-		            else
-		                slice = 2 + superslice*3;
-
-		            pkt.set_slice_sent(slice); // "timestamp" the packet
-		            // get the number of available paths for this packet during this slice
-	            	int npaths = top->get_no_paths(pkt.get_src_ToR(),
-	                	top->get_firstToR(pkt.get_dst()), slice);
-		            if (npaths == 0)
-		                cout << "Error: there were no paths!" << endl;
-		            assert(npaths > 0);
-
-		            // randomly choose a path for the packet
-		            int path_index = random() % npaths;
-	            	pkt.set_path_index(path_index); // set which path the packet will take
-	            	pkt.set_maxhops(top->get_no_hops(pkt.get_src_ToR(),
-	                	top->get_firstToR(pkt.get_dst()), slice, path_index));
-
-	            	pkt.set_crtport(top->get_port(new_src_ToR, top->get_firstToR(pkt.get_dst()),
-	            		slice, path_index, 0)); // current hop = 0 (hardcoded)
-
-	            }
-
-	            // debug:
-		        //cout << "   packet RTSed to node " << pkt.get_dst() << " at ToR = " << new_src_ToR << endl;
-
-	            pkt.set_crthop(0);
-	            pkt.set_crtToR(new_src_ToR);
-
-	            Queue* nextqueue = top->get_queue_tor(pkt.get_crtToR(), pkt.get_crtport());
-				nextqueue->receivePacket(pkt);
-
-	    		return;
 			} else {
 
 				// debug:
@@ -529,31 +484,29 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 	    //if (_tor == 0 && _port == 6)
 	    //	cout << "  > enqueueing header" << endl;
 	    
-	    _enqueued_high.push_front(&pkt);
-	    _queuesize_high += pkt.size();
+	    _enqueued_high[pkt_slice].push_front(&pkt);
+	    _queuesize_high[pkt_slice] += pkt.size();
 
         break;
     }
     }
     
-    int slice = _top->time_to_superslice(eventlist().now());
-    if (queuesize() > _max_recorded_size_slice[slice]) {
-        _max_recorded_size_slice[slice] = queuesize();
-    }
-    if (queuesize() > _max_recorded_size) {
-        _max_recorded_size = queuesize();
-    }
-    if (_serv == QUEUE_INVALID) {
+		if (_serv==QUEUE_INVALID && slice_queuesize(_crt_tx_slice) > 0) {
 		beginService();
     }
 }
 
 mem_b CompositeQueue::queuesize() {
-    return _queuesize_low + _queuesize_high;
+    if(_top->is_downlink(_port))
+        return _queuesize_low[0]+_queuesize_high[0];
+    int slices = _top->get_nsuperslice()*2;
+    int sum = 0;
+    for(int i = 0; i < slices; i++){
+        sum += _queuesize_low[i]+_queuesize_high[i];
+    }
+    return sum;
 }
 
 mem_b CompositeQueue::slice_queuesize(int slice){
-	//unimplemented 
-    assert(0);
-    return 0;
+    return _queuesize_low[slice]+_queuesize_high[slice];
 }
