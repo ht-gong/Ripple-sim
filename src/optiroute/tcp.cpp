@@ -24,6 +24,7 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
     _mss = Packet::data_packet_size();
     _maxcwnd = 65535;//MAX_SENT*_mss;
     //_maxcwnd = 0x80000;//MAX_SENT*_mss;
+    //_maxcwnd = 0x200000;
     _sawtooth = 0;
     _subflow_id = -1;
     _rtt_avg = timeFromMs(0);

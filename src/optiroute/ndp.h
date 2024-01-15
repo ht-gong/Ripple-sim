@@ -18,6 +18,7 @@
 #include "ndppacket.h"
 #include "fairpullqueue.h"
 #include "eventlist.h"
+#include "routing.h"
 
 
 #define timeInf 0
@@ -51,7 +52,8 @@ class ReceiptEvent {
 class NdpSrc : public PacketSink, public EventSource {
     friend class NdpSink;
  public:
-    NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, int flow_src, int flow_dst);
+    NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist,
+		    int flow_src, int flow_dst, Routing* routing);
     uint32_t get_id(){ return id;}
     virtual void connect(NdpSink& sink, simtime_picosec startTime);
     void set_traffic_logger(TrafficLogger* pktlogger);
@@ -61,6 +63,7 @@ class NdpSrc : public PacketSink, public EventSource {
     static void setRouteStrategy(RouteStrategy strat) {_route_strategy = strat;}
     void set_flowsize(uint64_t flow_size_in_bytes);
     inline uint64_t get_flowsize() {return _flow_size;} // bytes
+    inline uint64_t get_remaining_flowsize() {return _flow_size-_last_acked;} // bytes
     inline void set_start_time(simtime_picosec startTime) {_start_time = startTime;}
     inline simtime_picosec get_start_time() {return _start_time;}
 
@@ -156,6 +159,7 @@ class NdpSrc : public PacketSink, public EventSource {
     TrafficLogger* _pktlogger;
     // Connectivity
     PacketFlow _flow;
+    Routing *_routing;
     string _nodename;
 
     enum  FeedbackType {ACK, NACK, BOUNCE, UNKNOWN};

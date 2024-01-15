@@ -23,7 +23,7 @@ class NdpPacket : public Packet {
 
     //
     inline static NdpPacket* newpkt(DynExpTopology* top, PacketFlow &flow, int src, int dst, NdpSrc* ndpsrc,
-        NdpSink* ndpsink, seq_t seqno, seq_t pacerno, int size, bool retransmitted, bool last_packet) {
+        NdpSink* ndpsink, seq_t seqno, seq_t pacerno, int size, bool retransmitted, bool last_packet, double priority) {
 	NdpPacket* p = _packetdb.allocPacket();
 	p->set_attrs(flow, size+ACKSIZE, seqno+size-1, src, dst); // The NDP sequence number is the first byte of the packet; I will ID the packet by its last byte.
 	p->set_topology(top);
@@ -34,6 +34,7 @@ class NdpPacket : public Packet {
 	p->_pacerno = pacerno;
 	p->_retransmitted = retransmitted;
 	p->_last_packet = last_packet;
+	p->_priority = priority;
     p->_ndpsrc = ndpsrc;
     p->_ndpsink = ndpsink;
 	return p;
@@ -94,6 +95,7 @@ class NdpAck : public Packet {
 	p->_cumulative_ack = cumulative_ack;
 	p->_pull = true;
 	p->_pullno = pullno;
+	p->_priority = 0;
     p->_ndpsrc = ndpsrc;
 	//p->_path_id = path_id; // don't need this anymore
 	return p;
@@ -147,6 +149,7 @@ class NdpNack : public Packet {
 	p->_cumulative_ack = cumulative_ack;
 	p->_pull = true;
 	p->_pullno = pullno;
+	p->_priority = 0;
     p->_ndpsrc = ndpsrc;
 	//p->_path_id = path_id; // used to indicate which path the data
 	                       // packet was trimmed on
@@ -198,6 +201,7 @@ class NdpPull : public Packet {
         p->_ackno = ack->ackno();
         p->_cumulative_ack = ack->cumulative_ack();
         p->_pullno = ack->pullno();
+	p->_priority = 0;
         p->_ndpsrc = ack->get_ndpsrc();
         return p;
     }

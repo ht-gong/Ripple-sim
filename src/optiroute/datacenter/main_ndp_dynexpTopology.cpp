@@ -66,6 +66,7 @@ int main(int argc, char **argv) {
     int64_t rlbflow = 0; // flow size of "flagged" RLB flows
     int64_t cutoff = 0; // cutoff between NDP and RLB flow sizes. flows < cutoff == NDP.
     RoutingAlgorithm routing_alg = SINGLESHORTEST;
+    uint64_t routing_opt = ROUTING_NO_OPT;
     int64_t slice_time = 0;
     simtime_picosec slice_duration = 0;
 
@@ -119,6 +120,10 @@ int main(int argc, char **argv) {
                 exit_error(argv[0]);
             }
             i++;
+        } else if (!strcmp(argv[i],"-aging")){
+	       routing_opt = routing_opt | ROUTING_OPT_AGING;
+        } else if (!strcmp(argv[i],"-srtf")){
+	       routing_opt = routing_opt | ROUTING_OPT_SRTF;
         } else if (!strcmp(argv[i],"-slicedur")){
 	       slice_duration = strtoull(argv[i+1], NULL, 10);
 	       i++;
@@ -146,6 +151,7 @@ int main(int argc, char **argv) {
     srand(13); // random seed
 
     Routing* routing = new Routing(routing_alg, cutoff);
+    routing->set_options(routing_opt);
 
     eventlist.setEndtime(timeFromSec(simtime)); // in seconds
     Clock c(timeFromSec(5 / 100.), eventlist);
@@ -213,7 +219,7 @@ int main(int argc, char **argv) {
             if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
 
                 // generate an NDP source/sink:
-                NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
+                NdpSrc* flowSrc = new NdpSrc(top, NULL, NULL, eventlist, flow_src, flow_dst, routing);
                 flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
                 flowSrc->set_flowsize(vtemp[2]); // bytes
 

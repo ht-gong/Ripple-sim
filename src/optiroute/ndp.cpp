@@ -43,8 +43,10 @@ simtime_picosec NdpSrc::_min_rto = timeFromUs((uint32_t)DEFAULT_RTO_MIN);
 RouteStrategy NdpSrc::_route_strategy = NOT_SET;
 RouteStrategy NdpSink::_route_strategy = NOT_SET;
 
-NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, int flow_src, int flow_dst)
-    : EventSource(eventlist,"ndp"),  _logger(logger), _flow(pktlogger), _flow_src(flow_src), _flow_dst(flow_dst), _top(top) {
+NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, 
+		int flow_src, int flow_dst, Routing* routing)
+    : EventSource(eventlist,"ndp"),  _logger(logger), _flow(pktlogger), 
+	_flow_src(flow_src), _flow_dst(flow_dst), _top(top) , _routing(routing) {
     
     _mss = Packet::data_packet_size(); // maximum segment size (mss)
 
@@ -153,7 +155,7 @@ void NdpSrc::processRTS(NdpPacket& pkt){
     // need to reset the sounrce and destination:
     pkt.set_src(_flow_src);
     pkt.set_dst(_flow_dst);
-    cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
+    //cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
     
     _sent_times.erase(pkt.seqno());
     //resend from front of RTX
@@ -230,7 +232,7 @@ void NdpSrc::processNack(const NdpNack& nack){
 
     // Note: use `this` to add the Ndp_src (used for RTS)
     p = NdpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, nack.ackno(),
-        0, _pkt_size, true, last_packet);
+        0, _pkt_size, true, last_packet, _routing->get_pkt_priority(this));
 
     // debug:
     //if (p->been_bounced() == true)
@@ -552,7 +554,7 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
         }
 
         p = NdpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, _highest_sent+1,
-            pacer_no, _pkt_size, false, last_packet);
+            pacer_no, _pkt_size, false, last_packet, _routing->get_pkt_priority(this));
 
 
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
@@ -654,7 +656,7 @@ void NdpSrc::retransmit_packet() {
         bool last_packet = (seqno + _pkt_size - 1) >= _flow_size;
 
         p = NdpPacket::newpkt(_top, _flow, _flow_src, _flow_dst, this, _sink, seqno,
-            0, _pkt_size, true, last_packet);
+            0, _pkt_size, true, last_packet, _routing->get_pkt_priority(this));
 	
         p->flow().logTraffic(*p,*this,TrafficLogger::PKT_CREATESEND);
         p->set_ts(eventlist().now());

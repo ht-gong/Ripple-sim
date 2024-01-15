@@ -71,6 +71,7 @@ int main(int argc, char **argv) {
     int64_t rlbflow = 0; // flow size of "flagged" RLB flows
     int64_t cutoff = 0; // cutoff between NDP and RLB flow sizes. flows < cutoff == NDP.
     RoutingAlgorithm routing_alg = SINGLESHORTEST;
+    uint64_t routing_opt = ROUTING_NO_OPT;
     int64_t slice_time = 0;
     bool earlyfb = false;
 
@@ -89,6 +90,8 @@ int main(int argc, char **argv) {
 	       i++;
         } else if (!strcmp(argv[i],"-earlyfb")){
 	       earlyfb = true;
+        } else if (!strcmp(argv[i],"-aging")){
+	       routing_opt = routing_opt | ROUTING_OPT_AGING;
         } else if (!strcmp(argv[i],"-dctcpmarking")){
 	       marking_threshold = atoi(argv[i+1]);
 	       i++;
@@ -160,6 +163,7 @@ int main(int argc, char **argv) {
     srand(13); // random seed
 
     Routing* routing = new Routing(routing_alg, cutoff);
+    routing->set_options(routing_opt);
 
     eventlist.setEndtime(timeFromSec(simtime)); // in seconds
     Clock c(timeFromSec(5 / 100.), eventlist);

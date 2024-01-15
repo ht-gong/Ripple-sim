@@ -16,7 +16,7 @@
 // #define DEBUG
 // #define HOHO
 
-#define DYNAMIC_FSIZE
+//#define DYNAMIC_FSIZE
 
 // #define REROUTE_MITIGATION
 #define LOOKUP
@@ -36,10 +36,33 @@ double Routing::get_pkt_priority(TcpSrc* tcp_src) {
             return 1.0;
         }
     } else if (_routing_algorithm == OPTIROUTE) {
-        #ifdef DYNAMIC_FSIZE
+	if(_options & ROUTING_OPT_AGING) {
+	    return (double) tcp_src->get_flowsize()-tcp_src->get_remaining_flowsize();
+	} else if (_options & ROUTING_OPT_SRTF) {
             return (double) tcp_src->get_remaining_flowsize();
+	} else {
+	    return (double) tcp_src->get_flowsize();
+	}
+    }
+    return 0.0;
+}
+
+double Routing::get_pkt_priority(NdpSrc* ndp_src) {
+    if(_routing_algorithm == LONGSHORT) {
+        if(ndp_src->get_flowsize() < _cutoff) {
+            return 0.0;
+        } else {
+            return 1.0;
+        }
+    } else if (_routing_algorithm == OPTIROUTE) {
+        #ifdef DYNAMIC_FSIZE
+            return (double) ndp_src->get_remaining_flowsize();
         #endif
-        return (double) tcp_src->get_flowsize();
+	if(_options & ROUTING_OPT_AGING) {
+	    return (double) ndp_src->get_flowsize()-ndp_src->get_remaining_flowsize();
+	} else {
+	    return (double) ndp_src->get_flowsize();
+	}
     }
     return 0.0;
 }

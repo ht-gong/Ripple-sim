@@ -24,7 +24,7 @@ public:
 
 	inline static TcpPacket* newpkt(DynExpTopology* top, PacketFlow &flow,
 					int flow_src, int flow_dst, TcpSrc *tcp_src, TcpSink *tcp_sink,
-                    seq_t seqno, seq_t dataseqno,int size, int priority) {
+                    seq_t seqno, seq_t dataseqno,int size, double priority) {
 	    TcpPacket* p = _packetdb.allocPacket();
         p->set_topology(top);
         p->set_src(flow_src);

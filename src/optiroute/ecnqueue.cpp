@@ -93,9 +93,9 @@ ECNQueue::receivePacket(Packet & pkt)
         if(pkt.type() == TCP){
             TcpPacket *tcppkt = (TcpPacket*)&pkt;
             tcppkt->get_tcpsrc()->add_to_dropped(tcppkt->seqno());
-            cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
+            //cout<<"Current slice:"<< _crt_tx_slice<<" Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "\n";
             cout << "DROPPED because calendarqueue full\n";
-            dump_queuesize();
+            //dump_queuesize();
         }
         pkt.free();
         _num_drops++;
