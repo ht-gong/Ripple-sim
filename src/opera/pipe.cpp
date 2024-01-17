@@ -12,7 +12,7 @@
 #include "rlbpacket.h" // added for debugging
 
 #define LINKRATE 100000000000
-#define REPORTING_PERIOD 50 // outputs whenever this sampling limit is reached
+#define REPORTING_PERIOD 1 // outputs whenever this sampling limit is reached
 
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
 : EventSource(eventlist,"pipe"), _delay(delay)
@@ -299,7 +299,7 @@ void UtilMonitor::start(simtime_picosec period) {
     // debug:
     //cout << "_max_pkts_in_period = " << _max_pkts_in_period << endl;
     printAggUtil();
-    eventlist().sourceIsPending(*this, _period);
+    //eventlist().sourceIsPending(*this, _period);
 }
 
 void UtilMonitor::doNextEvent() {
