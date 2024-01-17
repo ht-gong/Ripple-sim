@@ -1,10 +1,7 @@
 // -*- c-basic-offset: 4; tab-width: 8; indent-tabs-mode: t -*-        
 #include "pipe.h"
-#include <cstdint>
 #include <iostream>
 #include <sstream>
-#include <set>
-#include <algorithm>
 
 #include "queue.h"
 #include "tcp.h"
@@ -14,6 +11,9 @@
 #include "ndppacket.h"
 #include "rlbpacket.h" // added for debugging
 
+#define LINKRATE 100000000000
+#define REPORTING_PERIOD 50 // outputs whenever this sampling limit is reached
+
 Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
 : EventSource(eventlist,"pipe"), _delay(delay)
 {
@@ -22,6 +22,7 @@ Pipe::Pipe(simtime_picosec delay, EventList& eventlist)
     //_nodename= ss.str();
 
     _bytes_delivered = 0;
+    _bytes_passed_through = 0;
 
 }
 
@@ -64,8 +65,16 @@ uint64_t Pipe::reportBytes() {
     return temp;
 }
 
+uint64_t Pipe::reportBytesPassedThrough() {
+    uint64_t temp;
+    temp = _bytes_passed_through;
+    _bytes_passed_through = 0; // reset the counter
+    return temp;
+}
+
 void Pipe::sendFromPipe(Packet *pkt) {
     //cout << "sendFromPipe" << endl;
+    _bytes_passed_through += pkt->size();
     if (pkt->is_lasthop()) {
         //cout << "LAST HOP\n";
         // we'll be delivering to an NdpSink or NdpSrc based on packet type
@@ -85,6 +94,7 @@ void Pipe::sendFromPipe(Packet *pkt) {
                     }
 
                     DynExpTopology* top = pkt->get_topology();
+		    pkt->inc_crthop();
                     RlbModule * mod = top->get_rlb_module(pkt->get_dst());
                     assert(mod);
                     mod->receivePacket(*pkt, 0);
@@ -128,13 +138,6 @@ void Pipe::sendFromPipe(Packet *pkt) {
                     src->receivePacket(*pkt);
                     break;
                 }
-            case SAMPLE:
-                {
-                    RTTSampler* sampler = ((SamplePacket*)pkt)->get_sampler();
-                    assert(sampler);
-                    sampler->receivePacket(*pkt);
-                    break;
-                }
             case NDPACK:
             case NDPNACK:
             case NDPPULL:
@@ -160,11 +163,15 @@ void Pipe::sendFromPipe(Packet *pkt) {
             // we compute the current slice at the end of the packet transmission
             // !!! as a future optimization, we could have the "wrong" host NACK any packets
             // that go through at the wrong time
-            int64_t superslice = (eventlist().now() / top->get_slicetime(3)) %
+            
+            // Relaxing the constraint so packets will reach their destination if it has been pushed onto the wire 
+            // just before reconfig. It will arrive at the dst of its sending slice.
+	    simtime_picosec crt_t = eventlist().now() - _delay;
+            int64_t superslice = (crt_t / top->get_slicetime(3)) %
                 top->get_nsuperslice();
             // next, get the relative time from the beginning of that superslice
-            int64_t reltime = eventlist().now() - superslice*top->get_slicetime(3) -
-                (eventlist().now() / (top->get_nsuperslice()*top->get_slicetime(3))) * 
+            int64_t reltime = crt_t - superslice*top->get_slicetime(3) -
+                (crt_t / (top->get_nsuperslice()*top->get_slicetime(3))) * 
                 (top->get_nsuperslice()*top->get_slicetime(3));
             int slice; // the current slice
             if (reltime < top->get_slicetime(0))
@@ -177,10 +184,18 @@ void Pipe::sendFromPipe(Packet *pkt) {
             int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
             if (nextToR >= 0) {// the rotor switch is up
                 pkt->set_crtToR(nextToR);
-
             } else { // the rotor switch is down, "drop" the packet
-
+                unsigned seqno = 0;
+                if(pkt->type() == TCP) {
+                    seqno = ((TcpPacket*)pkt)->seqno();
+                } else if (pkt->type() == TCPACK) {
+                    seqno = ((TcpAck*)pkt)->ackno();
+                } else if (pkt->type() == NDP) {
+                    seqno = ((NdpPacket*)pkt)->seqno();
+                }
+                
                 switch (pkt->type()) {
+                    
                     case RLB:
                         {
                             // for now, let's just return the packet rather than implementing the RLB NACK mechanism
@@ -264,28 +279,13 @@ UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist)
     _H = _top->no_of_nodes(); // number of hosts
     _N = _top->no_of_tors(); // number of racks
     _hpr = _top->no_of_hpr(); // number of hosts per rack
-    uint64_t rate = 10000000000 / 8; // bytes / second
+    
+    uint64_t rate = LINKRATE / 8; // bytes / second
     rate = rate * _H;
     //rate = rate / 1500; // total packets per second
 
     _max_agg_Bps = rate;
-
-    // debug:
-    //cout << "max bytes per second = " << rate << endl;
-
-}
-
-UtilMonitor::UtilMonitor(DynExpTopology* top, EventList &eventlist, map<uint64_t, TcpSrc*> flow_map)
-  : EventSource(eventlist,"utilmonitor"), _top(top), _flow_map(flow_map)
-{
-    _H = _top->no_of_nodes(); // number of hosts
-    _N = _top->no_of_tors(); // number of racks
-    _hpr = _top->no_of_hpr(); // number of hosts per rack
-    uint64_t rate = 10000000000 / 8; // bytes / second
-    rate = rate * _H;
-    //rate = rate / 1500; // total packets per second
-
-    _max_agg_Bps = rate;
+    _counter = 0;
 
     // debug:
     //cout << "max bytes per second = " << rate << endl;
@@ -298,7 +298,7 @@ void UtilMonitor::start(simtime_picosec period) {
 
     // debug:
     //cout << "_max_pkts_in_period = " << _max_pkts_in_period << endl;
-
+    printAggUtil();
     eventlist().sourceIsPending(*this, _period);
 }
 
@@ -307,121 +307,52 @@ void UtilMonitor::doNextEvent() {
 }
 
 void UtilMonitor::printAggUtil() {
-
-    uint64_t B_sum = 0;
-
-    for (int tor = 0; tor < _N; tor++) {
-        for (int downlink = 0; downlink < _hpr; downlink++) {
-            Pipe* pipe = _top->get_pipe_tor(tor, downlink);
-            B_sum = B_sum + pipe->reportBytes();
+    if (_counter % REPORTING_PERIOD == 0) {
+        uint64_t B_downlink_sum = 0;
+        uint64_t B_uplink_sum = 0;
+    
+        for (int tor = 0; tor < _N; tor++) {
+            for (int downlink = 0; downlink < _hpr; downlink++) {
+                Pipe* pipe = _top->get_pipe_tor(tor, downlink);
+                uint64_t bytes = pipe->reportBytes();
+                B_downlink_sum += bytes;
+                cout << "Pipe " <<  tor << " " << downlink << " " << (double) bytes / (LINKRATE / 8 * timeAsSec(_period) * REPORTING_PERIOD)  << endl;
+            }
+            for (int uplink = 0; uplink < _hpr; uplink++) {
+                Pipe* pipe = _top->get_pipe_tor(tor, _hpr + uplink);
+                uint64_t bytes = pipe->reportBytesPassedThrough();
+                B_uplink_sum += bytes;
+                cout << "Pipe " <<  tor << " " << _hpr + uplink 
+                     << " " << (double) bytes / (LINKRATE / 8 * timeAsSec(_period) * REPORTING_PERIOD)  << endl;
+            }
         }
-    }
 
-    // debug:
-    //cout << "Packets counted = " << (int)pkt_sum << endl;
-    //cout << "Max packets = " << _max_pkts_in_period << endl;
+        // debug:
+        //cout << "Packets counted = " << (int)pkt_sum << endl;
+        //cout << "Max packets = " << _max_pkts_in_period << endl;
+        double util_downlink = (double)B_downlink_sum / ((double)_max_B_in_period * REPORTING_PERIOD);
+        double util_uplink = (double)B_uplink_sum / ((double)_max_B_in_period * REPORTING_PERIOD);
+        assert(util_downlink <= 1.0 && util_uplink <= 1.0);
+        cout << "Util " << fixed << util_downlink << " " << util_uplink << " " << timeAsMs(eventlist().now()) << endl;
 
-    double util = (double)B_sum / (double)_max_B_in_period;
-    cout << "Util " << fixed << util << " " << timeAsMs(eventlist().now()) << endl;
+        for (int tor = 0; tor < _top->no_of_tors(); tor++) {
+            for (int uplink = 0; uplink < _top->no_of_hpr(); uplink++) {
+                Queue* q = _top->get_queue_tor(tor, _top->no_of_hpr() + uplink);
+                q->reportQueuesize();
+            }
+        }
+     }
+    
+    _counter++;
+    // cout << "QueueReport" << endl;
+    // for (int tor = 0; tor < _top->no_of_tors(); tor++) {
+    //     for (int uplink = _top->no_of_hpr()+1; uplink < _top->no_of_hpr()*2; uplink++) {
+    //         Queue* q = _top->get_queue_tor(tor, uplink);
+    //         q->reportMaxqueuesize();
+    //     }
+    // }
 
-/*
-    for (int tor = 0; tor < _top->no_of_tors(); tor++) {
-        for (int uplink = 0; uplink < _top->no_of_hpr()*2; uplink++) {
-            Queue* q = _top->get_queue_tor(tor, uplink);
-            q->reportMaxqueuesize();
-        }
-    }
-*/
-    /*
-    cout << "QueueReport" << endl;
-    for (int tor = 0; tor < _top->no_of_tors(); tor++) {
-        for (int uplink = _top->no_of_hpr(); uplink < _top->no_of_hpr()*2; uplink++) {
-            Queue* q = _top->get_queue_tor(tor, uplink);
-            q->reportMaxqueuesize_perslice();
-        }
-    }
-    */
-    /*
-    map<uint64_t, float> ideal_share = findIdealShare();
-    map<uint64_t, float>::iterator is_it;
-    for(is_it = ideal_share.begin(); is_it != ideal_share.end(); ++is_it) {
-        uint64_t id = is_it->first;
-        float share = is_it->second;
-        uint64_t tp = 100000*share;
-        TcpSrc *tcpsrc = _flow_map[id];
-        if(tcpsrc) {
-            tcpsrc->cmpIdealCwnd(tp);
-            tcpsrc->reportTP();
-        }
-    }
-    */
     if (eventlist().now() + _period < eventlist().getEndtime())
         eventlist().sourceIsPendingRel(*this, _period);
-}
 
-map<uint64_t, float> 
-UtilMonitor::findIdealShare() {
-    map<uint64_t, float> ideal_shares;
-    //maps flow id to set of sets of collisions (i.e. flows it shares a queue with)
-    map<uint64_t, set<set<uint64_t>>> collisions_per_flow;
-    //fill collisions_per_flow
-    for (int tor = 0; tor < _top->no_of_tors(); tor++) {
-        for (int link = 0; link < _top->no_of_hpr()*2; link++) {
-            Queue* q = _top->get_queue_tor(tor, link);
-            set<uint64_t> flows = q->getFlows();
-            for(uint64_t id : flows) {
-                collisions_per_flow[id].insert(flows);
-            }
-        }
-    }
-    //count and then sort flows by their max number of collisions
-    vector<pair<int,uint64_t>> max_collisions;
-    map<uint64_t, set<set<uint64_t>>>::iterator cpf_it;
-    for(cpf_it = collisions_per_flow.begin(); cpf_it != collisions_per_flow.end(); ++cpf_it) {
-        uint64_t id = cpf_it->first;
-        int max = 0;
-        set<set<uint64_t>> collisions = cpf_it->second;
-        set<set<uint64_t>>::iterator it;
-        for(it = collisions.begin(); it != collisions.end(); ++it) {
-            max = it->size() > max ? it->size() : max;
-        }
-        assert(max > 0);
-        max_collisions.push_back({max,id});
-    }
-    if (max_collisions.size() <= 0) return ideal_shares;
-    sort(max_collisions.begin(), max_collisions.end(), greater<>()); 
-    //iterating through the flows id in descending order of collisions
-    //1) no flows in a set have a rate -> all of their rates is 1/sizeof(set)
-    //2) some flows in a set have a rate -> the remaining ones get (1-set_rates)/sizeof(remaining)
-    //this is correct because the list is sorted and so if no flow has decided a rate, none of the flows
-    //in that set of collisions can have a worse rate than any of the others (easily proven by contradiction)
-    //and so they share equally.
-    vector<pair<int,uint64_t>>::iterator mc_it;
-    for(mc_it = max_collisions.begin(); mc_it != max_collisions.end(); ++mc_it) {
-        float min_rate = 1;
-        uint64_t id = mc_it->second;
-        set<set<uint64_t>> collisions = collisions_per_flow[id];
-        set<set<uint64_t>>::iterator it;
-        for(it = collisions.begin(); it != collisions.end(); ++it) {
-            float crt_share = 0;
-            set<uint64_t> flows = (*it);
-            int remaining = flows.size();
-            set<uint64_t>::iterator it;
-            for(it = flows.begin(); it != flows.end(); ++it) {
-                if(ideal_shares[*it] > 0) remaining -= 1;
-                crt_share += ideal_shares[*it];
-            }
-            assert(crt_share < 1);
-            float rate = (1-crt_share)/remaining;
-            min_rate = rate < min_rate ? rate : min_rate;
-        }
-        ideal_shares[id] = min_rate;
-    }
-    /*
-    map<uint64_t, float>::iterator it; 
-    for(it = ideal_shares.begin(); it != ideal_shares.end(); ++it) {
-        cout << it->first << "," << it->second << endl;
-    }
-    */
-    return ideal_shares;
 }

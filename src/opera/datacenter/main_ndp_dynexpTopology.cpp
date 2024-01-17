@@ -231,7 +231,7 @@ int main(int argc, char **argv) {
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);
-    UM->start(timeFromSec(0.00002)); // print utilization every X milliseconds.
+    UM->start(timeFromSec(utiltime)); // print utilization every X milliseconds.
 
     // debug:
     cout << "Starting... " << endl;

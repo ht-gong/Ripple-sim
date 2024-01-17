@@ -182,7 +182,7 @@ void Queue::reportMaxqueuesize_perslice(){
 }
 
 void Queue::reportQueuesize() {
-    cout << "Queuesize " << _tor << "," << _port << "," << queuesize() << endl;
+    cout << "Queue " << _tor << " " << _port << " " << queuesize() << endl;
 }
 
 void Queue::updatePktOut(uint64_t id){

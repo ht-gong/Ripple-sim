@@ -56,6 +56,7 @@ class RlbSrc : public EventSource {
     int _flow_dst; // the receiver (sink) for this flow
 
     int _pkts_sent; // number of packets sent
+    unsigned _total_hops = 0;
 
     DynExpTopology* _top;
 

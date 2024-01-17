@@ -13,7 +13,6 @@
 #include "network.h"
 #include "loggertypes.h"
 
-
 class Pipe : public EventSource, public PacketSink {
  public:
 
@@ -24,7 +23,9 @@ class Pipe : public EventSource, public PacketSink {
     void sendFromPipe(Packet *pkt);
 
     uint64_t reportBytes(); // reports to the UtilMonitor
+    uint64_t reportBytesPassedThrough();
     uint64_t _bytes_delivered; // keep track of how many (non-hdr,ACK,NACK,PULL,RTX) packets were delivered to hosts
+    uint64_t _bytes_passed_through; // keep track of how many bytes passed through rack
 
     simtime_picosec delay() { return _delay; }
     const string& nodename() { return _nodename; }
@@ -39,21 +40,19 @@ class UtilMonitor : public EventSource {
  public:
 
     UtilMonitor(DynExpTopology* top, EventList &eventlist);
-    UtilMonitor(DynExpTopology* top, EventList &eventlist, map<uint64_t, TcpSrc*> flow_map);
 
     void start(simtime_picosec period);
     void doNextEvent();
     void printAggUtil();
-    map<uint64_t, float> findIdealShare();
 
     DynExpTopology* _top;
     simtime_picosec _period; // picoseconds between utilization reports
-    map<uint64_t, TcpSrc*> _flow_map;
     uint64_t _max_agg_Bps; // delivered to endhosts, across the whole network
     uint64_t _max_B_in_period;
     int _H; // number of hosts
     int _N; // number of racks
     int _hpr; // number of hosts per rack
+    int _counter; // counter for printing to I/O
 };
 
 
