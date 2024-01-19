@@ -76,6 +76,10 @@ NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger,
     _flow_size = ((uint64_t)1)<<63;
     _last_pull = 0;
     _pull_window = 0;
+
+    _max_hops_per_trip = 0;
+    _last_hop_per_trip = 0;
+    _total_hops = 0;
   
     //_crt_path = 0; // used for SCATTER_PERMUTE route strategy
 
@@ -359,7 +363,8 @@ void NdpSrc::processAck(const NdpAck& ack) {
         
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
-            << timeAsMs(get_start_time()) << " " << _found_reorder << endl;
+            << timeAsMs(get_start_time()) << " " << _found_reorder << " " << 0 << " " << 0 
+            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << " " << _total_hops << endl;
         //if (get_flow_src() == 403 && get_flow_dst() == 19) exit(0);
     }
 
@@ -905,6 +910,10 @@ void NdpSink::receivePacket(Packet& pkt) {
         return;
     }
 
+    _src->_last_hop_per_trip = pkt.get_crthop();
+    if(pkt.get_crthop() > _src->_max_hops_per_trip)
+        _src->_max_hops_per_trip = pkt.get_crthop();
+    _src->_total_hops += pkt.get_crthop();
     if (last_ts > fts){
     /*
         cout << "REORDER " << " " << _flow_src << " " << _flow_dst << " "
