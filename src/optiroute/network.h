@@ -72,6 +72,7 @@ class Packet {
         _been_bounced = false;
         _type = IP;
         _flags = 0;
+        _planned_hops = 0;
     }
 
     /* say "this packet is no longer wanted". (doesn't necessarily
@@ -153,6 +154,8 @@ class Packet {
     void inc_queueing(unsigned queueing) {_queueing += queueing;}
     void set_crtslice(int slice) {_crtslice = slice;}
     int get_crtslice() {return _crtslice;}
+    void set_planned_hops(int planned_hops) { _planned_hops = planned_hops;}
+    int get_planned_hops() {return _planned_hops;}
     void set_priority(double prior) {_priority = prior;}
     double get_priority() {return _priority;}
 
@@ -233,6 +236,7 @@ class Packet {
     int _crtToR; // current ToR (used to compute next ToR before packet sent out on pipe)
     int _crthop; // current hop count, used for statistics
     int _hop_index; // may reset during re-route, used to index labels
+    int _planned_hops;
     bool _lasthop;
     int _maxhops;
     int _crtport;

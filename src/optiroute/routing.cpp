@@ -87,6 +87,11 @@ simtime_picosec Routing::routing_from_PQ(Packet* pkt, simtime_picosec t) {
         pkt->set_slice_sent(slice); // "timestamp" the packet
         pkt->set_fabricts(t);
         pkt->set_path_index(get_path_index(pkt, t)); // set which path the packet will take
+        if(_routing_algorithm == OPTIROUTE) {
+            DynExpTopology* _top = pkt->get_topology();
+            pkt->set_planned_hops(_top->get_no_hops(pkt->get_src_ToR(),
+	                _top->get_firstToR(pkt->get_dst()), pkt->get_slice_sent(), pkt->get_path_index()));
+        }
         pkt->set_crtslice(slice);
     }
 
