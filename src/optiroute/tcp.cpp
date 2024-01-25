@@ -53,7 +53,6 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
     _max_hops_per_trip = 0;
     _last_hop_per_trip = 0;
     _total_hops = 0;
-    _total_extra_reroutes = 0;
     _last_acked = 0;
     _last_ping = timeInf;
     _dupacks = 0;
@@ -235,7 +234,7 @@ TcpSrc::receivePacket(Packet& pkt)
         cout << "FCT " << get_flow_src() << " " << get_flow_dst() << " " << get_flowsize() <<
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change 
-            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << " " << _total_hops << " " << _total_extra_reroutes << '\n';
+            << " " << _max_hops_per_trip << " " << _last_hop_per_trip << " " << _total_hops << '\n';
         //if (_found_reorder == 0) assert(_found_retransmit == 0);
         /*
         if (get_flow_src() == 355 && get_flow_dst() == 429) {
@@ -805,7 +804,7 @@ TcpSink::receivePacket(Packet& pkt) {
     if(pkt.get_crthop() > pkt.get_tcpsrc()->_max_hops_per_trip)
         pkt.get_tcpsrc()->_max_hops_per_trip = pkt.get_crthop();
     pkt.get_tcpsrc()->_total_hops += pkt.get_crthop();
-    pkt.get_tcpsrc()->_total_extra_reroutes += pkt.get_crthop() - pkt.get_planned_hops();
+    pkt.get_topology()->record_packet_reroute(pkt.get_crthop() - pkt.get_planned_hops());
 
     bool marked = p->early_fb() ? false : p->flags()&ECN_CE; //only mark ACK with ECN if early fb not sent
     

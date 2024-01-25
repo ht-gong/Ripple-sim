@@ -21,6 +21,8 @@ extern uint32_t delay_ToR2ToR; // nanoseconds, tor-to-tor link
 
 #define OPTIROUTE_ECMP
 
+#define REROUTE_BUCKET_COUNT 1000
+
 string ntoa(double n);
 string itoa(uint64_t n);
 
@@ -145,6 +147,8 @@ void DynExpTopology::read_params(string topfile) {
             _connected_slices[src_tor][dst_tor].push_back(make_pair(i, (j % _nul) + _ndl));
       }
     }
+
+    _reroute_dict.resize(REROUTE_BUCKET_COUNT, 0);
 
     // debug:
     cout << "Loading topology..." << endl;
@@ -529,4 +533,20 @@ void DynExpTopology::inc_host_buffer(int host) {
 void DynExpTopology::decr_host_buffer(int host) {
     assert(_host_buffers[host] > 0);
     _host_buffers[host]--;
+}
+
+void DynExpTopology::record_packet_reroute(int hops) {
+  assert(hops < REROUTE_BUCKET_COUNT);
+  if(hops > 0) {
+    _reroute_dict[hops]++;
+  } else {
+    _reroute_dict[0]++;
+  }
+}
+
+void DynExpTopology::report_packet_reroute() {
+  cout<<"Reroute Report: \n";
+  for(int i = 0; i < REROUTE_BUCKET_COUNT; i++) {
+    cout<< i << " " << _reroute_dict[i] << '\n';
+  }
 }

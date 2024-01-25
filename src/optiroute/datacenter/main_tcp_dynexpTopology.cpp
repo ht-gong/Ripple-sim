@@ -273,6 +273,8 @@ int main(int argc, char **argv) {
     }
     //cout << "Done" << endl;
 
+    top->report_packet_reroute();
+
 }
 
 string ntoa(double n) {

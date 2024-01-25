@@ -79,6 +79,8 @@ class DynExpTopology: public Topology{
   unsigned get_host_buffer(int host);
   void inc_host_buffer(int host);
   void decr_host_buffer(int host);
+  void record_packet_reroute(int hops);
+  void report_packet_reroute();
 
 
   Logfile* logfile;
@@ -112,6 +114,7 @@ class DynExpTopology: public Topology{
   map<Queue*,int> _link_usage;
   map<int, unsigned> _host_buffers;
   map<int, unsigned> _max_host_buffers;
+  vector<int> _reroute_dict;
   void read_params(string topfile);
   void set_params();
   // Tor-to-Tor connections across time
