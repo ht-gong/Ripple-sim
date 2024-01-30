@@ -69,6 +69,7 @@ class RlbSrc : public EventSource {
 
     simtime_picosec _start_time;
     uint64_t _flow_size;  //The flow size in bytes.  Stop sending after this amount.
+    uint64_t _total_hops = 0;
 };
 
 //class RlbSink : public PacketSink, public DataReceiver {

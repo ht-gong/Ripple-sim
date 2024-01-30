@@ -495,7 +495,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     }
     }
     
-		if (_serv==QUEUE_INVALID && (slice_queuesize(_crt_tx_slice) > 0 || _queuesize_rlb > 0)) {
+		if (_serv==QUEUE_INVALID && slice_queuesize(_crt_tx_slice) > 0) {
 		beginService();
     }
 }
@@ -512,5 +512,9 @@ mem_b CompositeQueue::queuesize() {
 }
 
 mem_b CompositeQueue::slice_queuesize(int slice){
-    return _queuesize_low[slice]+_queuesize_high[slice];
+    return _queuesize_low[slice]+_queuesize_high[slice]+_queuesize_rlb;
+}
+
+simtime_picosec CompositeQueue::get_queueing_delay(int slice) {
+    return (_queuesize_low[slice]+_queuesize_high[slice])*_ps_per_byte;
 }

@@ -43,6 +43,8 @@ class CompositeQueue : public Queue {
     int num_pulls() const { return _num_pulls;}
     virtual mem_b queuesize();
     mem_b slice_queuesize(int slice);
+    simtime_picosec get_queueing_delay(int slice);
+    bool isTxing() {return _serv != QUEUE_INVALID;}
     virtual void setName(const string& name) {
 	Logged::setName(name); 
 	_nodename += name;

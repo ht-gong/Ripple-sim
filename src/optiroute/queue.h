@@ -45,7 +45,8 @@ class Queue : public EventSource, public PacketSink {
     }
     virtual mem_b queuesize();
     virtual mem_b slice_queuesize(int slice) = 0;
-    simtime_picosec get_queueing_delay(int slice);
+    virtual simtime_picosec get_queueing_delay(int slice);
+    virtual bool isTxing() {return _sending_pkt != NULL;}
     simtime_picosec get_is_servicing() {return _is_servicing;}
     simtime_picosec get_last_service_time() {return _last_service_begin;}
     simtime_picosec serviceTime();

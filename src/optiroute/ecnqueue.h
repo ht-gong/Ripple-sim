@@ -22,6 +22,7 @@ class ECNQueue : public Queue {
     void completeService();
     mem_b queuesize(); 
     mem_b slice_queuesize(int slice);
+    bool isTxing() {return _sending_pkt != NULL;}
     void set_early_fb(bool enabled) { _early_fb_enabled = enabled;}
 
  private:

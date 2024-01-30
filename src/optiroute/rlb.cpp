@@ -103,6 +103,7 @@ void RlbSink::connect(RlbSrc& src)
 // Receive a packet.
 void RlbSink::receivePacket(Packet& pkt) {
     RlbPacket *p = (RlbPacket*)(&pkt);
+    _src->_total_hops += p->get_crthop();
 
     // debug:
     //if (p->seqno() == 1)
@@ -140,6 +141,7 @@ void RlbSink::receivePacket(Packet& pkt) {
         // FCT output for processing: (src dst bytes fct_ms timestarted_ms)
 
         cout << "FCT " << _src->get_flow_src() << " " << _src->get_flow_dst() << " " << _src->get_flowsize() <<
-            " " << timeAsMs(eventlist().now() - _src->get_start_time()) << " " << fixed << timeAsMs(_src->get_start_time()) << endl;
+            " " << timeAsMs(eventlist().now() - _src->get_start_time()) << " " << fixed << timeAsMs(_src->get_start_time())<<
+            " 0 0 0 2 2 " << _src->_total_hops << endl;
     }
 }
