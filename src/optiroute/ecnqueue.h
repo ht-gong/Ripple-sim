@@ -30,6 +30,8 @@ class ECNQueue : public Queue {
     int _state_send;
     vector<mem_b> _queuesize;
     vector<list<Packet*>> _enqueued;
+    mem_b _queuesize_rlb;
+    list<Packet*> _enqueued_rlb;
     int _dl_queue;
     DynExpTopology *_top;
     void sendEarlyFeedback(Packet &pkt);

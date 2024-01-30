@@ -231,7 +231,7 @@ int main(int argc, char **argv) {
             int flow_src = vtemp[0];
             int flow_dst = vtemp[1];
 
-            // if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
+            if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
 
             // generate an DCTCP source/sink:
             TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, routing);
@@ -252,30 +252,28 @@ int main(int argc, char **argv) {
 
             sinkLogger.monitorSink(flowSnk);
 
-            // }  else { // background flow, send it over RLB
-            //     continue;
+            }  else { // background flow, send it over RLB
 
-            //     // generate an RLB source/sink:
+            // generate an RLB source/sink:
 
-            //     RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
-            //     // debug:
-            //     //cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
-            //     flowSrc->set_flowsize(vtemp[2]); // bytes
+            RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
+            // debug:
+            //cout << "setting flow size to " << vtemp[2] << " bytes..." << endl;
+            flowSrc->set_flowsize(vtemp[2]); // bytes
+            RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
 
-            //     RlbSink* flowSnk = new RlbSink(top, eventlist, flow_src, flow_dst);
+            // set up the connection event
+            flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
 
-            //     // set up the connection event
-            //     flowSrc->connect(*flowSnk, timeFromNs(vtemp[3]/1.));
-
-            // }
+            }
         }
     }
 
 
     cout << "Traffic loaded." << endl;
 
-    //RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
-    //master->start();
+    RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+    master->start();
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);

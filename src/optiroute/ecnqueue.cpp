@@ -7,6 +7,8 @@
 #include "dctcp.h"
 #include "queue_lossless.h"
 #include "tcppacket.h"
+#include "rlbpacket.h"
+#include "rlbmodule.h"
 #include <iostream>
 // #define DEBUG
 
@@ -29,42 +31,17 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
 void
 ECNQueue::receivePacket(Packet & pkt)
 {
-    if(pkt.id() == 2979155) {
-      cout << "DEBUG receivePacket " << _tor << " " << _port << " crt_slice " << _crt_tx_slice << " pktslice " << pkt.get_crtslice() << " hop " << pkt.get_hop_index() << endl;
-  }
-    if(pkt.id() == 2980467) {
-      cout << "DEBUG EFB receivePacket " << _tor << " " << _port << " crt_slice " << _crt_tx_slice << " pktslice " << pkt.get_crtslice() << " hop " << pkt.get_hop_index() << endl;
-  }
-
-    //is this a PAUSE packet?
-    if (pkt.type()==ETH_PAUSE){
-        EthPausePacket* p = (EthPausePacket*)&pkt;
-        
-        if (p->sleepTime()>0){
-            //remote end is telling us to shut up.
-            //assert(_state_send == LosslessQueue::READY);
-            if (queuesize()>0)
-            //we have a packet in flight
-            _state_send = LosslessQueue::PAUSE_RECEIVED;
-            else
-            _state_send = LosslessQueue::PAUSED;
-            
-            //cout << timeAsMs(eventlist().now()) << " " << _name << " PAUSED "<<endl;
-        }
-        else {
-            //we are allowed to send!
-            _state_send = LosslessQueue::READY;
-            //cout << timeAsMs(eventlist().now()) << " " << _name << " GO "<<endl;
-            
-            //start transmission if we have packets to send!
-            if(queuesize()>0)
+    bool queueWasEmpty = _enqueued[_crt_tx_slice].empty() && _enqueued_rlb.empty(); //is the current queue empty?
+    if(pkt.type() == RLB) {
+    	_enqueued_rlb.push_front(&pkt);
+		_queuesize_rlb += pkt.size();
+        if (queueWasEmpty && !_sending_pkt) {
+            /* schedule the dequeue event */
+            assert(_enqueued_rlb.size() == 1);
             beginService();
-        }
-        
-        pkt.free();
+        } 
         return;
     }
-
     int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
     #ifdef DEBUG
     cout<< "Queue " << _tor << "," << _port << "Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "delay: " << get_queueing_delay(pkt.get_crtslice()) << endl;
@@ -115,7 +92,6 @@ ECNQueue::receivePacket(Packet & pkt)
     }
 
     /* enqueue the packet */
-    bool queueWasEmpty = _enqueued[_crt_tx_slice].empty(); //is the current queue empty?
     _enqueued[pkt_slice].push_front(&pkt);
     _queuesize[pkt_slice] += pkt.size();
     pkt.inc_queueing(queuesize());
@@ -139,10 +115,21 @@ ECNQueue::receivePacket(Packet & pkt)
 
 void ECNQueue::beginService() {
     /* schedule the next dequeue event */
-    assert(!_enqueued[_crt_tx_slice].empty());
-    assert(drainTime(_enqueued[_crt_tx_slice].back()) != 0);
-
-    Packet* to_be_sent = _enqueued[_crt_tx_slice].back();
+    assert(!_enqueued[_crt_tx_slice].empty() || !_enqueued_rlb.empty());
+    //assert(drainTime(_enqueued[_crt_tx_slice].back()) != 0);
+    Packet* to_be_sent = NULL;
+    if(!_enqueued[_crt_tx_slice].empty()) {
+        to_be_sent = _enqueued[_crt_tx_slice].back();
+    } else if(!_enqueued_rlb.empty()) {
+        _is_servicing = true;
+        _last_service_begin = eventlist().now();
+        _sending_pkt = _enqueued_rlb.back();
+        _enqueued_rlb.pop_back();
+        eventlist().sourceIsPendingRel(*this, drainTime(_sending_pkt));
+        return;
+    } else {
+        assert(0);
+    }
     DynExpTopology* top = to_be_sent->get_topology();
     
     simtime_picosec finish_push = eventlist().now() + drainTime(to_be_sent) /*229760*/;
@@ -195,6 +182,69 @@ ECNQueue::completeService()
 {
     /* dequeue the packet */
     assert(_sending_pkt);
+    if(_sending_pkt->type() == RLB) {
+		int ul = _top->no_of_hpr(); // !!! # uplinks = # downlinks = # hosts per rack
+
+		if (_port >= ul) { // it's a ToR uplink
+
+			// check if we're still connected to the right rack:
+			
+			int slice = _top->time_to_slice(eventlist().now());
+
+            while (!_enqueued_rlb.empty() || _sending_pkt != NULL) {
+
+                if(_sending_pkt == NULL){
+            	    _sending_pkt = _enqueued_rlb.back(); // get the next packet
+            		_enqueued_rlb.pop_back();
+                }
+
+            	// get the destination ToR:
+            	int dstToR = _top->get_firstToR(_sending_pkt->get_dst());
+            	// get the currently-connected ToR:
+            	int nextToR = _top->get_nextToR(slice, _sending_pkt->get_crtToR(), _sending_pkt->get_crtport());
+                //cout << "nxt " << nextToR << " dst " << dstToR << endl;
+
+            	if (dstToR == nextToR && !_top->is_reconfig(eventlist().now())) {
+            		// this is a "fresh" RLB packet
+					_queuesize_rlb -= _sending_pkt->size();
+            		break;
+            	} else {
+            		// this is an old packet, "drop" it and move on to the next one
+
+            		RlbPacket *p = (RlbPacket*)(_sending_pkt);
+
+            		// debug:
+            		//cout << "X dropped an RLB packet at port " << pkt->get_crtport() << ", seqno:" << p->seqno() << endl;
+            		//cout << "   ~ checked @ " << timeAsUs(eventlist().now()) << " us: specified ToR:" << dstToR << ", current ToR:" << nextToR << endl;
+            		
+            		// old version: just drop the packet
+            		//pkt->free();
+
+            		// new version: NACK the packet
+            		// NOTE: have not actually implemented NACK mechanism... Future work
+            		RlbModule* module = _top->get_rlb_module(p->get_src()); // returns pointer to Rlb module that sent the packet
+    				module->receivePacket(*p, 1); // 1 means to put it at the front of the queue
+
+					_queuesize_rlb -= _sending_pkt->size(); // decrement the queue size
+                    _sending_pkt = NULL;
+            	}
+            }
+
+		} else { // its a ToR downlink
+			_queuesize_rlb -= _sending_pkt->size();
+		}
+        if(_sending_pkt){
+            sendFromQueue(_sending_pkt);
+        }
+        _sending_pkt = NULL;
+        _is_servicing = false; 
+
+    if (!_enqueued[_crt_tx_slice].empty() || !_enqueued_rlb.empty()) {
+        /* schedule the next dequeue event */
+        beginService();
+    }
+    return;
+	}
     if(_crt_tx_slice != _sending_pkt->get_crtslice()) {
     cout << "sending_pkt " << _sending_pkt->get_crtslice() << " efb " << _sending_pkt->early_fb() << " tx_slice " << _crt_tx_slice << " port " << _port << endl; 
     cout << "crt_tor " << _sending_pkt->get_crtToR() << " crt_port " << _sending_pkt->get_crtport() << " dst_tor " << _top->get_firstToR(_sending_pkt->get_dst()) << endl;
@@ -227,7 +277,7 @@ ECNQueue::completeService()
     _sending_pkt = NULL;
     _is_servicing = false;
     
-    if (!_enqueued[_crt_tx_slice].empty() && _state_send==LosslessQueue::READY) {
+    if (!_enqueued[_crt_tx_slice].empty() || !_enqueued_rlb.empty()) {
         /* schedule the next dequeue event */
         beginService();
     }
