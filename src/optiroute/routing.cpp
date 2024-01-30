@@ -111,6 +111,13 @@ simtime_picosec Routing::routing_from_ToR(Packet* pkt, simtime_picosec t, simtim
     if(_routing_algorithm == VLB || (_routing_algorithm == LONGSHORT && pkt->get_priority() == 1.0)) {
         return routing_from_ToR_VLB(pkt, t, t);
     } else if(_routing_algorithm == OPTIROUTE) {
+        if(pkt->type() == RLB) {
+            int cur_slice = top->time_to_logic_slice(t);
+            pkt->set_crtport(top->get_port(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
+                        pkt->get_slice_sent(), pkt->get_path_index(), pkt->get_crthop()));
+            pkt->set_crtslice(cur_slice);
+            return 0;
+        }
         return routing_from_ToR_OptiRoute(pkt, t, t, false);
     } else {
         return routing_from_ToR_Expander(pkt, t, t, false);

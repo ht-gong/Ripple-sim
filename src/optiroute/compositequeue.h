@@ -32,7 +32,8 @@ class CompositeQueue : public Queue {
     virtual void receivePacket(Packet& pkt);
     virtual void doNextEvent();
     // should really be private, but loggers want to see
-    vector<mem_b> _queuesize_rlb, _queuesize_low, _queuesize_high;
+    vector<mem_b> _queuesize_low, _queuesize_high;
+    mem_b _queuesize_rlb; 
     int num_headers() const { return _num_headers;}
     int num_packets() const { return _num_packets;}
     int num_stripped() const { return _num_stripped;}
@@ -72,7 +73,7 @@ class CompositeQueue : public Queue {
     vector<list<Packet*>> _enqueued_low;
     vector<list<Packet*>> _enqueued_high;
 
-    vector<list<Packet*>> _enqueued_rlb; // rlb queue
+    list<Packet*> _enqueued_rlb; // rlb queue
 };
 
 #endif

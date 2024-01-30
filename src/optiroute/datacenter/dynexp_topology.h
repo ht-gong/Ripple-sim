@@ -45,6 +45,7 @@ class DynExpTopology: public Topology{
   RlbModule* get_rlb_module(int host) {return rlb_modules[host];}
 
   simtime_picosec get_slice_time() {return _tot_time;} // picoseconds spent in total
+  simtime_picosec get_slice_uptime() {return _connected_time;} // picoseconds spent in total
   simtime_picosec get_logic_slice_time() {return _connected_time / _nlogicportion;} // picosecond of each logic slice's duration
   simtime_picosec get_relative_time(simtime_picosec t);
   int get_opt_slice(int srcToR, int dstToR, int slice, int path_ind, int hop);

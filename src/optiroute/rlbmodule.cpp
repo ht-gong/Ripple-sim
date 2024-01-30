@@ -27,8 +27,8 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
     _Ncommit_queues = _top->no_of_hpr(); // number of commit queues = number of hosts per rack
     _mss = 1436; // packet payload length (bytes)
     _hdr = 64; // header length (bytes)
-    _link_rate = 10000000000 / 8;
-    _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slice_time()); // seconds (was 0.000281;)
+    _link_rate = 100000000000 / 8;
+    _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slice_uptime()); // seconds (was 0.000281;)
     // ^^^ note: we try to send RLB traffic right up to the reconfiguration point (one pkt serialization & propagation before reconfig.)
     // in general, we have two options:
     // 1. design everything conservatively so we never have to retransmit an RLB packet
@@ -131,7 +131,7 @@ void RlbModule::receivePacket(Packet& pkt, int flag)
                 //    cout << ">>> node " << _node << " received the packet!" << endl;
                 //    abort();
                 //}
-
+                //cout << "\t arrived at real dst\n";
                 RlbSink* sink = pkt.get_rlbsink();
                 assert(sink);
                 sink->receivePacket(pkt); // should this be pkt, *pkt, or &pkt ??? !!!
@@ -141,6 +141,7 @@ void RlbModule::receivePacket(Packet& pkt, int flag)
                 pkt.set_src(_node); // change the "source" to this node for routing purposes
                 _rlb_queues[0][queue_ind].push_back(&pkt);
                 _rlb_queue_sizes[0][queue_ind]++; // increment number of packets in queue
+                //cout << "\t arrived at int hop queue_ind " << queue_ind << endl;
 
                 // debug:
                 //if (pkt.get_time_sent() == 342944606400 && pkt.get_real_src() == 177 && pkt.get_real_dst() == 423)
@@ -176,8 +177,8 @@ void RlbModule::receivePacket(Packet& pkt, int flag)
                 _rlb_queue_sizes[0][queue_ind]++; // increment number of packets in queue
 
             } else {
-                cout << "RLB packet received at wrong host: get_dst() = " << pkt.get_dst() << ", _node = " << _node << endl;
-                cout << "... get_real_dst() = " << pkt.get_real_dst() << ", get_real_src() = " << pkt.get_real_src() << ", get_src() = " << pkt.get_src() << endl;
+                //cout << "RLB packet received at wrong host: get_dst() = " << pkt.get_dst() << ", _node = " << _node << endl;
+                //cout << "... get_real_dst() = " << pkt.get_real_dst() << ", get_real_src() = " << pkt.get_real_src() << ", get_src() = " << pkt.get_src() << endl;
                 abort();
             }
         }
@@ -653,6 +654,7 @@ void RlbMaster::newMatching() {
 
     // debug:
     //cout << "-*-*- New matching at slice = " << slice << ", time = " << timeAsUs(eventlist().now()) << " us -*-*-" << endl;
+    //cout << _current_commit_queue << endl;
 
     // copy queue sizes from each host into a datastructure that covers all hosts
     RlbModule* mod;
@@ -660,8 +662,9 @@ void RlbMaster::newMatching() {
         mod = _top->get_rlb_module(host); // get pointer to module
         vector<vector<int>> _queue_sizes_temp = mod->get_queue_sizes(); // get queue sizes from module
         for (int j = 0; j < 2; j++) {
-            for (int k = 0; k < _H; k++)
+            for (int k = 0; k < _H; k++){
                 _working_queue_sizes[host][j][k] = _queue_sizes_temp[j][k];
+             }
         }
     }
 
@@ -702,68 +705,77 @@ void RlbMaster::newMatching() {
     // ---------- phase 1 ---------- //
 
     for (int crtToR = 0; crtToR < _N; crtToR++) {
+    vector<int> dst_hosts;
+    vector<int> src_hosts;
+    // get the list of src hosts in this rack
+    int basehost = crtToR * _hpr;
+    for (int j = 0; j < _hpr; j++) {
+        src_hosts.push_back(basehost + j);
+    }
+
+    for (_current_commit_queue = 0; _current_commit_queue < _hpr; _current_commit_queue++) {
 
         // get the list of new dst hosts (that every host in this rack is now connected to)
         int dstToR = _top->get_nextToR(slice, crtToR, _current_commit_queue + _hpr);
         
         if (crtToR != dstToR) { // necessary because of the way we define the topology
 
-            vector<int> dst_hosts;
             int basehost = dstToR * _hpr;
             for (int j = 0; j < _hpr; j++) {
                 dst_hosts.push_back(basehost + j);
             }
-
-            // get the list of src hosts in this rack
-            vector<int> src_hosts;
-            basehost = crtToR * _hpr;
-            for (int j = 0; j < _hpr; j++) {
-                src_hosts.push_back(basehost + j);
-            }
-
             // get:
             // 1. the 2nd hop "rates"
             // 2. the 1 hop "rates"
             // 3. the 1st hop proposed "rates"
             // all "rates" are in units of packets
-
-            phase1(src_hosts, dst_hosts);
         }
+        }
+        phase1(src_hosts, dst_hosts);
     }
 
 
     // ---------- phase 2 ---------- //
 
     for (int crtToR = 0; crtToR < _N; crtToR++) {
+    vector<int> dst_hosts;
+    vector<int> src_hosts;
+    // get the list of src hosts in this rack
+    int basehost = crtToR * _hpr;
+    for (int j = 0; j < _hpr; j++) {
+        src_hosts.push_back(basehost + j);
+    }
+
+    for (int _current_commit_queue = 0; _current_commit_queue < _hpr; _current_commit_queue++) {
 
         // get the list of new dst hosts (that every host in this rack is now connected to)
         int dstToR = _top->get_nextToR(slice, crtToR, _current_commit_queue + _hpr);
         
         if (crtToR != dstToR) {
 
-            vector<int> dst_hosts;
             int basehost = dstToR * _hpr;
             for (int j = 0; j < _hpr; j++) {
                 dst_hosts.push_back(basehost + j);
             }
 
-            // get the list of src hosts in this rack
-            vector<int> src_hosts;
-            basehost = crtToR * _hpr;
-            for (int j = 0; j < _hpr; j++) {
-                src_hosts.push_back(basehost + j);
-            }
-
             // given the proposals, generate the accepts
 
-            phase2(src_hosts, dst_hosts); // the dst_hosts compute how much to accept from the src_hosts
         }
+    }
+        phase2(src_hosts, dst_hosts); // the dst_hosts compute how much to accept from the src_hosts
     }
 
 
     // ---------- phase 3 ---------- //
 
     for (int crtToR = 0; crtToR < _N; crtToR++) {
+        vector<int> src_hosts;
+        // get the list of src hosts in this rack
+        int basehost = crtToR * _hpr;
+        for (int j = 0; j < _hpr; j++) {
+            src_hosts.push_back(basehost + j);
+        }
+    for (int _current_commit_queue = 0; _current_commit_queue < _hpr; _current_commit_queue++) {
 
         // get the list of new dst hosts (that every host in this rack is now connected to)
         int dstToR = _top->get_nextToR(slice, crtToR, _current_commit_queue + _hpr);
@@ -775,14 +787,6 @@ void RlbMaster::newMatching() {
             for (int j = 0; j < _hpr; j++) {
                 dst_hosts.push_back(basehost + j);
             }
-
-            // get the list of src hosts in this rack
-            vector<int> src_hosts;
-            basehost = crtToR * _hpr;
-            for (int j = 0; j < _hpr; j++) {
-                src_hosts.push_back(basehost + j);
-            }
-
             // given the accepts, finish getting how many packets to send and such
             // and communicate this to the RlbModule::enqueue_commit()
 
@@ -792,6 +796,7 @@ void RlbMaster::newMatching() {
                     for (int l = 0; l < _H; l++) {
                         int temp = _accepts[src_hosts[j]][dst_hosts[k]][l];
                         if (temp > 0) {
+                            //cout << "ACCEPT\n";
                             _Nsenders[src_hosts[j]] ++; // increment sender count
                             _pkts_to_send[src_hosts[j]].push_back(temp); // how many packets we should send
                             _q_inds[src_hosts[j]][0].push_back(1); // first index (0 = nonlocal, 1 = local)
@@ -816,12 +821,13 @@ void RlbMaster::newMatching() {
 
                 // only start if there's something to send...
                 if (_Nsenders[src_hosts[j]] > 0) {
+                    //cout << "SENDING\n";
                     mod = _top->get_rlb_module(src_hosts[j]);
                     mod->enqueue_commit(slice, _current_commit_queue, _Nsenders[src_hosts[j]], _pkts_to_send[src_hosts[j]], _q_inds[src_hosts[j]], _dst_labels[src_hosts[j]]);
                 }
             }
         }
-
+      }
     }
 
 
@@ -832,6 +838,7 @@ void RlbMaster::newMatching() {
 
     // set up the next reconfiguration event:
     eventlist().sourceIsPendingRel(*this, _top->get_slice_time());
+    //cout << "get_slice_time " << _top->get_slice_time() << endl;
 }
 
 

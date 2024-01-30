@@ -39,13 +39,10 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
   int slices = top->get_nlogicslices();
   _enqueued_high.resize(slices + 1);
   _enqueued_low.resize(slices + 1);
-  _enqueued_rlb.resize(slices + 1);
   _queuesize_high.resize(slices + 1);
   _queuesize_low.resize(slices + 1);
-  _queuesize_rlb.resize(slices + 1);
   std::fill(_queuesize_high.begin(), _queuesize_high.end(), 0);
   std::fill(_queuesize_low.begin(), _queuesize_low.end(), 0);
-  std::fill(_queuesize_rlb.begin(), _queuesize_rlb.end(), 0);
   _serv = QUEUE_INVALID;
 
 }
@@ -123,6 +120,7 @@ void CompositeQueue::returnToSender(Packet *pkt) {
 }
 
 void CompositeQueue::beginService(){
+    //cout << "CQ beginService\n";
 	if ( !_enqueued_high[_crt_tx_slice].empty() && !_enqueued_low[_crt_tx_slice].empty() ){
 
 		if (_crt >= (_ratio_high+_ratio_low))
@@ -175,9 +173,9 @@ void CompositeQueue::beginService(){
 		//if (_tor == 0 && _port == 6)
 		//	cout << "composite_queue sending a full packet: " << (_enqueued_low[_crt_tx_slice].back())->size() << " bytes (no headers in queue)" << endl;
 
-	} else if (!_enqueued_rlb[_crt_tx_slice].empty()) {
+	} else if (!_enqueued_rlb.empty()) {
 		_serv = QUEUE_RLB;
-		eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_rlb[_crt_tx_slice].back()));
+		eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_rlb.back()));
 	} else {
     cout << "assert0 " << _tor << " " << _port << " " << queuesize() << " " << slice_queuesize(_crt_tx_slice) << endl;
 		assert(0);
@@ -194,8 +192,8 @@ void CompositeQueue::completeService() {
 	bool sendingpkt = true;
 
 	if (_serv == QUEUE_RLB) {
-		assert(!_enqueued_rlb[_crt_tx_slice].empty());
-		pkt = _enqueued_rlb[_crt_tx_slice].back();
+		assert(!_enqueued_rlb.empty());
+		pkt = _enqueued_rlb.back();
 
 		DynExpTopology* top = pkt->get_topology();
 		int ul = top->no_of_hpr(); // !!! # uplinks = # downlinks = # hosts per rack
@@ -208,19 +206,20 @@ void CompositeQueue::completeService() {
 
             bool pktfound = false;
 
-            while (!_enqueued_rlb[_crt_tx_slice].empty()) {
+            while (!_enqueued_rlb.empty()) {
 
-            	pkt = _enqueued_rlb[_crt_tx_slice].back(); // get the next packet
+            	pkt = _enqueued_rlb.back(); // get the next packet
 
             	// get the destination ToR:
             	int dstToR = top->get_firstToR(pkt->get_dst());
             	// get the currently-connected ToR:
             	int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
+                //cout << "nxt " << nextToR << " dst " << dstToR << endl;
 
             	if (dstToR == nextToR && !top->is_reconfig(eventlist().now())) {
             		// this is a "fresh" RLB packet
-            		_enqueued_rlb[_crt_tx_slice].pop_back();
-					_queuesize_rlb[_crt_tx_slice] -= pkt->size();
+            		_enqueued_rlb.pop_back();
+					_queuesize_rlb -= pkt->size();
 					pktfound = true;
             		break;
             	} else {
@@ -240,8 +239,8 @@ void CompositeQueue::completeService() {
             		RlbModule* module = top->get_rlb_module(p->get_src()); // returns pointer to Rlb module that sent the packet
     				module->receivePacket(*p, 1); // 1 means to put it at the front of the queue
 
-            		_enqueued_rlb[_crt_tx_slice].pop_back(); // pop the packet
-					_queuesize_rlb[_crt_tx_slice] -= pkt->size(); // decrement the queue size
+            		_enqueued_rlb.pop_back(); // pop the packet
+					_queuesize_rlb -= pkt->size(); // decrement the queue size
             	}
             }
 
@@ -250,8 +249,8 @@ void CompositeQueue::completeService() {
             	sendingpkt = false;
 
 		} else { // its a ToR downlink
-			_enqueued_rlb[_crt_tx_slice].pop_back();
-			_queuesize_rlb[_crt_tx_slice] -= pkt->size();
+			_enqueued_rlb.pop_back();
+			_queuesize_rlb -= pkt->size();
 		}
 
 		//_num_packets++;
@@ -286,7 +285,7 @@ void CompositeQueue::completeService() {
 
   	_serv = QUEUE_INVALID;
 
-  	if (!_enqueued_high[_crt_tx_slice].empty() || !_enqueued_low[_crt_tx_slice].empty() || !_enqueued_rlb[_crt_tx_slice].empty())
+  	if (!_enqueued_high[_crt_tx_slice].empty() || !_enqueued_low[_crt_tx_slice].empty() || !_enqueued_rlb.empty())
   		beginService();
 }
 
@@ -328,9 +327,9 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     	//RlbPacket *p = (RlbPacket*)(&pkt);
         //    if (p->seqno() == 1)
         //        cout << "# marked packet queued at ToR: " << _tor << ", port: " << _port << endl;
-
-    	_enqueued_rlb[pkt_slice].push_front(&pkt);
-		_queuesize_rlb[pkt_slice] += pkt.size();
+        //cout << "CQ receivePacket " << _tor << " " << _port << " pktslice " << pkt_slice << " crt_tx_slice " << _crt_tx_slice << endl;
+    	_enqueued_rlb.push_front(&pkt);
+		_queuesize_rlb += pkt.size();
 
         break;
     }
@@ -496,7 +495,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     }
     }
     
-		if (_serv==QUEUE_INVALID && slice_queuesize(_crt_tx_slice) > 0) {
+		if (_serv==QUEUE_INVALID && (slice_queuesize(_crt_tx_slice) > 0 || _queuesize_rlb > 0)) {
 		beginService();
     }
 }

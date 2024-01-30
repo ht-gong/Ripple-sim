@@ -237,8 +237,6 @@ int main(int argc, char **argv) {
                 sinkLogger.monitorSink(flowSnk);
 
             }  else { // background flow, send it over RLB
-                continue;
-
                 // generate an RLB source/sink:
 
                 RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
@@ -257,8 +255,8 @@ int main(int argc, char **argv) {
 
     cout << "Traffic loaded." << endl;
 
-    //RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
-    //master->start();
+    RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+    master->start();
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);

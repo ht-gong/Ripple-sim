@@ -388,6 +388,7 @@ void PriorityQueue::completeService() {
 	    switch (_servicing) {
 	    case Q_RLB:
 	    {
+            //cout << "RLB PQ completeService\n";
 	        RlbModule* mod = _top->get_rlb_module(_node);
 	        pkt = mod->NICpull(); // get the packet from the RLB module
 
