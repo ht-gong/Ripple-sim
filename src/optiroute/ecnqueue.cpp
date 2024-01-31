@@ -25,6 +25,7 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
     _dl_queue = slices;
     _enqueued.resize(slices + 1);
     _queuesize.resize(slices + 1);
+    _queuesize_rlb = 0;
     std::fill(_queuesize.begin(), _queuesize.end(), 0);
 }
 
@@ -37,7 +38,7 @@ ECNQueue::receivePacket(Packet & pkt)
 		_queuesize_rlb += pkt.size();
         if (queueWasEmpty && !_sending_pkt) {
             /* schedule the dequeue event */
-            assert(_enqueued_rlb.size() == 1);
+            assert(_enqueued_rlb.size() == 1 && _enqueued[_crt_tx_slice].size() == 0);
             beginService();
         } 
         return;
@@ -131,7 +132,7 @@ void ECNQueue::preemptRLB() {
     assert(_sending_pkt != NULL);
     assert(_sending_pkt->type() == RLB);
     _enqueued_rlb.push_front(_sending_pkt);
-    _queuesize_rlb += _sending_pkt->size();
+    assert(_queuesize_rlb >= _sending_pkt->size());
     eventlist().cancelPendingSource(*this);
     //_rlb_preempted = true;
 }
@@ -147,8 +148,8 @@ void ECNQueue::beginService() {
         }
         to_be_sent = _enqueued[_crt_tx_slice].back();
     } else if(!_enqueued_rlb.empty()) {
+        assert(_sending_pkt == NULL);
         _sending_pkt = _enqueued_rlb.back();
-        _enqueued_rlb.pop_back();
         simtime_picosec finish_push = eventlist().now() + drainTime(_sending_pkt);
         int finish_push_slice = _top->time_to_logic_slice(finish_push); // plus the link delay
         if(_top->is_reconfig(finish_push)) {
@@ -164,8 +165,8 @@ void ECNQueue::beginService() {
         }
         //_is_servicing = true;
         //_last_service_begin = eventlist().now();
+        _enqueued_rlb.pop_back();
         eventlist().sourceIsPendingRel(*this, drainTime(_sending_pkt));
-        _rlb_service_time = eventlist().now() + drainTime(_sending_pkt);
         return;
     } else {
         assert(0);
@@ -219,13 +220,6 @@ void ECNQueue::beginService() {
 void
 ECNQueue::completeService()
 {
-    //for rlb full preemption, cancel event when it happens
-    /*
-    if(_rlb_preempted && _rlb_service_time == eventlist().now()) {
-        _rlb_preempted = false;
-        return;
-    }
-    */
     /* dequeue the packet */
     assert(_sending_pkt);
     if(_sending_pkt->type() == RLB) {
@@ -252,11 +246,13 @@ ECNQueue::completeService()
 
             	if (dstToR == nextToR && !_top->is_reconfig(eventlist().now())) {
             		// this is a "fresh" RLB packet
+                    assert(_queuesize_rlb >= _sending_pkt->size());
 					_queuesize_rlb -= _sending_pkt->size();
             		break;
             	} else {
             		// this is an old packet, "drop" it and move on to the next one
 
+					_queuesize_rlb -= _sending_pkt->size(); // decrement the queue size
             		RlbPacket *p = (RlbPacket*)(_sending_pkt);
 
             		// debug:
@@ -270,13 +266,12 @@ ECNQueue::completeService()
             		// NOTE: have not actually implemented NACK mechanism... Future work
             		RlbModule* module = _top->get_rlb_module(p->get_src()); // returns pointer to Rlb module that sent the packet
     				module->receivePacket(*p, 1); // 1 means to put it at the front of the queue
-
-					_queuesize_rlb -= _sending_pkt->size(); // decrement the queue size
                     _sending_pkt = NULL;
             	}
             }
 
 		} else { // its a ToR downlink
+                    assert(_queuesize_rlb >= _sending_pkt->size());
 			_queuesize_rlb -= _sending_pkt->size();
 		}
         if(_sending_pkt){
@@ -331,7 +326,8 @@ ECNQueue::completeService()
 
 mem_b ECNQueue::slice_queuesize(int slice){
     assert(slice <= _dl_queue);
-    return _queuesize[slice];
+    //cout << _queuesize[slice] << " " << _queuesize_rlb << " " << _enqueued_rlb.size() << endl;
+    return _queuesize[slice]+_queuesize_rlb;
 }
 
 mem_b ECNQueue::queuesize() {
@@ -350,6 +346,10 @@ void ECNQueue::dump_queuesize() {
         cout<<i<<":"<<_queuesize[i]<<" ";
     }
     cout<<"\n";
+}
+
+simtime_picosec ECNQueue::get_queueing_delay(int slice) {
+    return _queuesize[slice]*_ps_per_byte;
 }
 
 void
