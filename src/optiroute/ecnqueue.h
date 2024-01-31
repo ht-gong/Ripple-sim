@@ -22,7 +22,8 @@ class ECNQueue : public Queue {
     void completeService();
     mem_b queuesize(); 
     mem_b slice_queuesize(int slice);
-    bool isTxing() {return _sending_pkt != NULL;}
+    void preemptRLB();
+    bool isTxing() {return (_sending_pkt != NULL && _sending_pkt->type() != RLB);}
     void set_early_fb(bool enabled) { _early_fb_enabled = enabled;}
 
  private:
@@ -37,6 +38,8 @@ class ECNQueue : public Queue {
     void sendEarlyFeedback(Packet &pkt);
     void dump_queuesize();
     bool _early_fb_enabled;
+    simtime_picosec _rlb_service_time;
+    bool _rlb_preempted = false;
 };
 
 #endif

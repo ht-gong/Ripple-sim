@@ -325,6 +325,7 @@ void PriorityQueue::receivePacket(Packet& pkt) {
     //cout << "   NIC received a packet." << endl;
 
     //pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_ARRIVE);
+    /*
     if(queuesize()+pkt.size() > _maxsize) {
 	pkt.free();
 	if(pkt.type() == TCP){
@@ -334,6 +335,7 @@ void PriorityQueue::receivePacket(Packet& pkt) {
 	cout << "DROPPED AT NIC\n";
 	return;
     }
+    */
 
     /* enqueue the packet */
     bool queueWasEmpty = false;

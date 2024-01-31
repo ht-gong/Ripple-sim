@@ -122,15 +122,19 @@ void CompositeQueue::returnToSender(Packet *pkt) {
 void CompositeQueue::beginService(){
     //cout << "CQ beginService\n";
 	if ( !_enqueued_high[_crt_tx_slice].empty() && !_enqueued_low[_crt_tx_slice].empty() ){
-
 		if (_crt >= (_ratio_high+_ratio_low))
 			_crt = 0;
 
 		if (_crt< _ratio_high) {
       if(canBeginService(_enqueued_high[_crt_tx_slice].back())){
+        if(_serv == QUEUE_RLB) {
+            preemptRLB();
+        }
         _serv = QUEUE_HIGH;
         eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_high[_crt_tx_slice].back()));
         _crt = _crt + 64; // !!! hardcoded header size for now...
+        _is_servicing = true;
+        _last_service_begin = eventlist().now();
       }
 
 			// debug:
@@ -139,10 +143,15 @@ void CompositeQueue::beginService(){
 		} else {
 			assert(_crt < _ratio_high+_ratio_low);
       if(canBeginService(_enqueued_low[_crt_tx_slice].back())){
+        if(_serv == QUEUE_RLB) {
+            preemptRLB();
+        }
         _serv = QUEUE_LOW;
         eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_low[_crt_tx_slice].back()));
         int sz = _enqueued_low[_crt_tx_slice].back()->size();
         _crt = _crt + sz;
+        _is_servicing = true;
+        _last_service_begin = eventlist().now();
       }
 			// debug:
 			//if (_tor == 0 && _port == 6) {
@@ -155,8 +164,13 @@ void CompositeQueue::beginService(){
 
 	if (!_enqueued_high[_crt_tx_slice].empty()) {
     if(canBeginService(_enqueued_high[_crt_tx_slice].back())){
+        if(_serv == QUEUE_RLB) {
+            preemptRLB();
+        }
       _serv = QUEUE_HIGH;
       eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_high[_crt_tx_slice].back()));
+      _is_servicing = true;
+      _last_service_begin = eventlist().now();
     }
 
 		// debug:
@@ -165,8 +179,13 @@ void CompositeQueue::beginService(){
 
 	} else if (!_enqueued_low[_crt_tx_slice].empty()) {
     if(canBeginService(_enqueued_low[_crt_tx_slice].back())){
+        if(_serv == QUEUE_RLB) {
+            preemptRLB();
+        }
       _serv = QUEUE_LOW;
       eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_low[_crt_tx_slice].back()));
+      _is_servicing = true;
+      _last_service_begin = eventlist().now();
     }
 
 		// debug:
@@ -181,6 +200,12 @@ void CompositeQueue::beginService(){
 		assert(0);
 		_serv = QUEUE_INVALID;
 	}
+}
+
+void CompositeQueue::preemptRLB() {
+    assert(_serv == QUEUE_RLB);
+    _serv = QUEUE_INVALID;
+    eventlist().cancelPendingSource(*this);
 }
 
 void CompositeQueue::completeService() {
@@ -284,6 +309,7 @@ void CompositeQueue::completeService() {
   }
 
   	_serv = QUEUE_INVALID;
+    _is_servicing = false;
 
   	if (!_enqueued_high[_crt_tx_slice].empty() || !_enqueued_low[_crt_tx_slice].empty() || !_enqueued_rlb.empty())
   		beginService();
@@ -495,7 +521,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     }
     }
     
-		if (_serv==QUEUE_INVALID && slice_queuesize(_crt_tx_slice) > 0) {
+		if ((_serv==QUEUE_INVALID || (_serv == QUEUE_RLB && pkt.type() != RLB)) && slice_queuesize(_crt_tx_slice) > 0) {
 		beginService();
     }
 }

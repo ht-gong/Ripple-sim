@@ -31,8 +31,8 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
 void
 ECNQueue::receivePacket(Packet & pkt)
 {
-    bool queueWasEmpty = _enqueued[_crt_tx_slice].empty() && _enqueued_rlb.empty(); //is the current queue empty?
     if(pkt.type() == RLB) {
+        bool queueWasEmpty = _enqueued[_crt_tx_slice].empty() && _enqueued_rlb.empty(); //is the current queue empty?
     	_enqueued_rlb.push_front(&pkt);
 		_queuesize_rlb += pkt.size();
         if (queueWasEmpty && !_sending_pkt) {
@@ -43,6 +43,19 @@ ECNQueue::receivePacket(Packet & pkt)
         return;
     }
     int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
+
+    if(pkt_slice != _crt_tx_slice){
+        int slice_diff;
+        if(pkt_slice > _crt_tx_slice) {
+            slice_diff = pkt_slice - _crt_tx_slice;
+        } else {
+            slice_diff = pkt_slice - _crt_tx_slice + _top->get_nslices();
+        }
+        if(pkt.get_tcpsrc()->get_flowsize() < 20000 && slice_diff > 3) {
+            cout << "BAD SLICE DIFF " << slice_diff << " flowsize " << pkt.get_tcpsrc()->get_flowsize() << endl;
+        }
+    }
+
     #ifdef DEBUG
     cout<< "Queue " << _tor << "," << _port << "Slice received from PKT:"<<pkt.get_crtslice()<<" at " <<eventlist().now()<< "delay: " << get_queueing_delay(pkt.get_crtslice()) << endl;
     dump_queuesize();
@@ -80,6 +93,7 @@ ECNQueue::receivePacket(Packet & pkt)
     }
     //pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_ARRIVE);
 
+    bool queueWasEmpty = _enqueued[_crt_tx_slice].empty(); //is the current queue empty?
     //for early feedback, check for ECN at enqueue time
     if (queuesize() > _K){
       if(_early_fb_enabled && pkt.type() == TCP) {
@@ -105,12 +119,21 @@ ECNQueue::receivePacket(Packet & pkt)
         _max_recorded_size = queuesize();
     }
     
-    if (queueWasEmpty && !_sending_pkt && pkt_slice == _crt_tx_slice) {
+    if (queueWasEmpty && (!_sending_pkt || _sending_pkt->type()==RLB) && pkt_slice == _crt_tx_slice) {
 	/* schedule the dequeue event */
 	    assert(_enqueued[_crt_tx_slice].size() == 1);
 	    beginService();
     } 
     
+}
+
+void ECNQueue::preemptRLB() {
+    assert(_sending_pkt != NULL);
+    assert(_sending_pkt->type() == RLB);
+    _enqueued_rlb.push_front(_sending_pkt);
+    _queuesize_rlb += _sending_pkt->size();
+    eventlist().cancelPendingSource(*this);
+    //_rlb_preempted = true;
 }
 
 void ECNQueue::beginService() {
@@ -119,13 +142,30 @@ void ECNQueue::beginService() {
     //assert(drainTime(_enqueued[_crt_tx_slice].back()) != 0);
     Packet* to_be_sent = NULL;
     if(!_enqueued[_crt_tx_slice].empty()) {
+        if(_sending_pkt != NULL && _sending_pkt->type() == RLB) {
+            preemptRLB();
+        }
         to_be_sent = _enqueued[_crt_tx_slice].back();
     } else if(!_enqueued_rlb.empty()) {
-        _is_servicing = true;
-        _last_service_begin = eventlist().now();
         _sending_pkt = _enqueued_rlb.back();
         _enqueued_rlb.pop_back();
+        simtime_picosec finish_push = eventlist().now() + drainTime(_sending_pkt);
+        int finish_push_slice = _top->time_to_logic_slice(finish_push); // plus the link delay
+        if(_top->is_reconfig(finish_push)) {
+            finish_push_slice = _top->absolute_logic_slice_to_slice(finish_push_slice + 1);
+        }
+        if(!_top->is_downlink(_port) && finish_push_slice != _crt_tx_slice) {
+            // Uplink port attempting to serve pkt across configurations
+            #ifdef DEBUG
+            cout<<"RLB attempting to serve pkt across configurations\n";
+            #endif
+            _sending_pkt = NULL;
+            return;
+        }
+        //_is_servicing = true;
+        //_last_service_begin = eventlist().now();
         eventlist().sourceIsPendingRel(*this, drainTime(_sending_pkt));
+        _rlb_service_time = eventlist().now() + drainTime(_sending_pkt);
         return;
     } else {
         assert(0);
@@ -144,6 +184,7 @@ void ECNQueue::beginService() {
         #ifdef DEBUG
         cout<<"Uplink port attempting to serve pkt across configurations\n";
         #endif
+        cout<<"Uplink port attempting to serve pkt across configurations\n";
         return;
     }
 
@@ -171,15 +212,20 @@ void ECNQueue::beginService() {
         " pktslice" << _sending_pkt->get_crtslice() << " tx slice " << _crt_tx_slice << " at " << eventlist().now() <<
     " src,dst " << _sending_pkt->get_src() << "," << _sending_pkt->get_dst() << endl;
     dump_queuesize();
-    #endif
-    
-    
+    #endif 
 }
 
 
 void
 ECNQueue::completeService()
 {
+    //for rlb full preemption, cancel event when it happens
+    /*
+    if(_rlb_preempted && _rlb_service_time == eventlist().now()) {
+        _rlb_preempted = false;
+        return;
+    }
+    */
     /* dequeue the packet */
     assert(_sending_pkt);
     if(_sending_pkt->type() == RLB) {

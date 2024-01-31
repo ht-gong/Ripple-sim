@@ -235,6 +235,9 @@ TcpSrc::receivePacket(Packet& pkt)
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << _found_retransmit << " " << buffer_change 
             << " " << _max_hops_per_trip << " " << _last_hop_per_trip << " " << _total_hops << '\n';
+        if(_flow_size <= 2000 && timeAsMs(eventlist().now() - get_start_time()) >= 0.8) {
+            cout << "BAD FCT\n";
+        }
         //if (_found_reorder == 0) assert(_found_retransmit == 0);
         /*
         if (get_flow_src() == 355 && get_flow_dst() == 429) {
