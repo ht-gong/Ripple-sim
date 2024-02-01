@@ -24,6 +24,7 @@ class ECNQueue : public Queue {
     mem_b slice_queuesize(int slice);
     simtime_picosec get_queueing_delay(int slice);
     void preemptRLB();
+    void handleStuck() { return; }
     bool isTxing() {
         int slice = _top->time_to_logic_slice(eventlist().now());
         return (_sending_pkt != NULL && _sending_pkt->type() != RLB) ||

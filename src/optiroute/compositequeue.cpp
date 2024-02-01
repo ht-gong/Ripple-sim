@@ -50,7 +50,7 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
 void CompositeQueue::rerouteFromCQ(Packet* pkt) {
 	assert(pkt->get_crtslice() >= 0);
 	//if(pkt->get_src() == 72 && pkt->get_dst() == 241)
-	cout << "reroute from slice " << pkt->get_crtslice() << " tor,port " << _tor << "," << _port;
+	//cout << "reroute from slice " << pkt->get_crtslice() << " tor,port " << _tor << "," << _port;
 	simtime_picosec t = eventlist().now();
         simtime_picosec nxt_slice_time = _top->get_logic_slice_start_time(_top->time_to_absolute_logic_slice(t) + 1);
         pkt->set_src_ToR(pkt->get_crtToR());
@@ -59,10 +59,31 @@ void CompositeQueue::rerouteFromCQ(Packet* pkt) {
         pkt->set_hop_index(0);
 	_routing->routing_from_ToR(pkt, nxt_slice_time, eventlist().now());
 	//if(pkt->get_src() == 72 && pkt->get_dst() == 241)
-	cout << " to slice " << pkt->get_crtslice() << " tor,port " << _tor << "," << _port << endl;
+	//cout << " to slice " << pkt->get_crtslice() << " tor,port " << _tor << "," << _port << endl;
 	Queue* nextqueue = _top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
 	assert(nextqueue);
 	nextqueue->receivePacket(*pkt);
+}
+
+void 
+CompositeQueue::handleStuck() {
+    Packet *pkt;
+    list<Packet*> tmp = _enqueued_high[_crt_tx_slice];
+    _enqueued_high[_crt_tx_slice].clear();
+    _queuesize_high[_crt_tx_slice] = 0;
+    while(!tmp.empty()) {
+        pkt = tmp.back(); 
+        tmp.pop_back();
+        rerouteFromCQ(pkt);
+    } 
+    tmp = _enqueued_low[_crt_tx_slice];
+    _enqueued_low[_crt_tx_slice].clear();
+    _queuesize_low[_crt_tx_slice] = 0;
+    while(!tmp.empty()) {
+        pkt = tmp.back(); 
+        tmp.pop_back();
+        rerouteFromCQ(pkt);
+    } 
 }
 
 bool CompositeQueue::canBeginService(Packet* to_be_sent) {

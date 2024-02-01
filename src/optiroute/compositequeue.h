@@ -44,8 +44,9 @@ class CompositeQueue : public Queue {
     virtual mem_b queuesize();
     mem_b slice_queuesize(int slice);
     simtime_picosec get_queueing_delay(int slice);
-    bool isTxing() {return (_serv != QUEUE_INVALID || _serv != QUEUE_RLB);}
+    bool isTxing() {return (_serv ==  QUEUE_HIGH || _serv == QUEUE_LOW) ;}
     void preemptRLB();
+    void handleStuck();
     void rerouteFromCQ(Packet* pkt);
     virtual void setName(const string& name) {
 	Logged::setName(name); 
