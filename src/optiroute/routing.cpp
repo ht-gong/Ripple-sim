@@ -475,7 +475,7 @@ void QueueAlarm::doNextEvent(){
     #ifdef DEBUG
     cout << "queue slice " << crt << " " << _queue->_tor << "SETTING TO " << crt << endl;
     #endif
-    if(!_queue->isTxing() && _queue->slice_queuesize(crt) > 0){
+    if(!_queue->isTxing() && _queue->slice_queuesize(crt) > 0) {
         #ifdef DEBUG
         cout << "queue slice " << crt << " " << _queue->_tor << " alarm beginService quesize: " <<_queue->queuesize() << endl;
         #endif

@@ -22,8 +22,13 @@ class ECNQueue : public Queue {
     void completeService();
     mem_b queuesize(); 
     mem_b slice_queuesize(int slice);
+    simtime_picosec get_queueing_delay(int slice);
     void preemptRLB();
-    bool isTxing() {return (_sending_pkt != NULL && _sending_pkt->type() != RLB);}
+    bool isTxing() {
+        int slice = _top->time_to_logic_slice(eventlist().now());
+        return (_sending_pkt != NULL && _sending_pkt->type() != RLB) ||
+            (_sending_pkt != NULL && _queuesize[slice] <= 0);
+    }
     void set_early_fb(bool enabled) { _early_fb_enabled = enabled;}
 
  private:
