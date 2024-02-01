@@ -40,6 +40,8 @@ double Routing::get_pkt_priority(TcpSrc* tcp_src) {
 	    return (double) tcp_src->get_flowsize()-tcp_src->get_remaining_flowsize();
 	} else if (_options & ROUTING_OPT_SRTF) {
             return (double) tcp_src->get_remaining_flowsize();
+	} else if (_options & ROUTING_OPT_ALPHA0) {
+            return 0.0;
 	} else {
 	    return (double) tcp_src->get_flowsize();
 	}

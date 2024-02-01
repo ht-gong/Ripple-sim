@@ -11,6 +11,7 @@
 #define ROUTING_NO_OPT 0x0
 #define ROUTING_OPT_SRTF 0x1
 #define ROUTING_OPT_AGING 0x2
+#define ROUTING_OPT_ALPHA0 0x4
 
 class Queue;
 // A util class

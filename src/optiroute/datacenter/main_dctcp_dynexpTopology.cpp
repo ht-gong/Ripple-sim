@@ -92,6 +92,8 @@ int main(int argc, char **argv) {
 	       earlyfb = true;
         } else if (!strcmp(argv[i],"-aging")){
 	       routing_opt = routing_opt | ROUTING_OPT_AGING;
+        } else if (!strcmp(argv[i],"-alphazero")){
+	       routing_opt = routing_opt | ROUTING_OPT_ALPHA0;
         } else if (!strcmp(argv[i],"-dctcpmarking")){
 	       marking_threshold = atoi(argv[i+1]);
 	       i++;

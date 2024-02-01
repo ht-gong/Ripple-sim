@@ -122,6 +122,8 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i],"-aging")){
 	       routing_opt = routing_opt | ROUTING_OPT_AGING;
+        } else if (!strcmp(argv[i],"-alphazero")){
+	       routing_opt = routing_opt | ROUTING_OPT_ALPHA0;
         } else if (!strcmp(argv[i],"-srtf")){
 	       routing_opt = routing_opt | ROUTING_OPT_SRTF;
         } else if (!strcmp(argv[i],"-slicedur")){
