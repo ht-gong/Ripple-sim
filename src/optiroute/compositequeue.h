@@ -46,6 +46,7 @@ class CompositeQueue : public Queue {
     simtime_picosec get_queueing_delay(int slice);
     bool isTxing() {return (_serv != QUEUE_INVALID || _serv != QUEUE_RLB);}
     void preemptRLB();
+    void rerouteFromCQ(Packet* pkt);
     virtual void setName(const string& name) {
 	Logged::setName(name); 
 	_nodename += name;

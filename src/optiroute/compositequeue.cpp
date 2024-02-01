@@ -47,6 +47,24 @@ CompositeQueue::CompositeQueue(linkspeed_bps bitrate, mem_b maxsize, EventList& 
 
 }
 
+void CompositeQueue::rerouteFromCQ(Packet* pkt) {
+	assert(pkt->get_crtslice() >= 0);
+	//if(pkt->get_src() == 72 && pkt->get_dst() == 241)
+	cout << "reroute from slice " << pkt->get_crtslice() << " tor,port " << _tor << "," << _port;
+	simtime_picosec t = eventlist().now();
+        simtime_picosec nxt_slice_time = _top->get_logic_slice_start_time(_top->time_to_absolute_logic_slice(t) + 1);
+        pkt->set_src_ToR(pkt->get_crtToR());
+        pkt->set_path_index(_routing->get_path_index(pkt, nxt_slice_time));
+        pkt->set_slice_sent(_top->time_to_logic_slice(nxt_slice_time));
+        pkt->set_hop_index(0);
+	_routing->routing_from_ToR(pkt, nxt_slice_time, eventlist().now());
+	//if(pkt->get_src() == 72 && pkt->get_dst() == 241)
+	cout << " to slice " << pkt->get_crtslice() << " tor,port " << _tor << "," << _port << endl;
+	Queue* nextqueue = _top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
+	assert(nextqueue);
+	nextqueue->receivePacket(*pkt);
+}
+
 bool CompositeQueue::canBeginService(Packet* to_be_sent) {
   simtime_picosec finish_push = eventlist().now() + drainTime(to_be_sent) /*229760*/;
 
@@ -60,6 +78,7 @@ bool CompositeQueue::canBeginService(Packet* to_be_sent) {
 #ifdef DEBUG
     cout<<"Uplink port attempting to serve pkt across configurations\n";
 #endif
+    //if(to_be_sent->get_src() == 72 && to_be_sent->get_dst() == 241)
     cout<<"Uplink port attempting to serve pkt across configurations\n";
     return false;
   } else {
@@ -135,6 +154,11 @@ void CompositeQueue::beginService(){
         _crt = _crt + 64; // !!! hardcoded header size for now...
         _is_servicing = true;
         _last_service_begin = eventlist().now();
+      } else {
+        Packet *to_reroute = _enqueued_high[_crt_tx_slice].back();
+	_enqueued_high[_crt_tx_slice].pop_back();
+	_queuesize_high[_crt_tx_slice] -= to_reroute->size();
+	rerouteFromCQ(to_reroute);
       }
 
 			// debug:
@@ -152,6 +176,11 @@ void CompositeQueue::beginService(){
         _crt = _crt + sz;
         _is_servicing = true;
         _last_service_begin = eventlist().now();
+      } else {
+        Packet *to_reroute = _enqueued_low[_crt_tx_slice].back();
+	_enqueued_low[_crt_tx_slice].pop_back();
+	_queuesize_low[_crt_tx_slice] -= to_reroute->size();
+	rerouteFromCQ(to_reroute);
       }
 			// debug:
 			//if (_tor == 0 && _port == 6) {
@@ -171,7 +200,12 @@ void CompositeQueue::beginService(){
       eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_high[_crt_tx_slice].back()));
       _is_servicing = true;
       _last_service_begin = eventlist().now();
-    }
+      } else {
+        Packet *to_reroute = _enqueued_high[_crt_tx_slice].back();
+	_enqueued_high[_crt_tx_slice].pop_back();
+	_queuesize_high[_crt_tx_slice] -= to_reroute->size();
+	rerouteFromCQ(to_reroute);
+      }
 
 		// debug:
 		//if (_tor == 0 && _port == 6)
@@ -186,7 +220,12 @@ void CompositeQueue::beginService(){
       eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_low[_crt_tx_slice].back()));
       _is_servicing = true;
       _last_service_begin = eventlist().now();
-    }
+      } else {
+        Packet *to_reroute = _enqueued_low[_crt_tx_slice].back();
+	_enqueued_low[_crt_tx_slice].pop_back();
+	_queuesize_low[_crt_tx_slice] -= to_reroute->size();
+	rerouteFromCQ(to_reroute);
+      }
 
 		// debug:
 		//if (_tor == 0 && _port == 6)

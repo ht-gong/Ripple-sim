@@ -34,10 +34,10 @@ class Routing {
    RoutingAlgorithm get_routing_algorithm() {return _routing_algorithm;}
    void set_max_flow_size(int64_t max_flow) {_max_flow_size = max_flow;}
    void set_options(uint64_t options) { _options = options;}
+   int get_path_index(Packet* pkt, simtime_picosec t);
 
  private:
    RoutingAlgorithm _routing_algorithm;
-   int get_path_index(Packet* pkt, simtime_picosec t);
    int64_t _cutoff = -1;
    int64_t _max_flow_size = 0;
    uint64_t _options = 0;

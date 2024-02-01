@@ -365,6 +365,9 @@ void NdpSrc::processAck(const NdpAck& ack) {
             " " << timeAsMs(eventlist().now() - get_start_time()) << " " << fixed 
             << timeAsMs(get_start_time()) << " " << _found_reorder << " " << 0 << " " << 0 
             << " " << _max_hops_per_trip << " " << _last_hop_per_trip << " " << _total_hops << '\n';
+	if(timeAsMs(eventlist().now() - get_start_time()) >= 0.9 && get_flowsize() <= 50000) {
+	    cout << "BAD FCT\n";
+	}
         //if (get_flow_src() == 403 && get_flow_dst() == 19) exit(0);
     }
 
