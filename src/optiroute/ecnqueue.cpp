@@ -132,7 +132,6 @@ void ECNQueue::preemptRLB() {
     assert(_sending_pkt != NULL);
     assert(_sending_pkt->type() == RLB);
     _enqueued_rlb.push_front(_sending_pkt);
-    assert(_queuesize_rlb >= _sending_pkt->size());
     eventlist().cancelPendingSource(*this);
     //_rlb_preempted = true;
 }
