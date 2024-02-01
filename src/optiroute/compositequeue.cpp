@@ -193,8 +193,12 @@ void CompositeQueue::beginService(){
 		//	cout << "composite_queue sending a full packet: " << (_enqueued_low[_crt_tx_slice].back())->size() << " bytes (no headers in queue)" << endl;
 
 	} else if (!_enqueued_rlb.empty()) {
+		//this if branch is just a patch that does not fix the real problem
+		//remove this at your own risk
+		if(_serv != QUEUE_RLB) {
 		_serv = QUEUE_RLB;
 		eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_rlb.back()));
+		}
 	} else {
     cout << "assert0 " << _tor << " " << _port << " " << queuesize() << " " << slice_queuesize(_crt_tx_slice) << endl;
 		assert(0);
@@ -209,7 +213,7 @@ void CompositeQueue::preemptRLB() {
 }
 
 void CompositeQueue::completeService() {
-
+        assert(_serv != QUEUE_INVALID);
 	Packet* pkt;
 
 	uint64_t new_NDP_bytes_sent;
