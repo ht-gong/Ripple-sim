@@ -811,11 +811,12 @@ simtime_picosec HopDelayForward::routing(Packet* pkt, simtime_picosec t) {
 
     if (sent_slice == slice) {
         // YX: TODO: calculate delay considering the queue occupancy, same below
-        int finish_slice = top->time_to_slice(t + cq->drainTime(pkt) + timeFromNs(delay_ToR2ToR)); // plus the link delay
+        int finish_slice = top->time_to_slice(t + cq->drainTime(pkt) + timeFromNs(delay_ToR2ToR) + cq->slice_queuesize_low(sent_slice)); // plus the link delay
 
 		if (finish_slice == slice) {
 			return (t + cq->drainTime(pkt));
 		}
+    cout << "Reroute\n";
 		// May wrap around the cycle
 		int slice_delta = (finish_slice - slice + top->get_nsuperslice() * 2)
 			% (top->get_nsuperslice() * 2);
