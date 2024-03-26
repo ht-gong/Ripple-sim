@@ -186,6 +186,7 @@ void RlbModule::receivePacket(Packet& pkt, int flag)
 
 Packet* RlbModule::NICpull()
 {
+    // cout << "DEBUG1\treceivePacket" << endl;
     // NIC is requesting to pull a packet from the commit queues
 
     // debug:
@@ -388,8 +389,22 @@ void RlbModule::commit_push(int num_to_push)
     check_all_empty();
 }
 
-void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders, vector<int> pkts_to_send, vector<vector<int>> q_inds, vector<int> dst_labels)
+void RlbModule::enqueue_commit(int slice, int src_host, int current_commit_queue, int Nsenders, vector<int> &pkts_to_send, vector<vector<int>> q_inds, vector<int> dst_labels)
 {
+    assert(Nsenders == pkts_to_send.size());
+    assert(Nsenders == dst_labels.size());
+
+    // int size = 0;
+    // for (auto itr = pkts_to_send.begin(); itr != pkts_to_send.end(); itr++) {
+    //     size += *itr;
+    // }
+    // cout << "DEBUG1\tSENDING " << size << ": ";
+    // for (int i = 0; i < Nsenders; i++) {
+    //     if (pkts_to_send[i] > 0) {
+    //         cout << "(" << src_host << ", " << dst_labels[i] << ", " << pkts_to_send[i] << ") ";
+    //     }
+    // }
+    // cout << endl;
 
     // convert #packets_to_be_sent into sending_rates:
 
@@ -474,6 +489,15 @@ void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders
                     Packet* pkt;
                     pkt = _rlb_queues[q_inds[0][fst_sndr]][q_inds[1][fst_sndr]].front();
                     pkt->set_dst(dst_labels[fst_sndr]);
+                    pkts_to_send[fst_sndr]--;
+
+                    // int src = pkt->get_src(), real_src = pkt->get_real_src();
+                    // int dst = pkt->get_dst(), real_dst = pkt->get_real_dst();
+                    // cout << "DEBUG1\t"
+                    //      << "PACKET:\t(" << real_src << " -> " << real_dst << ")\t"
+                    //      << "SRC:\t" << src << " (" << src / 6 << ", " << src % 6 << ")" << "\t"
+                    //      << "DST:\t" << dst << " (" << dst / 6 << ", " << dst % 6 << ")"
+                    //      << endl;
 
                     // debug:
                     //if (pkt->get_time_sent() == 342944606400 && pkt->get_real_src() == 177 && pkt->get_real_dst() == 423) {
@@ -516,6 +540,27 @@ void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders
             }
         }
     }
+
+    // size = 0;
+    // for (auto itr = pkts_to_send.begin(); itr != pkts_to_send.end(); itr++) {
+    //     assert(*itr >= 0);
+    //     size += *itr;
+    // }
+    // cout << "DEBUG1\tRESIDUAL SIZE " << size << endl;
+    // cout << "DEBUG1\tcommit_queues:" << endl;
+    // for (int i = 0; i < _commit_queues.size(); i++) {
+    //     cout << "DEBUG1\t";
+    //     cout << _commit_queues[i].size() << ": ";
+    //     for (int j = 0; j < _commit_queues[i].size(); j++) {
+    //         Packet* pkt = _commit_queues[i][j];
+    //         if (!pkt->is_dummy()) {
+    //             int dst = pkt->get_dst() / 6;
+    //             int real_dst = pkt->get_real_dst() / 6;
+    //             cout << dst << " ";
+    //         }
+    //     }
+    //     cout << endl;
+    // }
 
     // debug:
     //cout << endl;
@@ -646,6 +691,17 @@ void RlbMaster::doNextEvent() {
 
 void RlbMaster::newMatching() {
 
+    // if (MATCHING_COUNT >= 1) {
+    //     exit(0);
+    // }
+    // MATCHING_COUNT++;
+    // cout << "DEBUG1\t" << endl;
+    // cout << "DEBUG1\t" << "MATCHING " << MATCHING_COUNT << endl;
+    // cout << "DEBUG1\t" << endl;
+    // cout << "DEBUG2\t" << endl;
+    // cout << "DEBUG2\t" << "MATCHING " << MATCHING_COUNT << endl;
+    // cout << "DEBUG2\t" << endl;
+
     // get the current slice:
     // first, get the current "superslice"
     int64_t superslice = (eventlist().now() / _top->get_slicetime(3)) %
@@ -662,6 +718,9 @@ void RlbMaster::newMatching() {
     else
         slice = 2 + superslice*3;
 
+    if (slice == 0) {
+        cout << "DEBUG1\tSLICE TIME: " << timeAsMs(eventlist().now()) << endl;
+    }
 
     // debug:
     //cout << "-*-*- New matching at slice = " << slice << ", time = " << timeAsUs(eventlist().now()) << " us -*-*-" << endl;
@@ -829,12 +888,15 @@ void RlbMaster::newMatching() {
                 // only start if there's something to send...
                 if (_Nsenders[src_hosts[j]] > 0) {
                     mod = _top->get_rlb_module(src_hosts[j]);
-                    mod->enqueue_commit(slice, _current_commit_queue, _Nsenders[src_hosts[j]], _pkts_to_send[src_hosts[j]], _q_inds[src_hosts[j]], _dst_labels[src_hosts[j]]);
+                    mod->enqueue_commit(slice, src_hosts[j], _current_commit_queue, _Nsenders[src_hosts[j]], _pkts_to_send[src_hosts[j]], _q_inds[src_hosts[j]], _dst_labels[src_hosts[j]]);
                 }
             }
         }
 
     }
+
+    // cout << "DEBUG1\t" << "=====================" << endl;
+    // cout << "DEBUG2\t" << "=====================" << endl;
 
 
     // --------- set up next new matching --------- //
@@ -1030,6 +1092,26 @@ void RlbMaster::phase2(vector<int> src_hosts, vector<int> dst_hosts)
         for (int j = 0; j < src_hosts.size(); j++)
             _accepts[src_hosts[j]][dst_hosts[i]] = all_proposals[j];
     }
+
+    // if (src_hosts[0] == 12) {
+    //     cout << "DEBUG2\t" << "\t";
+    //     for (int i = 0; i < dst_hosts.size(); i++) {
+    //         cout << dst_hosts[i] << "\t";
+    //     }
+    //     cout << endl;
+    //     for (int i = 0; i < src_hosts.size(); i++) {
+    //         cout << "DEBUG2\t" << src_hosts[i] << "\t";
+    //         for (int j = 0; j < dst_hosts.size(); j++) {
+    //             int sum = 0;
+    //             for (auto itr = _accepts[src_hosts[i]][dst_hosts[j]].begin(); itr != _accepts[src_hosts[i]][dst_hosts[j]].end(); itr++) {
+    //                 sum += *itr;
+    //             }
+    //             cout << sum << "\t";
+    //         }
+    //         cout << endl;
+    //     }
+    //     cout << "DEBUG2\t" << endl;
+    // }
 }
 
 
@@ -1235,6 +1317,13 @@ vector<vector<int>> RlbMaster::fairshare2d(vector<vector<int>> input, vector<int
 
 
 vector<vector<int>> RlbMaster::fairshare2d_2(vector<vector<int>> input, int cap0, vector<int> cap1) {
+
+    // cout << "DEBUG2\tcap0: " << cap0 << endl;
+    // cout << "DEBUG2\tcap1 (size " << cap1.size() << "): ";
+    // for (int i = 0; i < cap1.size(); i++) {
+    //     cout << cap1[i] << " ";
+    // }
+    // cout << endl;
 
     // if we take `input` as an N x M matrix (N rows, M columns)
     // then cap0 is the capacity shared across all elements

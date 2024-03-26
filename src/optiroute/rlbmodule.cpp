@@ -4,6 +4,7 @@
 
 // ????????
 
+#include <algorithm>
 #include <sstream>
 #include <math.h>
 #include "queue.h"
@@ -28,7 +29,7 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
     _mss = 1436; // packet payload length (bytes)
     _hdr = 64; // header length (bytes)
     _link_rate = 100000000000 / 8;
-    _slot_time = timeAsSec((_Ncommit_queues - 1) * _top->get_slice_uptime()); // seconds (was 0.000281;)
+    _slot_time = timeAsSec(_top->get_slice_uptime()); // seconds (was 0.000281;)
     // ^^^ note: we try to send RLB traffic right up to the reconfiguration point (one pkt serialization & propagation before reconfig.)
     // in general, we have two options:
     // 1. design everything conservatively so we never have to retransmit an RLB packet
@@ -52,6 +53,7 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
 
     _max_send_rate = (_F / _Ncommit_queues) * _good_rate;
     _max_pkts = _max_send_rate * _slot_time;
+    _max_pkts = _max_pkts / 6 * 6;
 
     // NOTE: we're working in packets / second
     //cout << "Initialization:" << endl;
@@ -305,6 +307,9 @@ Packet* RlbModule::NICpull()
         _skip_empty_commits = 0;
     }
 
+    // if (!pkt->is_dummy()) {
+    //     cout << "DEBUG1\treceivePacket dst " << pkt->get_dst() / 6 << " real_dst " << pkt->get_real_dst() / 6 << endl;
+    // }
     return pkt;
 
 }
@@ -389,19 +394,21 @@ void RlbModule::commit_push(int num_to_push)
     check_all_empty();
 }
 
-void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders, vector<int> pkts_to_send, vector<vector<int>> q_inds, vector<int> dst_labels)
+void RlbModule::enqueue_commit(int slice, int src_host, int current_commit_queue, int Nsenders, vector<int> &pkts_to_send, vector<vector<int>> q_inds, vector<int> dst_labels)
 {
+    int target = _top->get_nextToR(slice, src_host / _Ncommit_queues, current_commit_queue + _Ncommit_queues);
 
-    // convert #packets_to_be_sent into sending_rates:
-
-    vector<double> sending_rates;
-    for (int i = 0; i < Nsenders; i++) {
-        sending_rates.push_back(pkts_to_send[i] / _slot_time);
-
-        // debug:
-        //if (_node == 0)
-        //    cout << "_node " << _node << ", sender " << i << ", " << pkts_to_send[i] << " packets to send in " << _slot_time << " seconds" << endl;
-    }
+    // int size = 0;
+    // for (auto itr = pkts_to_send.begin(); itr != pkts_to_send.end(); itr++) {
+    //     size += *itr;
+    // }
+    // cout << "DEBUG1\tSENDING " << size << ": ";
+    // for (int i = 0; i < Nsenders; i++) {
+    //     if (pkts_to_send[i] > 0) {
+    //         cout << "(" << src_host << ", " << dst_labels[i] << ", " << pkts_to_send[i] << ") ";
+    //     }
+    // }
+    // cout << endl;
 
     // debug:
     //cout << "RLBmodule[node" << _node << "] - enqueuing commit queue[" << current_commit_queue << "] at " << timeAsUs(eventlist().now()) << " us." << endl;
@@ -429,20 +436,10 @@ void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders
     vector<std::deque<double>> send_times; // vector of queues containing send times (seconds)
     send_times.resize(Nsenders);
     for (int i = 0; i < Nsenders; i++) {
-        double inter_time = 1 / sending_rates[i];
-        int cnt = 0;
-        double time = cnt * inter_time; // seconds
-        while (time < _slot_time) {
-            send_times[i].push_back(time);
-            cnt++;
-            time = cnt * inter_time;
+        for (int j = 0; j < pkts_to_send[i]; j++) {
+            send_times[i].push_back(_slot_time * j / pkts_to_send[i]);
         }
     }
-    // make sure we have at least one time past the end time:
-    // this ensures we never pop the last send time, which would cause problems during enqueue
-    for (int i = 0; i < Nsenders; i++)
-        send_times[i].push_back(2 * _slot_time);
-
 
     // debug:
     //cout << "The queue is:" << endl;
@@ -451,12 +448,15 @@ void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders
     for (int i = 0; i < _max_pkts; i++){
         bool found_queue = false;
         while (!found_queue) {
+            // TODO: check if end_slot_time carries over from Opera
             double end_slot_time = (i + 1) * (_Ncommit_queues * _pkt_ser_time); // send_time must be less than this to send in this slot
             int fst_sndr = -1; // find the queue that sends first
             for (int j = 0; j < Nsenders; j++) {
-                if (send_times[j].front() < end_slot_time) {
-                    fst_sndr = j;
-                    end_slot_time = send_times[j].front(); // new time to beat
+                if (send_times[j].size() > 0 && send_times[j].front() < end_slot_time) {
+                    if (dst_labels[j] / _Ncommit_queues == target) {  // only take packets of the corresponding destination
+                        fst_sndr = j;
+                        end_slot_time = send_times[j].front(); // new time to beat
+                    }
                 }
             }
             if (fst_sndr != -1) { // there was a queue that can send
@@ -475,7 +475,15 @@ void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders
                     Packet* pkt;
                     pkt = _rlb_queues[q_inds[0][fst_sndr]][q_inds[1][fst_sndr]].front();
                     pkt->set_dst(dst_labels[fst_sndr]);
+                    pkts_to_send[fst_sndr]--;
 
+                    // int src = pkt->get_src(), real_src = pkt->get_real_src();
+                    // int dst = pkt->get_dst(), real_dst = pkt->get_real_dst();
+                    // cout << "DEBUG1\t"
+                    //      << "PACKET:\t(" << real_src << " -> " << real_dst << ")\t"
+                    //      << "SRC:\t" << src << " (" << src / 6 << ", " << src % 6 << ")" << "\t"
+                    //      << "DST:\t" << dst << " (" << dst / 6 << ", " << dst % 6 << ")"
+                    //      << endl;
                     // debug:
                     //if (pkt->get_time_sent() == 342944606400 && pkt->get_real_src() == 177 && pkt->get_real_dst() == 423) {
                     //    cout << "debug @ rlbmodule commit:" << endl;
@@ -517,6 +525,39 @@ void RlbModule::enqueue_commit(int slice, int current_commit_queue, int Nsenders
             }
         }
     }
+
+    // size = 0;
+    // for (auto itr = pkts_to_send.begin(); itr != pkts_to_send.end(); itr++) {
+    //     assert(*itr >= 0);
+    //     size += *itr;
+    // }
+    // cout << "DEBUG1\tRESIDUAL SIZE " << size << endl;
+    // cout << "DEBUG1\tcommit_queues:" << endl;
+    // map<int, int> freqs;
+    // for (int i = 0; i < _commit_queues.size(); i++) {
+    //     cout << "DEBUG1\t";
+    //     cout << _commit_queues[i].size() << ": ";
+    //     for (int j = 0; j < _commit_queues[i].size(); j++) {
+    //         Packet* pkt = _commit_queues[i][j];
+    //         if (!pkt->is_dummy()) {
+    //             int dst = pkt->get_dst() / 6;
+    //             int real_dst = pkt->get_real_dst() / 6;
+    //             cout << dst << " ";
+    //             if (freqs.find(dst) == freqs.end()) {
+    //                 freqs[dst] = 0;
+    //             }
+    //             freqs[dst] ++;
+    //         }
+    //     }
+    //     cout << endl;
+    // }
+    // cout << "DEBUG1\t";
+    // cout << "freqs: ";
+    // for (auto itr = freqs.begin(); itr != freqs.end(); itr++) {
+    //     cout << "(" << itr->first << ", " << itr->second << ") ";
+    // }
+    // cout << endl;
+    // cout << "DEBUG1\t" << endl;
 
     // debug:
     //cout << endl;
@@ -647,9 +688,24 @@ void RlbMaster::doNextEvent() {
 
 void RlbMaster::newMatching() {
 
+    // if (MATCHING_COUNT >= 2) {
+    //     exit(0);
+    // }
+    // MATCHING_COUNT++;
+    // cout << "DEBUG1\t" << endl;
+    // cout << "DEBUG1\t" << "MATCHING " << MATCHING_COUNT << endl;
+    // cout << "DEBUG1\t" << endl;
+    // cout << "DEBUG2\t" << endl;
+    // cout << "DEBUG2\t" << "MATCHING " << MATCHING_COUNT << endl;
+    // cout << "DEBUG2\t" << endl;
+
     // get the current slice:
     // first, get the current "superslice"
     int slice = _top->time_to_slice(eventlist().now());
+
+    if (slice == 0) {
+        cout << "DEBUG1\tSLICE TIME: " << timeAsMs(eventlist().now()) << endl;
+    }
 
 
     // debug:
@@ -705,31 +761,31 @@ void RlbMaster::newMatching() {
     // ---------- phase 1 ---------- //
 
     for (int crtToR = 0; crtToR < _N; crtToR++) {
-    vector<int> dst_hosts;
-    vector<int> src_hosts;
-    // get the list of src hosts in this rack
-    int basehost = crtToR * _hpr;
-    for (int j = 0; j < _hpr; j++) {
-        src_hosts.push_back(basehost + j);
-    }
-
-    for (_current_commit_queue = 0; _current_commit_queue < _hpr; _current_commit_queue++) {
-
-        // get the list of new dst hosts (that every host in this rack is now connected to)
-        int dstToR = _top->get_nextToR(slice, crtToR, _current_commit_queue + _hpr);
-        
-        if (crtToR != dstToR) { // necessary because of the way we define the topology
-
-            int basehost = dstToR * _hpr;
-            for (int j = 0; j < _hpr; j++) {
-                dst_hosts.push_back(basehost + j);
-            }
-            // get:
-            // 1. the 2nd hop "rates"
-            // 2. the 1 hop "rates"
-            // 3. the 1st hop proposed "rates"
-            // all "rates" are in units of packets
+        vector<int> dst_hosts;
+        vector<int> src_hosts;
+        // get the list of src hosts in this rack
+        int basehost = crtToR * _hpr;
+        for (int j = 0; j < _hpr; j++) {
+            src_hosts.push_back(basehost + j);
         }
+
+        for (_current_commit_queue = 0; _current_commit_queue < _hpr; _current_commit_queue++) {
+
+            // get the list of new dst hosts (that every host in this rack is now connected to)
+            int dstToR = _top->get_nextToR(slice, crtToR, _current_commit_queue + _hpr);
+            
+            if (crtToR != dstToR) { // necessary because of the way we define the topology
+
+                int basehost = dstToR * _hpr;
+                for (int j = 0; j < _hpr; j++) {
+                    dst_hosts.push_back(basehost + j);
+                }
+                // get:
+                // 1. the 2nd hop "rates"
+                // 2. the 1 hop "rates"
+                // 3. the 1st hop proposed "rates"
+                // all "rates" are in units of packets
+            }
         }
         phase1(src_hosts, dst_hosts);
     }
@@ -738,30 +794,30 @@ void RlbMaster::newMatching() {
     // ---------- phase 2 ---------- //
 
     for (int crtToR = 0; crtToR < _N; crtToR++) {
-    vector<int> dst_hosts;
-    vector<int> src_hosts;
-    // get the list of src hosts in this rack
-    int basehost = crtToR * _hpr;
-    for (int j = 0; j < _hpr; j++) {
-        src_hosts.push_back(basehost + j);
-    }
-
-    for (int _current_commit_queue = 0; _current_commit_queue < _hpr; _current_commit_queue++) {
-
-        // get the list of new dst hosts (that every host in this rack is now connected to)
-        int dstToR = _top->get_nextToR(slice, crtToR, _current_commit_queue + _hpr);
-        
-        if (crtToR != dstToR) {
-
-            int basehost = dstToR * _hpr;
-            for (int j = 0; j < _hpr; j++) {
-                dst_hosts.push_back(basehost + j);
-            }
-
-            // given the proposals, generate the accepts
-
+        vector<int> dst_hosts;
+        vector<int> src_hosts;
+        // get the list of src hosts in this rack
+        int basehost = crtToR * _hpr;
+        for (int j = 0; j < _hpr; j++) {
+            src_hosts.push_back(basehost + j);
         }
-    }
+
+        for (int _current_commit_queue = 0; _current_commit_queue < _hpr; _current_commit_queue++) {
+
+            // get the list of new dst hosts (that every host in this rack is now connected to)
+            int dstToR = _top->get_nextToR(slice, crtToR, _current_commit_queue + _hpr);
+
+            if (crtToR != dstToR) {
+
+                int basehost = dstToR * _hpr;
+                for (int j = 0; j < _hpr; j++) {
+                    dst_hosts.push_back(basehost + j);
+                }
+
+                // given the proposals, generate the accepts
+
+            }
+        }
         phase2(src_hosts, dst_hosts); // the dst_hosts compute how much to accept from the src_hosts
     }
 
@@ -823,13 +879,15 @@ void RlbMaster::newMatching() {
                 if (_Nsenders[src_hosts[j]] > 0) {
                     //cout << "SENDING\n";
                     mod = _top->get_rlb_module(src_hosts[j]);
-                    mod->enqueue_commit(slice, _current_commit_queue, _Nsenders[src_hosts[j]], _pkts_to_send[src_hosts[j]], _q_inds[src_hosts[j]], _dst_labels[src_hosts[j]]);
+                    mod->enqueue_commit(slice, src_hosts[j], _current_commit_queue, _Nsenders[src_hosts[j]], _pkts_to_send[src_hosts[j]], _q_inds[src_hosts[j]], _dst_labels[src_hosts[j]]);
                 }
             }
         }
       }
     }
 
+    // cout << "DEBUG1\t" << "=====================" << endl;
+    // cout << "DEBUG2\t" << "=====================" << endl;
 
     // --------- set up next new matching --------- //
 
@@ -1025,6 +1083,26 @@ void RlbMaster::phase2(vector<int> src_hosts, vector<int> dst_hosts)
         for (int j = 0; j < src_hosts.size(); j++)
             _accepts[src_hosts[j]][dst_hosts[i]] = all_proposals[j];
     }
+
+    // if (src_hosts[0] == 12) {
+    //     cout << "DEBUG2\t" << "\t";
+    //     for (int i = 0; i < dst_hosts.size(); i++) {
+    //         cout << dst_hosts[i] << "\t";
+    //     }
+    //     cout << endl;
+    //     for (int i = 0; i < src_hosts.size(); i++) {
+    //         cout << "DEBUG2\t" << src_hosts[i] << "\t";
+    //         for (int j = 0; j < dst_hosts.size(); j++) {
+    //             int sum = 0;
+    //             for (auto itr = _accepts[src_hosts[i]][dst_hosts[j]].begin(); itr != _accepts[src_hosts[i]][dst_hosts[j]].end(); itr++) {
+    //                 sum += *itr;
+    //             }
+    //             cout << sum << "\t";
+    //         }
+    //         cout << endl;
+    //     }
+    //     cout << "DEBUG2\t" << endl;
+    // }
 }
 
 
@@ -1235,6 +1313,13 @@ vector<vector<int>> RlbMaster::fairshare2d_2(vector<vector<int>> input, int cap0
     // then cap0 is the capacity shared across all elements
     // and cap1[i] is the capacity of the sum of the i-th column
 
+    // cout << "DEBUG2\tcap0: " << cap0 << endl;
+    // cout << "DEBUG2\tcap1 (size " << cap1.size() << "): ";
+    // for (int i = 0; i < cap1.size(); i++) {
+    //     cout << cap1[i] << " ";
+    // }
+    // cout << endl;
+
     // build output
     vector<vector<int>> sent;
     sent.resize(input.size());
@@ -1286,7 +1371,7 @@ vector<vector<int>> RlbMaster::fairshare2d_2(vector<vector<int>> input, int cap0
                 sent_temp[i][j] = temp_all[cnt];
                 cnt++;
             }
-    
+
 
         // sweep columns (i): (rows j)
         for (int i = 0; i < input[0].size(); i++) {
