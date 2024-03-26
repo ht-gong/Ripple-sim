@@ -97,6 +97,8 @@ void CompositeQueue::beginService(){
 
 void CompositeQueue::completeService() {
 
+	// cout << "completeService " << _tor << " " << _port << " slice " << _top->time_to_slice(eventlist().now()) << " t " << eventlist().now() << endl;
+
 	Packet* pkt;
 
 	uint64_t new_NDP_bytes_sent;
@@ -147,6 +149,7 @@ void CompositeQueue::completeService() {
 					pktfound = true;
             		break;
             	} else {
+								cout << "drop tor " << _tor << " port " << _port << " slice " << _top->time_to_slice(eventlist().now()) << " time " << eventlist().now() << endl;
             		// this is an old packet, "drop" it and move on to the next one
 
             		RlbPacket *p = (RlbPacket*)(pkt);
@@ -216,6 +219,8 @@ void CompositeQueue::doNextEvent() {
 }
 
 void CompositeQueue::receivePacket(Packet& pkt) {
+
+	// cout << "receivePacket " << _tor << " " << _port << " slice " << _top->time_to_slice(eventlist().now()) << " t " << eventlist().now() << endl;
 
 	switch (pkt.type()) {
     case RLB:

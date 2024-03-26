@@ -274,6 +274,9 @@ void CompositeQueue::preemptRLB() {
 
 void CompositeQueue::completeService() {
         assert(_serv != QUEUE_INVALID);
+
+	// cout << "completeService " << _tor << " " << _port << " slice " << _top->time_to_slice(eventlist().now()) << " t " << eventlist().now() << endl;
+	
 	Packet* pkt;
 
 	uint64_t new_NDP_bytes_sent;
@@ -312,6 +315,7 @@ void CompositeQueue::completeService() {
 					pktfound = true;
             		break;
             	} else {
+								cout << "drop tor " << _tor << " port " << _port << " dest " << dstToR << " next " << nextToR << " slice " << _top->time_to_slice(eventlist().now()) << " time " << eventlist().now() << endl;
             		// this is an old packet, "drop" it and move on to the next one
 
             		RlbPacket *p = (RlbPacket*)(pkt);
@@ -402,6 +406,12 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 	//	cout << "ToR " << _tor << " received a currently bounced packet" << endl;
 	//	cout << "    src = " << pkt.get_src() << endl;
 	//}
+
+	// if (_tor == 2) {
+	// 	cout << "DEBUG1\treceivePacket compositeQueue" << " slice " << _top->time_to_slice(eventlist().now()) << " time " << eventlist().now() << endl;
+	// }
+
+	// cout << "receivePacket " << _tor << " " << _port << " slice " << _top->time_to_slice(eventlist().now()) << " time " << eventlist().now() << endl;
 
   if (pkt.size() == UINT16_MAX) {
     pkt.free();

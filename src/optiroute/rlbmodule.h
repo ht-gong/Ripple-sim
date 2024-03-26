@@ -24,7 +24,7 @@ public:
     void NICpush(); // notification from the NIC that a high priority packet went out (blocking one of RLB's packets)
     void commit_push(int num_to_push); // push a committed packet back into the RLB queues in reponse to a NICpush()
     void phase1(vector<int> new_host_dsts, int current_commit_queue); // compute sending rates
-    void enqueue_commit(int slice, int current_commit_queue, int Nsenders, vector<int> pkts_to_send, vector<vector<int>> q_inds, vector<int> dst_labels);
+    void enqueue_commit(int slice, int src_host, int current_commit_queue, int Nsenders, vector<int> &pkts_to_send, vector<vector<int>> q_inds, vector<int> dst_labels);
     void clean_commit(); // clean up the oldest commit queue, returning enqueued packets back to the rlb queues
 
     vector<vector<int>> get_queue_sizes() {return _rlb_queue_sizes;} // returns a pointer to queue_sizes matrix
@@ -76,6 +76,8 @@ private:
 
 class RlbMaster : public EventSource {
  public:
+    
+    // int MATCHING_COUNT = 0;
 
     RlbMaster(DynExpTopology* top, EventList &eventlist);
 
