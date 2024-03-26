@@ -53,7 +53,7 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
 
     _max_send_rate = (_F / _Ncommit_queues) * _good_rate;
     _max_pkts = _max_send_rate * _slot_time;
-    _max_pkts = _max_pkts / 6 * 6;
+    _max_pkts = _max_pkts / _Ncommit_queues * _Ncommit_queues;
 
     // NOTE: we're working in packets / second
     //cout << "Initialization:" << endl;

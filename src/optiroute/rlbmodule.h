@@ -77,8 +77,7 @@ private:
 class RlbMaster : public EventSource {
  public:
     
-    int MATCHING_COUNT = 0;
-    int PERIOD_COUNT = 0;
+    // int MATCHING_COUNT = 0;
 
     RlbMaster(DynExpTopology* top, EventList &eventlist);
 

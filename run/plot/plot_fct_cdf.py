@@ -7,8 +7,8 @@ dir = date.today().strftime("%Y-%m-%d")
 os.makedirs(dir, exist_ok=True)
 
 files = (
-  ("../sim/simple6/opera.txt", "Opera"),
-  ("../sim/simple6/optiroute.txt", "Optiroute"),
+  ("../sim/large/opera.txt", "Opera"),
+  ("../sim/large/optiroute.txt", "Optiroute"),
 )
 
 for fname, label in files:
