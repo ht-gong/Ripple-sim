@@ -21,6 +21,7 @@ Queue::Queue(linkspeed_bps bitrate, mem_b maxsize, EventList& eventlist, QueueLo
 {
     _queuesize = 0;
     _ps_per_byte = (simtime_picosec)((pow(10.0, 12.0) * 8) / _bitrate);
+    _txbytes = 0;
     stringstream ss;
     //ss << "queue(" << bitrate/1000000 << "Mb/s," << maxsize << "bytes)";
     //_nodename = ss.str();
@@ -170,6 +171,56 @@ void Queue::receivePacket(Packet& pkt) {
 	assert(_enqueued.size() == 1);
 	beginService();
     }
+}
+
+//this code is cursed
+void Queue::sendEarlyFeedback(Packet *pkt) {
+  DynExpTopology* top = pkt->get_topology();
+
+  TcpSrc* tcpsrc = NULL;
+  unsigned seqno;
+  if(pkt->type() == TCP) {
+      tcpsrc = ((TcpPacket*)(pkt))->get_tcpsrc();
+      seqno = ((TcpPacket*)(pkt))->seqno();
+  } else {
+      return;
+  }
+  assert(tcpsrc != NULL);
+  pkt->set_early_fb();
+  TcpAck *ack = tcpsrc->alloc_tcp_ack();
+  int old_src_ToR = _top->get_firstToR(pkt->get_src());
+  // flip the source and dst of the packet:
+  int s = pkt->get_src();
+  int d = pkt->get_dst();
+  ack->set_src(d);
+  ack->set_dst(s);
+  assert(pkt->get_crtToR() >= 0);
+  ack->set_src_ToR(pkt->get_crtToR());
+  _routing->routing_from_PQ(ack, eventlist().now());
+  ack->set_crtToR(pkt->get_crtToR());
+  ack->set_lasthop(false);
+  ack->set_hop_index(0);
+  ack->set_crthop(0);
+  ack->set_early_fb();
+  ack->set_int(pkt->get_int());
+
+  // get the current ToR, this will be the new src_ToR of the packet
+  int new_src_ToR = ack->get_crtToR();
+
+  if (new_src_ToR == old_src_ToR) {
+    // the packet got returned at the source ToR
+    // we need to send on a downlink right away
+    ack->set_crtport(top->get_lastport(ack->get_dst()));
+    ack->set_maxhops(0);
+    ack->set_crtslice(0);
+
+  } else {
+    ack->set_src_ToR(new_src_ToR);
+    _routing->routing_from_ToR(ack, eventlist().now(), eventlist().now()); 
+  }
+  //assert(!(pkt->get_crtToR() == ack->get_crtToR() && pkt->get_crtToR() && ack->get_crtToR()));
+  Queue* nextqueue = top->get_queue_tor(ack->get_crtToR(), ack->get_crtport());
+  nextqueue->receivePacket(*ack);
 }
 
 mem_b Queue::queuesize() {

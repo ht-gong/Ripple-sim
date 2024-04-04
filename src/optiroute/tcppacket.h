@@ -70,12 +70,17 @@ public:
     inline int get_tcp_slice() {return _tcp_slice;}
     virtual inline TcpSrc* get_tcpsrc(){return _tcp_src;}
     virtual inline TcpSink* get_tcpsink(){return _tcp_sink;}
+  inline bool last() {return _last_wnd;}
+  inline void set_last(bool last) {_last_wnd = last;}
+  inline bool first() {return _first_wnd;}
+  inline void set_first(bool first) {_first_wnd = first;}
 protected:
     TcpSrc *_tcp_src;
     TcpSink *_tcp_sink;
 	seq_t _seqno,_data_seqno;
 	bool _syn;
     int _tcp_slice;
+  bool _last_wnd, _first_wnd;
 	simtime_picosec _ts;
 	static PacketDB<TcpPacket> _packetdb;
 };
@@ -122,6 +127,8 @@ public:
     list<pair<seq_t, seq_t>> get_sack() {return _sacks;}
     virtual inline TcpSrc* get_tcpsrc(){return _tcp_src;}
     virtual inline TcpSink* get_tcpsink(){return _tcp_sink;}
+  void set_bolt_inc(bool inc) {_bolt_inc = inc;}
+  bool bolt_inc() {return _bolt_inc;}
 
 	virtual ~TcpAck(){}
 	const static int ACKSIZE=40;
@@ -134,6 +141,7 @@ protected:
     list<pair<seq_t, seq_t>> _sacks;
 	simtime_picosec _ts;
 	static PacketDB<TcpAck> _packetdb;
+  bool _bolt_inc;
 };
 
 #endif

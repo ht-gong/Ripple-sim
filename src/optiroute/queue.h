@@ -32,6 +32,7 @@ class Queue : public EventSource, public PacketSink {
     // should really be private, but loggers want to see
     mem_b _maxsize; 
     mem_b _max_recorded_size;
+    uint64_t _txbytes;
     vector<mem_b> _max_recorded_size_slice;
     int _tor; // the ToR switch this queue belongs to
     int _port; // the port this queue belongs to
@@ -86,6 +87,8 @@ class Queue : public EventSource, public PacketSink {
 
     // wrap up serving the item at the head of the queue
     virtual void completeService(); 
+
+    void sendEarlyFeedback(Packet *pkt);
 
     linkspeed_bps _bitrate; 
     simtime_picosec _ps_per_byte;  // service time, in picoseconds per byte

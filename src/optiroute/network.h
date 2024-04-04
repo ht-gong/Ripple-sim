@@ -24,6 +24,21 @@ class TcpSrc;
 class RlbSink;
 class RlbSrc;
 
+typedef struct pktINT {
+    uint64_t qLen;
+    uint64_t txBytes;
+    simtime_picosec ts;
+    pktINT() {
+        this->qLen = 0;
+        this->txBytes = 0;
+        this->ts = 0;
+    }
+    pktINT(uint64_t qLen, uint64_t txBytes, simtime_picosec ts) {
+        this->qLen = qLen;
+        this->txBytes = txBytes;
+        this->ts = ts;
+    }
+} pktINT;
 
 class DataReceiver {
  public:
@@ -106,7 +121,8 @@ class Packet {
     PacketFlow& flow() const {return *_flow;}
     virtual ~Packet() {};
     inline const packetid_t id() const {return _id;}
-    inline uint32_t flow_id() const {return _flow->flow_id();}
+    inline uint64_t flow_id() const {return _flowid;}
+    inline void set_flow_id(uint64_t id) {_flowid = id;}
     // packets don't have routes anymore...
     //const Route* route() const {return _route;}
     //const Route* reverse_route() const {return _route->reverse();}
@@ -158,6 +174,9 @@ class Packet {
     int get_planned_hops() {return _planned_hops;}
     void set_priority(double prior) {_priority = prior;}
     double get_priority() {return _priority;}
+    void push_int(string id, pktINT pkt_int) { _pkt_ints[id] = pkt_int; }
+    void set_int(map<string, pktINT> pkt_ints) { _pkt_ints = pkt_ints; } 
+    map<string, pktINT> get_int() { return _pkt_ints; }
 
     int get_src() {return _src;}
     int get_dst() {return _dst;}
@@ -207,6 +226,7 @@ class Packet {
     packet_type _type;
     
     uint16_t _size;
+    uint64_t _flowid;
     bool _is_header;
     bool _bounced; // packet has hit a full queue, and is being bounced back to the sender
     bool _been_bounced; // packet has been bounced previously (for debugging only as of 9/4/18)
@@ -214,6 +234,7 @@ class Packet {
     uint32_t _flags; // used for ECN & friends
     simtime_picosec _fabricts; //timestamp from nic sentout
     unsigned _queueing; //amount of queueing packet goes through
+    map<string, pktINT> _pkt_ints;
 
     ///////// For RLB //////////
 

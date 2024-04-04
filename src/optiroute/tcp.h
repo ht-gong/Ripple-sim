@@ -51,7 +51,8 @@ class TcpSACK {
 class TcpSrc : public PacketSink, public EventSource {
     friend class TcpSink;
  public:
-    TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, DynExpTopology *top, int flow_src, int flow_dst, Routing* routing);
+    TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger, 
+           EventList &eventlist, DynExpTopology *top, int flow_src, int flow_dst, Routing* routing);
     uint32_t get_id(){ return id;}
     virtual void connect(TcpSink& sink, simtime_picosec startTime);
     void startflow();
@@ -146,6 +147,7 @@ class TcpSrc : public PacketSink, public EventSource {
     simtime_picosec _fast_recovery_start;
 
     bool _established;
+    bool _use_tcp = true;
 
     uint32_t _drops;
 
@@ -171,7 +173,7 @@ class TcpSrc : public PacketSink, public EventSource {
     virtual void deflate_window();
 #endif
 
- private:
+ protected:
     //const Route* _old_route;
     uint64_t _last_packet_with_old_route;
     vector<uint64_t> _dropped_at_queue;

@@ -12,6 +12,7 @@
 #include "pipe.h"
 #include "compositequeue.h"
 #include "ecnqueue.h"
+#include "boltqueue.h"
 #include "ecn.h"
 //#include "prioqueue.h"
 
@@ -249,6 +250,8 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, mem_b queuesize, in
 Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem_b queuesize, int tor, int port) {
     if (qt==COMPOSITE)
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
+    if (qt==BOLT)
+        return new BoltQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
     else if (qt==DEFAULT)
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
     else if (qt==ECN || qt==ECN_EFB) {

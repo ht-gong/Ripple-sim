@@ -32,6 +32,9 @@ ECNQueue::ECNQueue(linkspeed_bps bitrate, mem_b maxsize,
 void
 ECNQueue::receivePacket(Packet & pkt)
 {
+    if(pkt.id() == 60586) {
+    cout << "receivePacket " << _tor << " " << _port << " " << pkt.get_crtslice() << " " << eventlist().now() << endl;
+  }
     if(pkt.type() == RLB) {
         bool queueWasEmpty = _enqueued[_crt_tx_slice].empty() && _enqueued_rlb.empty(); //is the current queue empty?
     	_enqueued_rlb.push_front(&pkt);
@@ -170,6 +173,9 @@ void ECNQueue::beginService() {
     } else {
         assert(0);
     }
+    if(to_be_sent->id() == 60586) {
+    cout << "beginService " << _tor << " " << _port << " " << to_be_sent->get_crtslice() << " " << eventlist().now() << endl;
+  }
     DynExpTopology* top = to_be_sent->get_topology();
     
     simtime_picosec finish_push = eventlist().now() + drainTime(to_be_sent) /*229760*/;
@@ -184,6 +190,9 @@ void ECNQueue::beginService() {
         #ifdef DEBUG
         cout<<"Uplink port attempting to serve pkt across configurations\n";
         #endif
+        Packet *pkt = _enqueued[_crt_tx_slice].back();
+        cout << "debug packet earlyfb? " << pkt->early_fb() << " TcpData? " << (pkt->type() == TCP) << " remaining " << _queuesize[_crt_tx_slice] << " slices " << finish_push_slice << " " << _crt_tx_slice << " pktid " << pkt->id() << endl;
+        assert(0);
         cout<<"Uplink port attempting to serve pkt across configurations\n";
         return;
     }
@@ -221,6 +230,9 @@ ECNQueue::completeService()
 {
     /* dequeue the packet */
     assert(_sending_pkt);
+    if(_sending_pkt->id() == 60586) {
+    cout << "completeService " << _tor << " " << _port << " " << _sending_pkt->get_crtslice() << " " << eventlist().now() << endl;
+  }
     if(_sending_pkt->type() == RLB) {
 		int ul = _top->no_of_hpr(); // !!! # uplinks = # downlinks = # hosts per rack
 

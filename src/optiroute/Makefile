@@ -1,5 +1,5 @@
-OBJS=eventlist.o pipe.o queue.o loggers.o logfile.o clock.o config.o network.o sent_packets.o rlb.o rlbmodule.o ndp.o ndppacket.o rlbpacket.o compositequeue.o cpqueue.o fairpullqueue.o route.o tcp.o tcppacket.o dctcp.o ecnqueue.o routing.o
-HDRS=network.h rlb.h ndp.h compositequeue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h sent_packets.h ndppacket.h rlbpacket.h rlbmodule.h routing.h tcp.h tcppacket.h dctcp.h ecnqueue.h ecn.h routing_util.h 
+OBJS=eventlist.o pipe.o queue.o loggers.o logfile.o clock.o config.o network.o sent_packets.o rlb.o rlbmodule.o ndp.o ndppacket.o rlbpacket.o compositequeue.o cpqueue.o fairpullqueue.o route.o tcp.o tcppacket.o dctcp.o bolt.o ecnqueue.o boltqueue.o routing.o
+HDRS=network.h rlb.h ndp.h compositequeue.h cpqueue.h queue.h loggers.h loggertypes.h pipe.h eventlist.h config.h sent_packets.h ndppacket.h rlbpacket.h rlbmodule.h routing.h tcp.h tcppacket.h dctcp.h bolt.h ecnqueue.h boltqueue.h ecn.h routing_util.h 
 
 
 CRT=`pwd`
@@ -28,6 +28,7 @@ network.o:	network.cpp  $(HDRS)
 fairpullqueue.o:	fairpullqueue.cpp  $(HDRS)
 route.o:	route.cpp  $(HDRS)
 tcp.o:		tcp.cpp  $(HDRS)
+bolt.o:		bolt.cpp  $(HDRS)
 dctcp.o:		dctcp.cpp  $(HDRS)
 rlb.o:		rlb.cpp $(HDRS)
 rlbmodule.o:	rlbmodule.cpp $(HDRS)
@@ -41,6 +42,7 @@ logfile.o:	logfile.cpp  $(HDRS)
 clock.o:	clock.cpp clock.h eventlist.h config.h
 compositequeue.o: compositequeue.cpp $(HDRS)
 ecnqueue.o:		ecnqueue.cpp $(HDRS)	
+boltqueue.o:		boltqueue.cpp $(HDRS)	
 #prioqueue.o: prioqueue.cpp $(HDRS)
 cpqueue.o: cpqueue.cpp $(HDRS)
 #compositeprioqueue.o: compositeprioqueue.cpp $(HDRS)

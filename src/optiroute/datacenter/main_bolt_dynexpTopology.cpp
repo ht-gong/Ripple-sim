@@ -15,7 +15,9 @@
 #include "clock.h"
 #include "tcp.h"
 #include "dctcp.h"
+#include "bolt.h"
 #include "compositequeue.h"
+#include "boltqueue.h"
 #include "topology.h"
 #include <list>
 #include "main.h"
@@ -65,7 +67,6 @@ int main(int argc, char **argv) {
     stringstream filename(ios_base::out);
     string flowfile; // read the flows from a specified file
     string topfile; // read the topology from a specified file
-    double pull_rate; // set the pull rate from the command line
     double simtime; // seconds
     double utiltime = .01; // seconds
     int64_t rlbflow = 0; // flow size of "flagged" RLB flows
@@ -204,7 +205,7 @@ int main(int argc, char **argv) {
 
 // this creates the Expander topology
 #ifdef DYNEXP
-    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, earlyfb ? ECN_EFB : ECN, topfile, 
+    DynExpTopology* top = new DynExpTopology(queuesize, &logfile, &eventlist, BOLT, topfile, 
                                                 routing, marking_threshold, slice_duration);
 #endif
 
@@ -239,15 +240,10 @@ int main(int argc, char **argv) {
             if (vtemp[2] < cutoff && vtemp[2] != rlbflow) { // priority flow, sent it over NDP
 
             // generate an DCTCP source/sink:
-            TcpSrc* flowSrc = new DCTCPSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, routing);
+            TcpSrc* flowSrc = new BoltSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, routing);
             //flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
             flowSrc->set_flowsize(vtemp[2]); // bytes
             maxflow = std::max(vtemp[2], maxflow);
-
-            // Set the pull rate to something reasonable.
-            // we can be more aggressive if the load is lower
-            //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, pull_rate); // 1 = pull at line rate
-            //NdpPullPacer* flowpacer = new NdpPullPacer(eventlist, .17);
 
             TcpSink* flowSnk = new TcpSink();
             tcpRtxScanner.registerTcp(*flowSrc);
@@ -258,7 +254,7 @@ int main(int argc, char **argv) {
             sinkLogger.monitorSink(flowSnk);
 
             }  else { // background flow, send it over RLB
-
+            assert(0);
             // generate an RLB source/sink:
 
             RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);

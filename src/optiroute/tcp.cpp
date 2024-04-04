@@ -9,7 +9,7 @@
 
 #define KILL_THRESHOLD 5
 
-
+unsigned total_flows = 0;
 
 //#define TCP_SACK
 ////////////////////////////////////////////////////////////////
@@ -37,6 +37,7 @@ TcpSrc::TcpSrc(TcpLogger* logger, TrafficLogger* pktlogger,
     _app_limited = -1;
     _established = false;
     _effcwnd = 0;
+    _cwnd = 0;
 
     //_ssthresh = 30000;
 #ifdef TDTCP
@@ -96,7 +97,9 @@ TcpSrc::startflow() {
         _cwnd[i] = 10*_mss;
     _unacked = _cwnd[0];
 #else
-    _cwnd = 10*_mss;
+    if(_cwnd == 0) {
+      _cwnd = 10*_mss;
+    }
     _unacked = _cwnd;
 #endif
     _established = false;
@@ -609,6 +612,8 @@ TcpSrc::send_packets() {
     } else {
 #endif
 
+    bool last_cwnd = (_highest_sent+c >= _flow_size);
+    bool first_cwnd = (_highest_sent < _mss);
     while ((_last_acked + c >= _highest_sent + _mss) 
             && (_highest_sent < _flow_size)) {
         uint64_t data_seq = 0;
@@ -624,6 +629,8 @@ TcpSrc::send_packets() {
         _packets_sent += size;
         _remaining_flow_size -= size;
         _remaining_flow_size = std::max((int64_t)0, _remaining_flow_size);
+        p->set_first(first_cwnd);
+        p->set_last(last_cwnd);
 #ifdef TCP_SACK
         _sack_handler.updateHiData(_highest_sent);
 #endif

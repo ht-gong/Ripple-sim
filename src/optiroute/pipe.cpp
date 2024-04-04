@@ -248,6 +248,9 @@ void Pipe::sendFromPipe(Packet *pkt) {
         pkt->inc_crthop(); // increment the hop
         pkt->inc_hop_index(); // increment hop index as well
         
+       if(pkt->id() == 60586) {
+      cout << "pipe routing " << eventlist().now() << endl;
+    }
         _routing->routing_from_ToR(pkt, eventlist().now(), eventlist().now());
         
         //cout << "next: " << pkt->get_crtToR() << " " << pkt->get_crtport() << endl;
