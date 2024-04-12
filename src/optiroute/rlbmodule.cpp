@@ -18,6 +18,14 @@
 //          RLB Module          //
 //////////////////////////////////
 
+static uint64_t sent_in_match;
+static uint64_t sent_phase1_1;
+static uint64_t sent_phase1_2;
+static uint64_t sent_phase3;
+static uint64_t tot_proposals;
+static uint64_t tot_accepts;
+static uint64_t tot_link_caps_send;
+
 RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
   : EventSource(eventlist,"rlbmodule"), _node(node), _top(top)
 {
@@ -49,11 +57,11 @@ RlbModule::RlbModule(DynExpTopology* top, EventList &eventlist, int node)
     //_slot_time = _slot_time - (_Ncommit_queues * _pkt_ser_time);
 
     // test, to try to drop packets
-    //_slot_time = 1.2 * _slot_time; // yes, packets were dropped!
+    //_slot_time = 1.1 * _slot_time; // yes, packets were dropped!
 
     _max_send_rate = (_F / _Ncommit_queues) * _good_rate;
     _max_pkts = _max_send_rate * _slot_time;
-    _max_pkts = _max_pkts / _Ncommit_queues * _Ncommit_queues;  // rounding down significantly reduces the number of "drops"
+    //_max_pkts = _max_pkts / _Ncommit_queues * _Ncommit_queues;  // rounding down significantly reduces the number of "drops"
 
     // NOTE: we're working in packets / second
     //cout << "Initialization:" << endl;
@@ -163,17 +171,6 @@ void RlbModule::receivePacket(Packet& pkt, int flag)
             if (pkt.get_src() == _node) {
                 // we check pkt.get_src() to at least make sure it was sent from this node
                 assert(flag == 1); // we also require the "enqueue_front" flag be set
-
-                // debug:
-                //if (pkt.get_time_sent() == 342944606400 && pkt.get_real_src() == 177 && pkt.get_real_dst() == 423)
-                //    cout << "debug @rlbmodule: packet was indirect and bounced back to node " << _node << endl;
-
-                // debug:
-                //cout << "bounced NON-LOCAL RLB packet returned to RlbModule at node " << _node << endl;
-                //cout << "   real_dst = " << pkt.get_real_dst() << endl;
-                //cout << "   time = " << timeAsUs(eventlist().now()) << " us" << endl;
-
-                // check the "real" dest, and put it in the corresponding NON-LOCAL Rlb queue.
                 int queue_ind = pkt.get_real_dst();
                 _rlb_queues[0][queue_ind].push_front(&pkt);
                 _rlb_queue_sizes[0][queue_ind]++; // increment number of packets in queue
@@ -476,6 +473,7 @@ void RlbModule::enqueue_commit(int slice, int src_host, int current_commit_queue
                     pkt = _rlb_queues[q_inds[0][fst_sndr]][q_inds[1][fst_sndr]].front();
                     pkt->set_dst(dst_labels[fst_sndr]);
                     pkts_to_send[fst_sndr]--;
+		    sent_in_match++;
 
                     // int src = pkt->get_src(), real_src = pkt->get_real_src();
                     // int dst = pkt->get_dst(), real_dst = pkt->get_real_dst();
@@ -698,7 +696,14 @@ void RlbMaster::newMatching() {
     // cout << "DEBUG2\t" << endl;
     // cout << "DEBUG2\t" << "MATCHING " << MATCHING_COUNT << endl;
     // cout << "DEBUG2\t" << endl;
-
+    //
+    sent_in_match = 0;
+    sent_phase1_1 = 0;
+    sent_phase1_2 = 0;
+    sent_phase3 = 0;
+    tot_proposals = 0;
+    tot_accepts = 0;
+    tot_link_caps_send = 0;
     // get the current slice:
     // first, get the current "superslice"
     int slice = _top->time_to_slice(eventlist().now());
@@ -752,8 +757,8 @@ void RlbMaster::newMatching() {
     
     // initialize link capacities to full capacity:
     for (int i = 0; i < _H; i++) {
-        _link_caps_send[i] = _max_pkts;
-        _link_caps_recv[i] = _max_pkts;
+        _link_caps_send[i] = _max_pkts*_hpr;
+        _link_caps_recv[i] = _max_pkts*2;
     }
 
 
@@ -789,6 +794,7 @@ void RlbMaster::newMatching() {
         }
         phase1(src_hosts, dst_hosts);
     }
+    //cout << "tot_link_caps_send " << tot_link_caps_send << endl;
 
 
     // ---------- phase 2 ---------- //
@@ -852,6 +858,7 @@ void RlbMaster::newMatching() {
                     for (int l = 0; l < _H; l++) {
                         int temp = _accepts[src_hosts[j]][dst_hosts[k]][l];
                         if (temp > 0) {
+		            sent_phase3 += temp;
                             //cout << "ACCEPT\n";
                             _Nsenders[src_hosts[j]] ++; // increment sender count
                             _pkts_to_send[src_hosts[j]].push_back(temp); // how many packets we should send
@@ -897,6 +904,7 @@ void RlbMaster::newMatching() {
     // set up the next reconfiguration event:
     eventlist().sourceIsPendingRel(*this, _top->get_slice_time());
     //cout << "get_slice_time " << _top->get_slice_time() << endl;
+    cout << "sent " << sent_in_match << " p1_1 " << sent_phase1_1 << " p1_2 " << sent_phase1_2 << " p3 " << sent_phase3 << " acc " << tot_accepts << " prop " << tot_proposals << " caps " << tot_link_caps_send << " abss " << _top->time_to_absolute_slice(eventlist().now()) << " t " << eventlist().now() << endl;
 }
 
 
@@ -908,7 +916,7 @@ void RlbMaster::phase1(vector<int> src_hosts, vector<int> dst_hosts)
     // STEP 1 - decide how many 2nd hop packets to send.
     // this is done on a host level:
 
-    int fixed_pkts = _max_pkts / _hpr; // maximum "safe" number of packets we can send
+    int fixed_pkts = _max_pkts; // maximum "safe" number of packets we can send
 
     for (int i = 0; i < src_hosts.size(); i++) { // sweep senders
 
@@ -925,6 +933,7 @@ void RlbMaster::phase1(vector<int> src_hosts, vector<int> dst_hosts)
             _working_queue_sizes[src_hosts[i]][0][dst_hosts[j]] -= temp_pkts;
 
             if (temp_pkts > 0) {
+		sent_phase1_1 += temp_pkts;
                 _Nsenders[src_hosts[i]] ++; // increment sender count
                 _pkts_to_send[src_hosts[i]].push_back(temp_pkts); // how many packets we should send
 
@@ -1027,6 +1036,7 @@ void RlbMaster::phase1(vector<int> src_hosts, vector<int> dst_hosts)
             if (temp_pkts > 0) {
                 // some packets can be sent:
                 _Nsenders[src_hosts[i]] ++; // increment sender count
+		sent_phase1_2 += temp_pkts;
                 _pkts_to_send[src_hosts[i]].push_back(temp_pkts); // how many packets we should send
                 _q_inds[src_hosts[i]][0].push_back(1); // first index (0 = nonlocal, 1 = local)
                 _q_inds[src_hosts[i]][1].push_back(dst_hosts[j]); // second index (which queue)
@@ -1045,8 +1055,13 @@ void RlbMaster::phase1(vector<int> src_hosts, vector<int> dst_hosts)
         for (int j = 0; j < dst_hosts.size(); j++) {
             temp[dst_hosts[j]] = 0; // remove any elements corresponding to hosts in the dest. rack
         }
+	tot_link_caps_send += _link_caps_send[src_hosts[i]];
         temp = fairshare1d(temp, _link_caps_send[src_hosts[i]], true); // fairshare according to remaining link capacity
         _proposals[src_hosts[i]] = temp;
+	for(int ii = 0; ii < _proposals[src_hosts[i]].size(); ii++) {
+          //if(src_hosts[i] == 18 && _proposals[src_hosts[i]][ii] != 0) cout << "prop " << ii << " " << _proposals[src_hosts[i]][ii] << endl;
+          tot_proposals += _proposals[src_hosts[i]][ii];
+        }
     }
 
 }
@@ -1054,6 +1069,7 @@ void RlbMaster::phase1(vector<int> src_hosts, vector<int> dst_hosts)
 
 void RlbMaster::phase2(vector<int> src_hosts, vector<int> dst_hosts)
 {
+    //cout << "phase2 start src: " << src_hosts.size() << " dst: " << dst_hosts.size() << endl;
     // the dst_hosts compute how much to accept from the src_hosts
 
     // NOTE: MODIFICATION: can add a factor of two, which helps with throughput (a little)
@@ -1080,8 +1096,13 @@ void RlbMaster::phase2(vector<int> src_hosts, vector<int> dst_hosts)
         // fairshare, according to queue availability + receiving link capacity
         all_proposals = fairshare2d_2(all_proposals, _link_caps_recv[dst_hosts[i]], temp);
 
-        for (int j = 0; j < src_hosts.size(); j++)
+        for (int j = 0; j < src_hosts.size(); j++){
             _accepts[src_hosts[j]][dst_hosts[i]] = all_proposals[j];
+	    for(int jj = 0; jj < all_proposals[j].size(); jj++) {
+	      //if(src_hosts[j] == 18 && all_proposals[j][jj] != 0) cout << "accept " << jj << " " << all_proposals[j][jj] << endl;
+              tot_accepts += all_proposals[j][jj];
+	    }
+	}
     }
 
     // if (src_hosts[0] == 12) {
@@ -1433,6 +1454,7 @@ vector<vector<int>> RlbMaster::fairshare2d_2(vector<vector<int>> input, int cap0
 
         iter++;
     }
+    //cout << "nelem left " << nelem << endl;
 
     return sent; // return what was sent
 
