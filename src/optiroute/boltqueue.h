@@ -45,6 +45,8 @@ class BoltQueue : public Queue {
     void updateSupply(Packet &pkt);
 
     void preemptRLB();
+    void handleStuck();
+    void reroute(Packet* pkt);
 };
 
 #endif

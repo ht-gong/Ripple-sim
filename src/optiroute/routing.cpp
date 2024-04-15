@@ -15,7 +15,6 @@
 #include "ndp.h"
 // #define DEBUG
 #define HOHO
-#define EARLYFB_GUARDBAND
 
 //#define DYNAMIC_FSIZE
 
@@ -58,9 +57,6 @@ double Routing::get_pkt_priority(NdpSrc* ndp_src) {
             return 1.0;
         }
     } else if (_routing_algorithm == OPTIROUTE) {
-    #ifdef HOHO
-        return 0;
-    #endif
         #ifdef DYNAMIC_FSIZE
             return (double) ndp_src->get_remaining_flowsize();
         #endif
@@ -301,12 +297,8 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
     int expected_slice = top->get_opt_slice(pkt->get_src_ToR(), top->get_firstToR(pkt->get_dst()),
                                 pkt->get_slice_sent(), pkt->get_path_index(), pkt->get_hop_index());
     #endif
-  if(pkt->id() == 60586) {
-    cout << "ROUTING " << " curslice " << cur_slice << " slice_sent " << pkt->get_slice_sent() << " expected " << expected_slice << " t " << t << endl;
-  }
 
     if(top->time_to_absolute_logic_slice(t - init_time) > top->get_nlogicslices()) {
-        assert(0);
         pkt->set_crtslice(expected_slice);
         pkt->set_crtport(expected_port);
         return 0;
@@ -330,37 +322,16 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
 
     Queue* cur_q = top->get_queue_tor(pkt->get_crtToR(), expected_port);
     
-    simtime_picosec start_t;
-    if(expected_slice == cur_slice) {
-      start_t = t;
-    } else {
-      int abs_slice = top->time_to_absolute_slice(t); 
-      //care wraparound
-      int slice_diff;
-      if(expected_slice > cur_slice) {
-        slice_diff = expected_slice - cur_slice;
-        } else {
-        slice_diff = expected_slice - cur_slice + top->get_nlogicslices();
-      }
-      int abs_expected_slice = abs_slice+slice_diff;
-      start_t = top->get_slice_start_time(abs_expected_slice);
-    }
     simtime_picosec finish_push;
     // to get accurate queueing delay, need to add from when the queue began servicing
     if(cur_q->get_is_servicing() && top->time_to_logic_slice(init_time) == cur_slice) { // only needed when init_slice == cur_slice
         finish_push = cur_q->get_last_service_time() + cur_q->get_queueing_delay(cur_slice) +
             cur_q->drainTime(pkt);
-        if(pkt->id() == 60586) {
-          cout << "PKTDEBUG last_service " << cur_q->get_last_service_time() << " queueing_delay " << cur_q->get_queueing_delay(cur_slice) << " draintime " << cur_q->drainTime(pkt) << endl;
-    }
     } else {
-        finish_push = start_t + cur_q->get_queueing_delay(expected_slice) +
+        finish_push = t + cur_q->get_queueing_delay(cur_slice) +
             cur_q->drainTime(pkt);
-        if(pkt->id() == 60586) {
-          cout << "PKTDEBUG start_t " << start_t << " queueing_delay " << cur_q->get_queueing_delay(expected_slice) << " draintime " << cur_q->drainTime(pkt) << " slice " << expected_slice << endl;
     }
-    }
-    finish_push += 5120;
+
     int finish_push_slice = top->time_to_logic_slice(finish_push); // plus the link delay
 
     // calculate delay considering the queue occupancy
@@ -382,14 +353,8 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
         // 1. The packet is pushed within the expected slice
         pkt->set_crtslice(expected_slice);
         pkt->set_crtport(expected_port);
-        if(pkt->id() == 60586) {
-          cout << "OK\n";
-    }
         return finish_time;
     } else {
-        if(pkt->id() == 60586) {
-          cout << "REROUTE " << " expected " << expected_slice << " actual " << finish_push_slice << endl;
-    }
         // 2. The packet cannot match current schedule, thus we start rerouting it from the current slice
         simtime_picosec nxt_slice_time;
         if(!rerouted) {
@@ -500,7 +465,7 @@ void QueueAlarm::doNextEvent(){
     if(_queue->slice_queuesize(_queue->_crt_tx_slice) > 0) {
         std::cout << "Packets " << _queue->slice_queuesize(_queue->_crt_tx_slice)/1436 << 
             " stuck in queue tor " << _queue->_tor << " port " << _queue->_port << " slice " << _queue->_crt_tx_slice << endl;
-	      _queue->handleStuck();
+	_queue->handleStuck();
     }
 
     // cout << "QueueAlarmUtil" << fixed << " " << timeAsMs(eventlist().now()) << endl;

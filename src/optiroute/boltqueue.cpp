@@ -189,7 +189,7 @@ void BoltQueue::beginService() {
     if (finish_slice != _crt_tx_slice && !_top->is_downlink(_port)) {
       Packet *pkt = _enqueued[_crt_tx_slice].back();
       cout << "debug packet earlyfb? " << pkt->early_fb() << " TcpData? " << (pkt->type() == TCP) << " remaining " << _queuesize[_crt_tx_slice] << " slices " << finish_slice << " " << _crt_tx_slice << endl;
-      assert(0);
+      //assert(0);
     } else {
       //cout << "beginService " << _tor << " " << _port << " id " << current_event_id << " slice " << _crt_tx_slice << endl;
       _servicing = Q_LO;
@@ -300,6 +300,33 @@ BoltQueue::completeService()
     beginService();
   }
 #endif
+}
+
+void 
+BoltQueue::handleStuck() {
+    Packet *pkt;
+    list<Packet*> tmp = _enqueued[_crt_tx_slice];
+    _enqueued[_crt_tx_slice].clear();
+    _queuesize[_crt_tx_slice] = 0;
+    while(!tmp.empty()) {
+        pkt = tmp.back(); 
+        tmp.pop_back();
+        reroute(pkt);
+    } 
+}
+
+void BoltQueue::reroute(Packet* pkt) {
+  assert(pkt->get_crtslice() >= 0);
+  simtime_picosec t = eventlist().now();
+  simtime_picosec nxt_slice_time = _top->get_logic_slice_start_time(_top->time_to_absolute_logic_slice(t) + 1);
+  pkt->set_src_ToR(pkt->get_crtToR());
+  pkt->set_path_index(_routing->get_path_index(pkt, nxt_slice_time));
+  pkt->set_slice_sent(_top->time_to_logic_slice(nxt_slice_time));
+  pkt->set_hop_index(0);
+  _routing->routing_from_ToR(pkt, nxt_slice_time, eventlist().now());
+  Queue* nextqueue = _top->get_queue_tor(pkt->get_crtToR(), pkt->get_crtport());
+  assert(nextqueue);
+  nextqueue->receivePacket(*pkt);
 }
 
 void
