@@ -8,6 +8,8 @@
 #include "dctcp.h"
 #include "queue_lossless.h"
 #include "tcppacket.h"
+#include "rlbmodule.h"
+#include "rlbpacket.h"
 #include <iostream>
 
 extern uint32_t delay_host2ToR; // nanoseconds, host-to-tor link
@@ -22,8 +24,8 @@ BoltQueue::BoltQueue(linkspeed_bps bitrate, mem_b maxsize,
   _pru_token = 0;
   _sm_token = 0;
   int slices = top->get_nlogicslices();
-#ifdef PRIO_QUEUE
   _servicing = Q_NONE;
+#ifdef PRIO_QUEUE
   _enqueued[Q_LO].resize(slices);
   _queuesize[Q_LO].resize(slices);
   std::fill(_queuesize[Q_LO].begin(), _queuesize[Q_LO].end(), 0);
@@ -31,11 +33,11 @@ BoltQueue::BoltQueue(linkspeed_bps bitrate, mem_b maxsize,
   _queuesize[Q_HI].resize(slices);
   std::fill(_queuesize[Q_HI].begin(), _queuesize[Q_HI].end(), 0);
 #else
-  _servicing = false;
   _enqueued.resize(slices);
   _queuesize.resize(slices);
   std::fill(_queuesize.begin(), _queuesize.end(), 0);
 #endif
+  _queuesize_rlb = 0;
 }
 
 void
@@ -67,6 +69,16 @@ BoltQueue::receivePacket(Packet & pkt)
   cout << nodename() << " receivePacket " << pkt.size() << " " << pkt.flow_id() << " " << queuesize() << " " << pkt.get_slice_sent() << " " << _top->time_to_slice(eventlist().now()) << 
     " " << eventlist().now() << endl;
     */
+
+  if(pkt.type() == RLB) {
+    //cout << "BoltQueue receivePacket Rlb " << _tor << " " << _port << " seqno " << ((RlbPacket*)&pkt)->seqno() << endl;
+    _enqueued_rlb.push_back(&pkt);
+    _queuesize_rlb += pkt.size();
+    if(_servicing == Q_NONE) {
+      beginService();
+    }
+    return;
+  }
 
   if (queuesize()+pkt.size() > _maxsize) {
     /* if the packet doesn't fit in the queue, drop it */
@@ -111,14 +123,13 @@ BoltQueue::receivePacket(Packet & pkt)
 */
 
   /* enqueue the packet */
+  bool queueWasEmpty = slice_queuesize(_crt_tx_slice) == 0;
 #ifdef PRIO_QUEUE
-  bool queueWasEmpty = _servicing == Q_NONE;
   _enqueued[prio][pktslice].push_front(&pkt);
   _queuesize[prio][pktslice] += pkt.size();
   pkt.inc_queueing(_queuesize[prio][pktslice]);
   pkt.set_last_queueing(_queuesize[prio][pktslice]);
 #else
-  bool queueWasEmpty = _servicing == false;
   _enqueued[pktslice].push_front(&pkt);
   _queuesize[pktslice] += pkt.size();
 #endif
@@ -151,6 +162,9 @@ BoltQueue::receivePacket(Packet & pkt)
 }
 
 void BoltQueue::beginService() {
+  if(_servicing == Q_RLB) {
+    preemptRLB();
+  }
   /* schedule the next dequeue event */
 #ifdef PRIO_QUEUE
   assert(!_enqueued[Q_LO][_crt_tx_slice].empty() || !_enqueued[Q_HI][_crt_tx_slice].empty());
@@ -164,21 +178,29 @@ void BoltQueue::beginService() {
     _servicing = Q_LO;
   }
 #else
-  assert(!_enqueued[_crt_tx_slice].empty());
-  simtime_picosec finish_time = eventlist().now()+drainTime(_enqueued[_crt_tx_slice].back());
-  int finish_slice = _top->time_to_slice(finish_time);
-  if(_top->is_reconfig(finish_time)) {
-    cout << "hello world\n";
-    finish_slice = _top->absolute_logic_slice_to_slice(finish_slice + 1);
-  }
-  if (finish_slice != _crt_tx_slice && !_top->is_downlink(_port)) {
-    Packet *pkt = _enqueued[_crt_tx_slice].back();
-    cout << "debug packet earlyfb? " << pkt->early_fb() << " TcpData? " << (pkt->type() == TCP) << " remaining " << _queuesize[_crt_tx_slice] << " slices " << finish_slice << " " << _crt_tx_slice << endl;
-    assert(0);
+  assert(!_enqueued[_crt_tx_slice].empty() || !_enqueued_rlb.empty());
+  if(!_enqueued[_crt_tx_slice].empty()){
+    simtime_picosec finish_time = eventlist().now()+drainTime(_enqueued[_crt_tx_slice].back());
+    int finish_slice = _top->time_to_slice(finish_time);
+    if(_top->is_reconfig(finish_time) && _port >= 6) {
+      cout << "hello world\n";
+      finish_slice = _top->absolute_logic_slice_to_slice(finish_slice + 1);
+    }
+    if (finish_slice != _crt_tx_slice && !_top->is_downlink(_port)) {
+      Packet *pkt = _enqueued[_crt_tx_slice].back();
+      cout << "debug packet earlyfb? " << pkt->early_fb() << " TcpData? " << (pkt->type() == TCP) << " remaining " << _queuesize[_crt_tx_slice] << " slices " << finish_slice << " " << _crt_tx_slice << endl;
+      assert(0);
+    } else {
+      //cout << "beginService " << _tor << " " << _port << " id " << current_event_id << " slice " << _crt_tx_slice << endl;
+      _servicing = Q_LO;
+      eventlist().sourceIsPendingRel(*this, drainTime(_enqueued[_crt_tx_slice].back()));
+    }
+  } else if(!_enqueued_rlb.empty()) {
+      //cout << "beginService RLB " << _tor << " " << _port << " slice " << _crt_tx_slice << endl;
+      _servicing = Q_RLB;
+      eventlist().sourceIsPendingRel(*this, drainTime(_enqueued_rlb.back()));
   } else {
-    //cout << "beginService " << _tor << " " << _port << " id " << current_event_id << " slice " << _crt_tx_slice << endl;
-    _servicing = true;
-    eventlist().sourceIsPendingRel(*this, drainTime(_enqueued[_crt_tx_slice].back()));
+    assert(0);
   }
 #endif
 }
@@ -186,23 +208,85 @@ void BoltQueue::beginService() {
 void
 BoltQueue::completeService()
 {
-  /* dequeue the packet */
-#ifdef PRIO_QUEUE
-  assert(!_enqueued[_servicing][_crt_tx_slice].empty());
-  Packet* pkt = _enqueued[_servicing][_crt_tx_slice].back();
-  _enqueued[_servicing][_crt_tx_slice].pop_back();
-  assert(_queuesize[_servicing][_crt_tx_slice] >= pkt->size());
-  _queuesize[_servicing][_crt_tx_slice] -= pkt->size();
-#else
-  //cout << "completeService " << _tor << " " << _port << " id " << current_event_id << " slice " << _crt_tx_slice << endl;
-  assert(!_enqueued[_crt_tx_slice].empty());
-  Packet* pkt = _enqueued[_crt_tx_slice].back();
-  _enqueued[_crt_tx_slice].pop_back();
-  _queuesize[_crt_tx_slice] -= pkt->size();
-  _servicing = false;
-#endif
+  Packet *pkt = NULL;
+  if(_servicing == Q_RLB) { 
+    assert(!_enqueued_rlb.empty());
+    pkt = _enqueued_rlb.back();
 
-  sendFromQueue(pkt);
+    DynExpTopology* top = pkt->get_topology();
+    //cout << "BoltQueue Rlb completeService " << _tor << " " << _port << " seqno " << ((RlbPacket*)pkt)->seqno() << endl;
+
+    bool pktfound = true;
+    if (_port >= top->no_of_hpr()) { // it's a ToR uplink
+      pktfound = false;
+      while (!_enqueued_rlb.empty()) {
+
+        pkt = _enqueued_rlb.back(); // get the next packet
+        int slice = top->time_to_slice(eventlist().now());
+        // get the destination ToR:
+        int dstToR = top->get_firstToR(pkt->get_dst());
+        // get the currently-connected ToR:
+        int nextToR = top->get_nextToR(slice, pkt->get_crtToR(), pkt->get_crtport());
+
+        if (dstToR == nextToR) {
+          // this is a "fresh" RLB packet
+          _enqueued_rlb.pop_back();
+          _queuesize_rlb -= pkt->size();
+          pktfound = true;
+          break;
+        } else {
+          // this is an old packet, "drop" it and move on to the next one
+
+          RlbPacket *p = (RlbPacket*)(pkt);
+
+          // debug:
+          //cout << "X dropped an RLB packet at port " << pkt->get_crtport() << ", seqno:" << p->seqno() << endl;
+          //cout << "   ~ checked @ " << timeAsUs(eventlist().now()) << " us: specified ToR:" << dstToR << ", current ToR:" << nextToR << endl;
+
+          // old version: just drop the packet
+          //pkt->free();
+
+          // new version: NACK the packet
+          // NOTE: have not actually implemented NACK mechanism... Future work
+          RlbModule* module = top->get_rlb_module(p->get_src()); // returns pointer to Rlb module that sent the packet
+          module->receivePacket(*p, 1); // 1 means to put it at the front of the queue
+
+          _enqueued_rlb.pop_back(); // pop the packet
+          _queuesize_rlb -= pkt->size(); // decrement the queue size
+        }
+      }
+
+      // we went through the whole queue and they were all "old" packets
+      if (!pktfound){
+        pkt = NULL;
+      }
+
+    } else { // its a ToR downlink
+      _enqueued_rlb.pop_back();
+      _queuesize_rlb -= pkt->size();
+    }
+
+  } else {
+    /* dequeue the packet */
+#ifdef PRIO_QUEUE
+    assert(!_enqueued[_servicing][_crt_tx_slice].empty());
+    Packet* pkt = _enqueued[_servicing][_crt_tx_slice].back();
+    _enqueued[_servicing][_crt_tx_slice].pop_back();
+    assert(_queuesize[_servicing][_crt_tx_slice] >= pkt->size());
+    _queuesize[_servicing][_crt_tx_slice] -= pkt->size();
+#else
+    //cout << "completeService " << _tor << " " << _port << " id " << current_event_id << " slice " << _crt_tx_slice << endl;
+    assert(!_enqueued[_crt_tx_slice].empty());
+    pkt = _enqueued[_crt_tx_slice].back();
+    _enqueued[_crt_tx_slice].pop_back();
+    _queuesize[_crt_tx_slice] -= pkt->size();
+#endif
+  }
+
+  if(pkt){
+    sendFromQueue(pkt);
+  }
+  _servicing = Q_NONE;
 
 #ifdef PRIO_QUEUE
   _servicing = Q_NONE;
@@ -211,11 +295,18 @@ BoltQueue::completeService()
     beginService();
   }
 #else
-  if (!_enqueued[_crt_tx_slice].empty()) {
+  if (!_enqueued[_crt_tx_slice].empty() || !_enqueued_rlb.empty()) {
     /* schedule the next dequeue event */
     beginService();
   }
 #endif
+}
+
+void
+BoltQueue::preemptRLB() {
+  assert(_servicing == Q_RLB);
+  eventlist().cancelPendingSource(*this);
+  _servicing = Q_NONE;
 }
 
 mem_b

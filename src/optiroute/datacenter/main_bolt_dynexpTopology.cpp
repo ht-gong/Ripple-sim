@@ -254,7 +254,6 @@ int main(int argc, char **argv) {
             sinkLogger.monitorSink(flowSnk);
 
             }  else { // background flow, send it over RLB
-            assert(0);
             // generate an RLB source/sink:
 
             RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);

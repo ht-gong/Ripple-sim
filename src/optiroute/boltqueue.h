@@ -25,22 +25,26 @@ class BoltQueue : public Queue {
     virtual mem_b queuesize();
     virtual mem_b slice_queuesize(int slice);
     simtime_picosec get_queueing_delay(int slice);
+    bool isTxing() {return _servicing != Q_NONE && _servicing != Q_RLB;}
  private:
-    typedef enum {Q_LO, Q_HI, Q_NONE} queue_priority_t;
+    typedef enum {Q_LO, Q_HI, Q_RLB, Q_NONE} queue_priority_t;
+    queue_priority_t _servicing; 
 #ifdef PRIO_QUEUE
     vector<list <Packet*>> _enqueued[Q_NONE];
     vector<mem_b> _queuesize[Q_NONE];
-    queue_priority_t _servicing; 
 #else
     vector<list <Packet*>> _enqueued;
     vector<mem_b> _queuesize;
-    bool _servicing;
 #endif
+    list<Packet*> _enqueued_rlb;
+    mem_b _queuesize_rlb;
     mem_b _CCthresh;
     int _pru_token, _sm_token;
     simtime_picosec _last_sm_t;
 
     void updateSupply(Packet &pkt);
+
+    void preemptRLB();
 };
 
 #endif
