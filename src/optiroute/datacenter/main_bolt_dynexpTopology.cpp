@@ -243,6 +243,7 @@ int main(int argc, char **argv) {
             TcpSrc* flowSrc = new BoltSrc(NULL, NULL, eventlist, top, flow_src, flow_dst, routing);
             //flowSrc->setCwnd(cwnd*Packet::data_packet_size()); // congestion window
             flowSrc->set_flowsize(vtemp[2]); // bytes
+            flowSrc->set_nosyn();
             maxflow = std::max(vtemp[2], maxflow);
 
             TcpSink* flowSnk = new TcpSink();

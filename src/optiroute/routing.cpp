@@ -360,7 +360,7 @@ simtime_picosec Routing::routing_from_ToR_OptiRoute(Packet* pkt, simtime_picosec
           cout << "PKTDEBUG start_t " << start_t << " queueing_delay " << cur_q->get_queueing_delay(expected_slice) << " draintime " << cur_q->drainTime(pkt) << " slice " << expected_slice << endl;
     }
     }
-
+    finish_push += 5120;
     int finish_push_slice = top->time_to_logic_slice(finish_push); // plus the link delay
 
     // calculate delay considering the queue occupancy

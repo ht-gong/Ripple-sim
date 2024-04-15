@@ -56,6 +56,7 @@ class TcpSrc : public PacketSink, public EventSource {
     uint32_t get_id(){ return id;}
     virtual void connect(TcpSink& sink, simtime_picosec startTime);
     void startflow();
+    void set_nosyn() {_established = true;}
 
     void doNextEvent();
     Queue* sendToNIC(Packet* pkt);
