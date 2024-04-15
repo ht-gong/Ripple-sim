@@ -182,7 +182,7 @@ void BoltQueue::beginService() {
   if(!_enqueued[_crt_tx_slice].empty()){
     simtime_picosec finish_time = eventlist().now()+drainTime(_enqueued[_crt_tx_slice].back());
     int finish_slice = _top->time_to_slice(finish_time);
-    if(_top->is_reconfig(finish_time) && _port >= 6) {
+    if(_top->is_reconfig(finish_time) && _port >= _top->no_of_hpr()) {
       cout << "hello world\n";
       finish_slice = _top->absolute_logic_slice_to_slice(finish_slice + 1);
     }
