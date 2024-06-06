@@ -67,6 +67,7 @@ void CompositeQueue::rerouteFromCQ(Packet* pkt) {
 
 void 
 CompositeQueue::handleStuck() {
+    return;
     Packet *pkt;
     list<Packet*> tmp = _enqueued_high[_crt_tx_slice];
     _enqueued_high[_crt_tx_slice].clear();
@@ -176,10 +177,12 @@ void CompositeQueue::beginService(){
         _is_servicing = true;
         _last_service_begin = eventlist().now();
       } else {
+      /*
         Packet *to_reroute = _enqueued_high[_crt_tx_slice].back();
 	_enqueued_high[_crt_tx_slice].pop_back();
 	_queuesize_high[_crt_tx_slice] -= to_reroute->size();
 	rerouteFromCQ(to_reroute);
+    */
       }
 
 			// debug:
@@ -198,10 +201,12 @@ void CompositeQueue::beginService(){
         _is_servicing = true;
         _last_service_begin = eventlist().now();
       } else {
+      /*
         Packet *to_reroute = _enqueued_low[_crt_tx_slice].back();
 	_enqueued_low[_crt_tx_slice].pop_back();
 	_queuesize_low[_crt_tx_slice] -= to_reroute->size();
 	rerouteFromCQ(to_reroute);
+    */
       }
 			// debug:
 			//if (_tor == 0 && _port == 6) {
@@ -222,10 +227,12 @@ void CompositeQueue::beginService(){
       _is_servicing = true;
       _last_service_begin = eventlist().now();
       } else {
+      /*
         Packet *to_reroute = _enqueued_high[_crt_tx_slice].back();
 	_enqueued_high[_crt_tx_slice].pop_back();
 	_queuesize_high[_crt_tx_slice] -= to_reroute->size();
 	rerouteFromCQ(to_reroute);
+    */
       }
 
 		// debug:
@@ -242,10 +249,12 @@ void CompositeQueue::beginService(){
       _is_servicing = true;
       _last_service_begin = eventlist().now();
       } else {
+      /*
         Packet *to_reroute = _enqueued_low[_crt_tx_slice].back();
 	_enqueued_low[_crt_tx_slice].pop_back();
 	_queuesize_low[_crt_tx_slice] -= to_reroute->size();
 	rerouteFromCQ(to_reroute);
+    */
       }
 
 		// debug:
