@@ -153,7 +153,7 @@ void NdpSrc::processRTS(NdpPacket& pkt){
     // need to reset the sounrce and destination:
     pkt.set_src(_flow_src);
     pkt.set_dst(_flow_dst);
-    cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
+    //cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
     
     _sent_times.erase(pkt.seqno());
     //resend from front of RTX
@@ -909,10 +909,12 @@ void NdpSink::receivePacket(Packet& pkt) {
     }
 
     if (last_ts > fts){
+	    /*
         cout << "REORDER " << " " << _flow_src << " " << _flow_dst << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
             "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
+	    */
         _src->_found_reorder++;
     }
     last_ts = fts;
