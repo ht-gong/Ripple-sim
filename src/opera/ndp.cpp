@@ -888,10 +888,12 @@ void NdpSink::receivePacket(Packet& pkt) {
     }
 	
     //update_path_history(*p); // don't need this anymore...
-    _src->_last_hop_per_trip = pkt.get_crthop();
-    if(pkt.get_crthop() > _src->_max_hops_per_trip)
-        _src->_max_hops_per_trip = pkt.get_crthop();
-    _src->_total_hops += pkt.get_crthop();
+    if(!pkt.header_only()) {
+		_src->_last_hop_per_trip = pkt.get_crthop();
+		if(pkt.get_crthop() > _src->_max_hops_per_trip)
+			_src->_max_hops_per_trip = pkt.get_crthop();
+		_src->_total_hops += pkt.get_crthop();
+    }
 
     if (pkt.header_only()){
 
