@@ -324,7 +324,7 @@ void CompositeQueue::completeService() {
 					pktfound = true;
             		break;
             	} else {
-			cout << "drop tor " << _tor << " port " << _port << " dest " << dstToR << " next " << nextToR << " slice " << _top->time_to_slice(eventlist().now()) << " hop " << pkt->get_crthop() << " time " << eventlist().now() << endl;
+			//cout << "drop tor " << _tor << " port " << _port << " dest " << dstToR << " next " << nextToR << " slice " << _top->time_to_slice(eventlist().now()) << " hop " << pkt->get_crthop() << " time " << eventlist().now() << endl;
             		// this is an old packet, "drop" it and move on to the next one
 
             		RlbPacket *p = (RlbPacket*)(pkt);
