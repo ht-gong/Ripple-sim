@@ -69,6 +69,7 @@ int main(int argc, char **argv) {
     uint64_t routing_opt = ROUTING_NO_OPT;
     int64_t slice_time = 0;
     simtime_picosec slice_duration = 0;
+	bool rlb_enabled = true;
 
     int i = 1;
     filename << "logout.dat";
@@ -105,6 +106,8 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-rlbflow")) {
             rlbflow = atof(argv[i+1]);
             i++;
+        } else if (!strcmp(argv[i],"-norlb")) {
+            rlb_enabled = false;
         } else if (!strcmp(argv[i],"-routing")) {
             if(!strcmp(argv[i + 1], "SingleShortest")) {
                 routing_alg = SINGLESHORTEST;
@@ -239,6 +242,7 @@ int main(int argc, char **argv) {
                 sinkLogger.monitorSink(flowSnk);
 
             }  else { // background flow, send it over RLB
+				if(!rlb_enabled) continue;
                 // generate an RLB source/sink:
 
                 RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
@@ -257,8 +261,10 @@ int main(int argc, char **argv) {
 
     cout << "Traffic loaded." << endl;
 
-    RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
-    master->start();
+	if(rlb_enabled){
+		RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+		master->start();
+	}
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);
