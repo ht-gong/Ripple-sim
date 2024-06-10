@@ -20,17 +20,14 @@ class ECNQueue : public Queue {
     void receivePacket(Packet & pkt);
     void beginService();
     void completeService();
+    typedef enum {Q_LO, Q_HI, Q_RLB, Q_NONE} queue_priority_t;
+    queue_priority_t _servicing; 
     mem_b queuesize(); 
     mem_b slice_queuesize(int slice);
     simtime_picosec get_queueing_delay(int slice);
     void preemptRLB();
     void handleStuck() { return; }
-    bool isTxing() {
-        int slice = _top->time_to_logic_slice(eventlist().now());
-        return (_sending_pkt != NULL && _sending_pkt->type() != RLB) ||
-            (_sending_pkt != NULL && _queuesize[slice] <= 0);
-    }
-    void set_early_fb(bool enabled) { _early_fb_enabled = enabled;}
+    bool isTxing() {return _servicing != Q_NONE && _servicing != Q_RLB;}
 
  private:
     mem_b _K;
@@ -41,11 +38,7 @@ class ECNQueue : public Queue {
     list<Packet*> _enqueued_rlb;
     int _dl_queue;
     DynExpTopology *_top;
-    void sendEarlyFeedback(Packet &pkt);
     void dump_queuesize();
-    bool _early_fb_enabled;
-    simtime_picosec _rlb_service_time;
-    bool _rlb_preempted = false;
 };
 
 #endif

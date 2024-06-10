@@ -465,6 +465,9 @@ void PriorityQueue::completeService() {
 	            pkt->set_crthop(-1);
 	            pkt->set_crtToR(-1);
 		    //cout << "debug " << pkt->get_src_ToR() << " " << pkt->get_dst() << " " << pkt->get_slice_sent() << endl;
+            if(pkt->get_src_ToR() == _top->get_firstToR(pkt->get_dst())) {
+                cout << "flow " << pkt->get_src() << " " << pkt->get_dst() << endl;
+            }
 	            pkt->set_maxhops(_top->get_no_hops(pkt->get_src_ToR(),
 	                _top->get_firstToR(pkt->get_dst()), pkt->get_slice_sent(), path_index));
 	        }
