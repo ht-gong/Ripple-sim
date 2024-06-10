@@ -30,6 +30,7 @@ int NdpSrc::_global_node_count = 0;
    this out after the sim has finished if you care about this. */
 int NdpSrc::_rtt_hist[10000000] = {0};
 
+#define RESEND_ON_TIMEOUT
 /* keep track of RTOs.  Generally, we shouldn't see RTOs if
    return-to-sender is enabled.  Otherwise we'll see them with very
    large incasts. */
