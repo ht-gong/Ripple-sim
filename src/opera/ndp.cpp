@@ -154,7 +154,7 @@ void NdpSrc::processRTS(NdpPacket& pkt){
     // need to reset the sounrce and destination:
     pkt.set_src(_flow_src);
     pkt.set_dst(_flow_dst);
-    cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
+    //cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
     
     _sent_times.erase(pkt.seqno());
     //resend from front of RTX
@@ -889,10 +889,12 @@ void NdpSink::receivePacket(Packet& pkt) {
     }
 	
     //update_path_history(*p); // don't need this anymore...
-    _src->_last_hop_per_trip = pkt.get_crthop();
-    if(pkt.get_crthop() > _src->_max_hops_per_trip)
-        _src->_max_hops_per_trip = pkt.get_crthop();
-    _src->_total_hops += pkt.get_crthop();
+    if(!pkt.header_only()) {
+		_src->_last_hop_per_trip = pkt.get_crthop();
+		if(pkt.get_crthop() > _src->_max_hops_per_trip)
+			_src->_max_hops_per_trip = pkt.get_crthop();
+		_src->_total_hops += pkt.get_crthop();
+    }
 
     if (pkt.header_only()){
 
@@ -910,10 +912,12 @@ void NdpSink::receivePacket(Packet& pkt) {
     }
 
     if (last_ts > fts){
+	    /*
         cout << "REORDER " << " " << _flow_src << " " << _flow_dst << " "
             << _src->get_flowsize() << " " << 
             "EARLY " << last_ts << " " << last_hops << " " << last_queueing << " " 
             "LATE " << ts << " " << p->get_crthop() << " " << p->get_queueing() << endl;
+	    */
         _src->_found_reorder++;
     }
     last_ts = fts;
