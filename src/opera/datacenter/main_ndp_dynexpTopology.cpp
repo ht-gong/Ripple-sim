@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
 #endif
 
 	// initialize all sources/sinks
-    NdpSrc::setMinRTO(1000); // microseconds
+    NdpSrc::setMinRTO(2000); // microseconds
     NdpSrc::setRouteStrategy(route_strategy);
     NdpSink::setRouteStrategy(route_strategy);
 

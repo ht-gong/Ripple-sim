@@ -68,7 +68,7 @@ NdpSrc::NdpSrc(DynExpTopology* top, NdpLogger* logger, TrafficLogger* pktlogger,
     _sink = 0;
 
     _rtt = 0;
-    _rto = timeFromMs(1); // was 20
+    _rto = timeFromMs(2); // was 20
     _cwnd = 15 * Packet::data_packet_size();
     _mdev = 0;
     _drops = 0;
@@ -154,7 +154,7 @@ void NdpSrc::processRTS(NdpPacket& pkt){
     // need to reset the sounrce and destination:
     pkt.set_src(_flow_src);
     pkt.set_dst(_flow_dst);
-    //cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
+    cout << "RTS " << _flow_src << " " << _flow_dst << " " << pkt.seqno() << endl;
     
     _sent_times.erase(pkt.seqno());
     //resend from front of RTX
@@ -325,7 +325,7 @@ void NdpSrc::processAck(const NdpAck& ack) {
     }
 
     if (_rto < _min_rto)
-	_rto = _min_rto * ((drand() * 0.5) + 0.75);
+	_rto = _min_rto;// * ((drand() * 0.5) + 0.75);
 
     if (cum_ackno > _last_acked) { // a brand new ack    
         // we should probably cancel the rtx timer for any acked by
@@ -589,6 +589,7 @@ void NdpSrc::send_packet(NdpPull::seq_t pacer_no) {
 
         if (_rtx_timeout == timeInf) {
             _rtx_timeout = eventlist().now() + _rto;
+            //cout << "_rtx_timeout " << _rtx_timeout << " _rto " << _rto << endl;
         }
     }
 }
@@ -629,7 +630,6 @@ void NdpSrc::process_cumulative_ack(NdpPacket::seq_t cum_ackno) {
 }
 
 void NdpSrc::retransmit_packet() {
-    assert(0);
     //cout << "starting retransmit_packet\n";
     NdpPacket* p;
     map<NdpPacket::seq_t, simtime_picosec>::iterator i, i_next;
@@ -682,7 +682,7 @@ void NdpSrc::rtx_timer_hook(simtime_picosec now, simtime_picosec period) {
     if (_rtx_timeout==timeInf || now + period < _rtx_timeout) return;
 
     // this should never happen in Opera...
-    cout <<"At " << timeAsUs(now) << "us RTO " << timeAsUs(_rto) << "us MDEV " << timeAsUs(_mdev) << "us RTT "<< timeAsUs(_rtt) << "us SEQ " << _last_acked / _mss << " CWND "<< _cwnd/_mss << " Flow ID " << str()  << endl;
+    cout <<"At " << timeAsUs(now) << "us RTO " << timeAsUs(_rto) << "us MDEV " << timeAsUs(_mdev) << "us RTT "<< timeAsUs(_rtt) << "us SEQ " << _last_acked / _mss << " CWND "<< _cwnd/_mss << " Flow ID " << str()  << " highest_sent " << _highest_sent << endl;
     /*
     if (_log_me) {
 	cout << "Flow " << LOGSINK << "scheduled for RTX\n";
