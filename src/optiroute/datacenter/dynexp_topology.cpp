@@ -254,12 +254,10 @@ Queue* DynExpTopology::alloc_queue(QueueLogger* queueLogger, uint64_t speed, mem
         return new BoltQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
     else if (qt==DEFAULT)
         return new CompositeQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, tor, port, this, _routing);
-    else if (qt==ECN || qt==ECN_EFB) {
+    else if (qt==ECN) {
         if(!_marking_thresh)
           _marking_thresh = DEFAULT_ECN_K;
         ECNQueue *q = new ECNQueue(speedFromMbps(speed), queuesize, *eventlist, queueLogger, 1500*_marking_thresh, tor, port, this, _routing);
-        if(qt==ECN_EFB) q->set_early_fb(true);
-        else q->set_early_fb(false);
         return q;   
     }
     assert(0);
@@ -440,6 +438,7 @@ int DynExpTopology::get_no_paths(int srcToR, int dstToR, int slice) {
 }
 
 int DynExpTopology::get_no_hops(int srcToR, int dstToR, int slice, int path_ind) {
+  //cout << "DB " << srcToR << " " << dstToR << " " << slice << " " << path_ind << endl;
   int sz = _lbls[srcToR][dstToR][slice][path_ind].size();
   return sz;
 }

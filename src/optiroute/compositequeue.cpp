@@ -428,19 +428,20 @@ void CompositeQueue::receivePacket(Packet& pkt) {
     return;
   }
   int pkt_slice = _top->is_downlink(_port) ? 0 : pkt.get_crtslice();
-	switch (pkt.type()) {
+  switch (pkt.type()) {
     case RLB:
-    {
-        
+    { 
     	// debug:
     	//RlbPacket *p = (RlbPacket*)(&pkt);
         //    if (p->seqno() == 1)
         //        cout << "# marked packet queued at ToR: " << _tor << ", port: " << _port << endl;
         //cout << "CQ receivePacket " << _tor << " " << _port << " pktslice " << pkt_slice << " crt_tx_slice " << _crt_tx_slice << endl;
-    	_enqueued_rlb.push_front(&pkt);
+		_enqueued_rlb.push_front(&pkt);
 		_queuesize_rlb += pkt.size();
-
-        break;
+		if(_serv == QUEUE_INVALID) {
+			beginService();
+		}
+		return;
     }
     case NDP:
     {
@@ -539,7 +540,7 @@ void CompositeQueue::receivePacket(Packet& pkt) {
 					assert(_queuesize_low[pkt_slice] + pkt.size() <= _maxsize);
 					_enqueued_low[pkt_slice].push_front(&pkt);
 					_queuesize_low[pkt_slice] += pkt.size();
-					if (_serv==QUEUE_INVALID && slice_queuesize(_crt_tx_slice) > 0) {
+					if ((_serv==QUEUE_INVALID || _serv==QUEUE_RLB) && slice_queuesize(_crt_tx_slice) > 0) {
 						beginService();
 					}
 					return;
@@ -621,7 +622,7 @@ mem_b CompositeQueue::queuesize() {
 }
 
 mem_b CompositeQueue::slice_queuesize(int slice){
-    return _queuesize_low[slice]+_queuesize_high[slice]+_queuesize_rlb;
+    return _queuesize_low[slice]+_queuesize_high[slice];
 }
 
 simtime_picosec CompositeQueue::get_queueing_delay(int slice) {

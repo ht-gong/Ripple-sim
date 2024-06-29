@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
     double utiltime = .01; // seconds
     int64_t rlbflow = 0; // flow size of "flagged" RLB flows
     int64_t cutoff = 0; // cutoff between NDP and RLB flow sizes. flows < cutoff == NDP.
+    bool rlb_enabled = true;
 
     int i = 1;
     filename << "logout.dat";
@@ -99,6 +100,8 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-rlbflow")) {
             rlbflow = atof(argv[i+1]);
             i++;
+        } else if (!strcmp(argv[i],"-norlb")) {
+            rlb_enabled = false;
         } else if (!strcmp(argv[i],"-flowfile")) {
 			flowfile = argv[i+1];
 			i++;
@@ -158,7 +161,7 @@ int main(int argc, char **argv) {
 #endif
 
 	// initialize all sources/sinks
-    NdpSrc::setMinRTO(1000); // microseconds
+    NdpSrc::setMinRTO(2000); // microseconds
     NdpSrc::setRouteStrategy(route_strategy);
     NdpSink::setRouteStrategy(route_strategy);
 
@@ -208,6 +211,8 @@ int main(int argc, char **argv) {
 
             }  else { // background flow, send it over RLB
 
+                if(!rlb_enabled) continue;
+
                 // generate an RLB source/sink:
 
                 RlbSrc* flowSrc = new RlbSrc(top, NULL, NULL, eventlist, flow_src, flow_dst);
@@ -226,8 +231,10 @@ int main(int argc, char **argv) {
 
     cout << "Traffic loaded." << endl;
 
-    RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
-    master->start();
+    if(rlb_enabled){
+        RlbMaster* master = new RlbMaster(top, eventlist); // synchronizes the RLBmodules
+        master->start();
+    }
 
     // NOTE: UtilMonitor defined in "pipe"
     UtilMonitor* UM = new UtilMonitor(top, eventlist);
