@@ -265,7 +265,7 @@ void ECNQueue::beginService() {
         #endif
         Packet *pkt = _enqueued[_crt_tx_slice].back();
         cout << "debug packet earlyfb? " << pkt->early_fb() << " TcpData? " << (pkt->type() == TCP) << " remaining " << _queuesize[_crt_tx_slice] << " slices " << finish_push_slice << " " << _crt_tx_slice << " pktid " << pkt->id() << endl;
-        //assert(0);
+        // assert(0);
         cout<<"Uplink port attempting to serve pkt across configurations\n";
         _sending_pkt = NULL;
         if(_queuesize_rlb > 0) {
