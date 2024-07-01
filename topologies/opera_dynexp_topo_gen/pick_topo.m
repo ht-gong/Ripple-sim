@@ -5,7 +5,7 @@ function []=pick_topo(N,Nbase,k,lifted,pflag,Nruns,G)
 u=k/2; % endpoint fanout, also == number of rotors
 
 if lifted==1
-    load(sprintf('lifted_Decomp_Nbase=%d_N=%d.mat',Nbase,N),'P');
+    load(sprintf('Lifted_Decomp_Nbase=%d_N=%d.mat',Nbase,N),'P');
 else
     load(sprintf('Decomp_N=%d.mat',N),'P');
 end
