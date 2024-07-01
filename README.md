@@ -1,5 +1,5 @@
 # Ripple-sim
-Packet-level simulation code to model Ripple and other networks from the 2024 SIGCOMM paper "#506 Uniform-Cost Multi-Path Routing for Reconfigurable Data Center Networks"
+Packet-level simulation code for SIGCOMM 2024 paper "#506 Uniform-Cost Multi-Path Routing for Reconfigurable Data Center Networks"
 
 ## Requirements:
 
@@ -7,13 +7,12 @@ Packet-level simulation code to model Ripple and other networks from the 2024 SI
 
 ## Description:
 
-- The /FigureX directories contain example Matlab scripts to generate traffic and post-process simulation data as well as execution scripts for running simulations.
-- The /src directory contains the packet simulator source code. There is a separate simulator for each network type (e.g. Ripple, Opera, Clos). The packet simulator is an extension of the htsim NDP simulator (https://github.com/nets-cs-pub-ro/NDP/tree/master/sim)
+- The /src directory contains the packet simulator source code. There is a separate simulator for each network type (e.g. UCMP, Opera). The packet simulator is an extension of the htsim NDP simulator (https://github.com/nets-cs-pub-ro/NDP/tree/master/sim)
 
 ## Repo Structure:
-- routing: scripts replated to pre-computing our routing paths
+- routing: scripts replated to pre-computing UCMP paths
 - src: source for the htsim simulator
-  - optiroute: modified simulator version for Ripple simulations
+  - optiroute: Ripple simulations
   - opera: modified simulator versions for simulations from Opera(NSDI '20)
   - ...
 - run: where simulator runs are initiated, results and plotting scripts are stored
