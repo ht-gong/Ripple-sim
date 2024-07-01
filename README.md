@@ -9,25 +9,39 @@ Packet-level simulation code for SIGCOMM 2024 paper (UCMP) "Uniform-Cost Multi-P
 
 - The /src directory contains the packet simulator source code. There is a separate simulator for each network type (e.g. UCMP, Opera). The packet simulator is an extension of the htsim NDP simulator (https://github.com/nets-cs-pub-ro/NDP/tree/master/sim)
 
-## Repo Structure:
-- /routing: scripts replated to pre-computing UCMP paths
-- /src: source for the htsim simulator
-  - optiroute: for UCMP, ksp
-  - opera: for Opera(NSDI '20), VLB (SIGCOMM '17)
-- /run: where simulator runs are initiated, results and plotting scripts are stored
-- /topologies: network topology files
-- /traffic: for generating synthetic traffic traces
+### Repo Structure:
+```
+/
+├─ topologies/ -- network topology files
+├─ src/ -- source for the htsim simulator
+│  ├─ optiroute/ -- for UCMP, ksp
+│  ├─ opera/ -- for Opera(NSDI '20), VLB (SIGCOMM '17)
+├─ run/ -- where simulator runs are initiated, results and plotting scripts are stored
+├─ traffic --  for generating synthetic traffic traces
+```
 
 ## Build instructions:
 
-- To build any simulator, take Ripple for example, from the top level directory run:
+- To build both versions (optiroute, opera) of the htsim simulator:
   ```
-  cd /src/$SIMULATOR_BRANCH
+  cd /src/optiroute
+  make
+  cd /datacenter
+  make
+
+  cd /src/opera
   make
   cd /datacenter
   make
   ```
 - The executable will be found in the /datacenter directory and named htsim_...
+
+## Re-creating paper figures:
+
+1. Build both ``optiroute`` and ``opera``.
+2. Each sub-directory under ``/run`` corresponds to a figure in the UCMP paper, to obtain results and plot the figures, cd into ``/run/FigureX`` and run the bash script named ``runs.sh``.
+  - *The simulations can take a long time to finish -- the longest simulation takes ~20 hours on our machine*.
+  - It may be more efficient to run each command in parallel, but becareful about the memory consumption -- some runs took up to 50GBs of memory in our server.
 
 ## Typical workflow:
 
