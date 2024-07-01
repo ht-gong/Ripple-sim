@@ -31,12 +31,13 @@ Packet-level simulation code for SIGCOMM 2024 paper (UCMP) "Uniform-Cost Multi-P
 
 ## Typical workflow:
 
-- Compile the simulator as described above (for UCMP, Opera, etc.).
+- Compile the simulator as described above.
 - Generate/use our pre-existing topology file related to that network type
 	- UCMP -- /topologies/slice50us_portion1_queue0_optiroute_adaptive_paths_alpha_0.5.txt 
-	- Opera -- /topologies/dynexp_50us_10nsrc_5paths.txt 
+	- Opera -- /topologies/dynexp_50us_10nsrc_1path.txt 
 	- VLB -- /topologies/dynexp_50us_10nsrc_1path.txt
 	- ksp -- /topologies/general_from_dynexp_N=108_topK=1.txt
+  If you want to generate them manually, go to the corresponding folder and run the script.
 - Generate/use our pre-generated files specifying the traffic 
 	- Our pre-generated traffic files are in /traffic
 	- If you want to generate them manually you should run the corresponding script.  (e.g. /traffic/generate_traffic.m). The file format is (where src_host and dst_host are indexed from zero)
@@ -44,6 +45,5 @@ Packet-level simulation code for SIGCOMM 2024 paper (UCMP) "Uniform-Cost Multi-P
   <src_host> <dst_host> <flow_size_bytes> <flow_start_time_nanosec> /newline
   ```
   - If you want to generate them manually, run /traffic/generate_websearch_traffic.m, then run write_to_htsim_file.m
-- Specify the simulation parameters and run (e.g. run /Figure7_datamining/opera/sim/run.sh).
-- Post-process the simulation data (e.g. run /Figure7_datamining/opera/plot/process_FCT_and_UTIL.m).
-- Plot the post-processed data (e.g. run /Figure7_datamining/opera/plot/plotter.m)
+- Specify the simulation parameters and run (e.g. run /Figure8/run.sh).
+- Plot the post-processed data (e.g. run /Figure8/set_config.py and then run FCT.py)

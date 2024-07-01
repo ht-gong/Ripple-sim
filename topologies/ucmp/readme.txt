@@ -1,5 +1,6 @@
 ********** Default UCMP paths
 To generate default UCMP paths (SLICE_E = 50us, alpha = 0.5), try the following workflow:
+Create two empty folders /fully_reconf_one_optimal_path, /fully_reconf_all_optimal_paths
 python3 run_1.py
 python3 run_2.py
 python3 get_joint_paths.py
