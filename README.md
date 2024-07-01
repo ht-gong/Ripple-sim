@@ -14,7 +14,7 @@ Packet-level simulation code to model Ripple and other networks from the 2024 SI
 - routing: scripts replated to pre-computing our routing paths
 - src: source for the htsim simulator
   - optiroute: modified simulator version for Ripple simulations
-  - opera: modified simulator versions for simulations from Opera(SIGCOMM '20)
+  - opera: modified simulator versions for simulations from Opera(NSDI '20)
   - ...
 - run: where simulator runs are initiated, results and plotting scripts are stored
 - topologies: network topology files
