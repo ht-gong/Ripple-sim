@@ -40,8 +40,9 @@ Packet-level simulation code for SIGCOMM 2024 paper (UCMP) "Uniform-Cost Multi-P
 
 1. Build both ``optiroute`` and ``opera``.
 2. Each sub-directory under ``/run`` corresponds to a figure in the UCMP paper, to obtain results and plot the figures, cd into ``/run/FigureX`` and run the bash script named ``runs.sh``.
+  - The network topology file for Opera k=5 (5 candidate paths for each src-dst pair) is too large for the Git repo. Please download it from https://drive.google.com/file/d/1B7F3yTlNVO7C7kCwY9ym055iDyM8XVNq/view and place it within the ``/topologies``.
   - *The simulations can take a long time to finish -- the longest simulation takes ~20 hours on our machine*.
-  - It may be more efficient to run each command in parallel, but becareful about the memory consumption -- some runs took up to 50GBs of memory in our server.
+  - *It may be more time-efficient to run each command in parallel, but becareful about the memory consumption -- some runs took up to 50GBs of memory in our server.*
 
 ## Typical workflow:
 
@@ -50,7 +51,7 @@ Packet-level simulation code for SIGCOMM 2024 paper (UCMP) "Uniform-Cost Multi-P
 	- UCMP -- /topologies/slice50us_portion1_queue0_optiroute_adaptive_paths_alpha_0.5.txt 
 	- Opera -- /topologies/dynexp_50us_10nsrc_1path.txt 
 	- VLB -- /topologies/dynexp_50us_10nsrc_1path.txt
-	- ksp -- /topologies/general_from_dynexp_N=108_topK=1.txt
+	- K Shortest Paths (KSP) -- /topologies/general_from_dynexp_N=108_topK=1.txt
   If you want to generate them manually, go to the corresponding folder and run the script.
 - Generate/use our pre-generated files specifying the traffic 
 	- Our pre-generated traffic files are in /traffic
