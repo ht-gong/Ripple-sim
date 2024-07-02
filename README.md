@@ -15,7 +15,7 @@ Packet-level simulation code for SIGCOMM 2024 paper (UCMP) "Uniform-Cost Multi-P
 ├─ topologies/ -- network topology files
 ├─ src/ -- source for the htsim simulator
 │  ├─ optiroute/ -- for UCMP, ksp
-│  ├─ opera/ -- for Opera(NSDI '20), VLB (SIGCOMM '17)
+│  ├─ opera/ -- for Opera(NSDI '20), VLB(SIGCOMM '17)
 ├─ run/ -- where simulator runs are initiated, results and plotting scripts are stored
 ├─ traffic --  for generating synthetic traffic traces
 ```
