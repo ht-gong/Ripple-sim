@@ -19,3 +19,4 @@ python3 FCT.py
 
 python3 BE_CDF.py
 python3 BE_BAR.py
+python3 avg_link_util_agg.py

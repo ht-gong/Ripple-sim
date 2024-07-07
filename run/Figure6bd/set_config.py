@@ -29,18 +29,18 @@ markers = itertools.cycle(('o', '^', 's', 'd', 'p', 'v'))
 config = {
     "folder_name": "",
     "file_names": [
-        #"slice_1us/HOHO_websearch_10percLoad_dctcp_0.5sec_0.8sec_1us_unfinish_180ms",
-        #"../../../../operasim/run/result_hoho/HOHO_websearch_1percLoad_ndp_0.5sec_0.8sec_1us",
-        #"../../../../operasim/run/hoho_opera_from_fed/HOHO_websearch_1percLoad_bolt_0.5sec_0.8sec_5us",
-        "./OptiRoute_websearch_dctcp_0.5sec_0.8sec_50us",
-        "./OptiRoute_websearch_ndp_0.5sec_0.8sec_50us",
-        "./VLB_websearch_rotorlb_opera_0.5sec_0.8sec_50us",
-        "./ksp_topK=1_websearch_dctcp_0.5sec_0.8sec_50us",
-        "./ksp_topK=5_websearch_dctcp_0.5sec_0.8sec_50us",
-        "./Opera_1path_websearch_ndp_0.5sec_0.8sec_50us",
-        "./Opera_5paths_websearch_ndp_0.5sec_0.8sec_50us"
-        #"../../../../operasim/run/result_ucmp/Opera_1path_websearch_ndp_0.5sec_0.8sec_50us_haotian",
-        #"../../../../operasim/run/result_ucmp/Opera_5paths_websearch_ndp_0.5sec_3sec_50us_new"
+        #"slice_1us/HOHO_datamining_10percLoad_dctcp_0.5sec_0.8sec_1us_unfinish_180ms",
+        #"../../../../operasim/run/result_hoho/HOHO_datamining_1percLoad_ndp_0.5sec_0.8sec_1us",
+        #"../../../../operasim/run/hoho_opera_from_fed/HOHO_datamining_1percLoad_bolt_0.5sec_0.8sec_5us",
+        "./OptiRoute_datamining_dctcp_0.5sec_0.8sec_50us",
+        "./OptiRoute_datamining_ndp_0.5sec_0.8sec_50us",
+        "./VLB_datamining_rotorlb_opera_0.5sec_0.8sec_50us",
+        "./ksp_topK=1_datamining_dctcp_0.5sec_0.8sec_50us",
+        "./ksp_topK=5_datamining_dctcp_0.5sec_0.8sec_50us",
+        "./Opera_1path_datamining_ndp_0.5sec_0.8sec_50us",
+        "./Opera_5paths_datamining_ndp_0.5sec_0.8sec_50us"
+        #"../../../../operasim/run/result_ucmp/Opera_1path_datamining_ndp_0.5sec_0.8sec_50us_haotian",
+        #"../../../../operasim/run/result_ucmp/Opera_5paths_datamining_ndp_0.5sec_3sec_50us_new"
     ],
     "labels": [
         #r'HOHO+NDP (1$\mu s$)',
