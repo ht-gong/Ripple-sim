@@ -24,7 +24,7 @@ colors = [
 markers = itertools.cycle(('o', '^', 's', 'd', 'p', 'v'))
 
 config = {
-    "folder_name": "0119_final_OptiRoute_dctcp_0.5sec_0.8sec_Xus/",
+    "folder_name": "",
     "file_names": [
         "OptiRoute_websearch_dctcp_0.5sec_0.8sec_1us_alpha_0.5",
         "OptiRoute_websearch_dctcp_0.5sec_0.8sec_10us_alpha_0.5",
