@@ -15,7 +15,7 @@ for i in range(len(file_names)):
     flow_sizes = []
     hop_counts = []
     band_efficiencies = []
-    with open('../../run/results/' + folder_name + file_names[i] + '.txt', 'r') as file:
+    with open('./' + folder_name + file_names[i] + '.txt', 'r') as file:
         for line in file.readlines():
             line = line.split()
             if len(line) <= 0:

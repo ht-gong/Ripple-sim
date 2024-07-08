@@ -26,10 +26,10 @@ markers = itertools.cycle(('o', '^', 's', 'd', 'p', 'v'))
 config = {
     "folder_name": "",
     "file_names": [
-        "OptiRoute_websearch_dctcp_0.5sec_0.8sec_cfg_10ns",
-        "OptiRoute_websearch_dctcp_0.5sec_0.8sec_cfg_1us",
+        "OptiRoute_websearch_dctcp_0.5sec_0.8sec_50us_cfg_10ns",
+        "OptiRoute_websearch_dctcp_0.5sec_0.8sec_50us_cfg_1us",
         # "OptiRoute_websearch_dctcp_0.5sec_0.8sec_cfg_5us",
-        "OptiRoute_websearch_dctcp_0.5sec_0.8sec_cfg_10us",
+        "OptiRoute_websearch_dctcp_0.5sec_0.8sec_50us_cfg_10us",
     ],
     "labels": [
         r'10 $ns$',

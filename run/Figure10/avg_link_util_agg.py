@@ -30,7 +30,7 @@ colors, markers, endpoint = config["colors"], config["markers"], config["endpoin
 set_times, set_tor_host_util, set_tor_tor_util = [], [], []
 
 for i in range(len(file_names)):
-    with open('../../run/results/' + folder_name + file_names[i] + '.txt', 'r') as file:
+    with open('./' + folder_name + file_names[i] + '.txt', 'r') as file:
         pipes = defaultdict(list)
         times = np.zeros(0)
         for line in file.readlines():
