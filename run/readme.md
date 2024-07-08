@@ -7,3 +7,9 @@
 
 3. All settings for plotting figures are in first created in set_config.py. They are configured to work out-of-the box. We specify the settings first then use others scripts, i.e., FCT.py, BE_BAR.py to generate the figures.
 
+Note: Due to strict export controls, we are unable to provide access to our testbed for evaluating Figure 13. However, if AE reviewers are interested in conducting testbed experiments, we are happy to provide compiled P4 and VMA configurations. Please contact us via HotCRP if you are interested.
+
+Hardware requirements for Figure 13:
+	Tofino2 Programmable Switches: 3
+	Linux Servers: At least 2
+	NICs: Mellanox ConnectX-6
