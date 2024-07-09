@@ -41,8 +41,8 @@ Packet-level simulation code for SIGCOMM 2024 paper (UCMP) "Uniform-Cost Multi-P
 1. Build both ``optiroute`` and ``opera``.
 2. Each sub-directory under ``/run`` corresponds to a figure in the UCMP paper, to obtain results and plot the figures, cd into ``/run/FigureX`` and run the bash script named ``runs.sh``.
   - The network topology file for Opera k=5 (5 candidate paths for each src-dst pair) is too large for the Git repo. Please download it from https://drive.google.com/file/d/1B7F3yTlNVO7C7kCwY9ym055iDyM8XVNq/view and place it within the ``/topologies``.
-  - *The simulations can take a long time to finish -- the longest simulation takes ~20 hours on our machine*.
-  - *It may be more time-efficient to run each command in parallel, but becareful about the memory consumption -- some runs took up to 50GBs of memory in our server.*
+  - *The simulations can take a long time to finish -- the longest simulation takes ~40 hours on our machine*.
+  - *It may be more time-efficient to run each command in parallel, but becareful about the memory consumption -- some runs took up to 100GBs of memory in our server.*
 
 ## Typical workflow:
 
